@@ -2,7 +2,7 @@ import litellm
 from .models import Message, Role
 from .memory import memory_manager
 from .config import settings
-from typing import List
+from typing import List, Optional
 
 class Agent:
     def __init__(self, session_id: str, model: str = None):
@@ -21,8 +21,7 @@ class Agent:
         # 2. Build messages
         system_prompt = (
             "You are Angel Claw, a helpful personal AI assistant. "
-            "Use the following memory context if relevant:
-"
+            "Use the following memory context if relevant:\n"
             f"{memory_context.get('response', 'No relevant memory found.')}"
         )
         
@@ -42,7 +41,6 @@ class Agent:
         
         # 4. Store interaction in memory (Implicitly)
         # We can store the fact that this interaction happened or let memos.process decide
-        self.memos.process(f"User said: {user_input}
-Assistant said: {assistant_content}")
+        self.memos.process(f"User said: {user_input}\nAssistant said: {assistant_content}")
         
         return assistant_content

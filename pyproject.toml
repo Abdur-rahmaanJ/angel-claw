@@ -1,0 +1,27 @@
+[project]
+name = "angel-claw"
+version = "0.1.0"
+description = "Add your description here"
+dependencies = [
+    "fastapi",
+    "uvicorn",
+    "pydantic",
+    "pydantic-settings",
+    "python-dotenv",
+    "angel-recall @ file://localhost/home/appinv/code/angel-recall",
+    "litellm"
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+    "pytest-asyncio"
+]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]

@@ -20,6 +20,9 @@ test = [
     "pytest-asyncio"
 ]
 
+[project.scripts]
+angel-claw = "angel_claw.cli:main"
+
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"

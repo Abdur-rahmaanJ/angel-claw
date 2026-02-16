@@ -12,7 +12,15 @@ class Agent:
         self.memos = memory_manager.get_memos(session_id)
         # Update memos model if overridden
         self.memos.reader.model = self.model
-        
+        self.soul = self._load_soul()
+
+    def _load_soul(self) -> str:
+        try:
+            with open("SOUL.md", "r") as f:
+                return f.read()
+        except FileNotFoundError:
+            return "You are Angel Claw, a helpful personal AI assistant."
+
     async def chat(self, user_input: str) -> str:
         # 1. Process memory (Retrieval)
         # Using a consistent user 'alice' for the CLI
@@ -20,7 +28,7 @@ class Agent:
         
         # 2. Build messages
         system_prompt = (
-            "You are Angel Claw, a helpful personal AI assistant. "
+            f"{self.soul}\n\n"
             "Use the following memory context to answer. "
             "IMPORTANT: Memories are listed from NEWEST to OLDEST. "
             "If there is conflicting information, ALWAYS trust the NEWEST memory.\n\n"

@@ -1,5 +1,7 @@
 import litellm
 import logging
+import os
+import json
 
 # Silence litellm logging to stop the "Give Feedback" messages
 litellm.suppress_debug_info = True
@@ -8,6 +10,7 @@ logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 from .models import Message, Role
 from .memory import memory_manager
 from .config import settings
+from .skills.manager import SkillManager
 from typing import List, Optional
 
 class Agent:
@@ -19,6 +22,10 @@ class Agent:
         self.memos.reader.model = self.model
         self.soul = self._load_soul()
         self.history: List[dict] = []
+        
+        # Initialize Skill Manager
+        skills_dir = os.path.join(os.path.dirname(__file__), "skills")
+        self.skill_manager = SkillManager(skills_dir)
 
     def _load_soul(self) -> str:
         try:
@@ -62,6 +69,18 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
             "Use the following memory context to answer. "
             "IMPORTANT: Memories are listed from NEWEST to OLDEST. "
             "If there is conflicting information, ALWAYS trust the NEWEST memory.\n\n"
+            "You also have access to 'Skills' which are tools you can call.\n"
+            "If you need to perform an action (like creating a skill, listing skills, or searching something), use the appropriate tool.\n\n"
+            "IMPORTANT for 'create_skill':\n"
+            "1. Do NOT import 'skill' decorator. It is automatically injected into the module's namespace.\n"
+            "2. Always use @skill decorator for functions you want to expose as tools.\n"
+            "3. Do NOT import any 'angel_claw_sdk' or 'angel_skill_sdk'. They do not exist.\n"
+            "4. Use standard Python libraries only, or assume the environment has what you need for basic tasks.\n"
+            "5. Example skill code:\n"
+            "   @skill\n"
+            "   def my_tool(param1: str) -> str:\n"
+            "       \"\"\"Description of the tool.\"\"\"\n"
+            "       return f'Result: {param1}'\n\n"
             f"Memory Context:\n{memory_context.get('response', 'No relevant memory found.')}"
         )
         
@@ -70,14 +89,67 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
         messages.extend(self.history[-4:])
         messages.append({"role": "user", "content": user_input})
         
-        # 3. Call LLM via litellm
-        response = await litellm.acompletion(
-            model=self.model,
-            messages=messages,
-            api_key=settings.api_key
-        )
-        
-        assistant_content = response.choices[0].message.content
+        # 3. Call LLM with Tool Support
+        assistant_content = ""
+        while True:
+            tools = self.skill_manager.get_tool_definitions()
+            
+            response = await litellm.acompletion(
+                model=self.model,
+                messages=messages,
+                api_key=settings.api_key,
+                tools=tools if tools else None,
+                tool_choice="auto" if tools else None
+            )
+            
+            message = response.choices[0].message
+            # litellm returns a message object that we need to convert to dict for history if it has tool_calls
+            msg_dict = {"role": "assistant", "content": message.content}
+            if message.tool_calls:
+                msg_dict["tool_calls"] = [
+                    {
+                        "id": tc.id,
+                        "type": tc.type,
+                        "function": {
+                            "name": tc.function.name,
+                            "arguments": tc.function.arguments
+                        }
+                    } for tc in message.tool_calls
+                ]
+            
+            messages.append(msg_dict)
+            
+            if not message.tool_calls:
+                assistant_content = message.content or ""
+                break
+                
+            # Handle Tool Calls
+            for tool_call in message.tool_calls:
+                function_name = tool_call.function.name
+                try:
+                    function_args = json.loads(tool_call.function.arguments)
+                except json.JSONDecodeError:
+                    function_args = {}
+                
+                if function_name in self.skill_manager.skills:
+                    function_to_call = self.skill_manager.skills[function_name]
+                    try:
+                        print(f"DEBUG: Executing skill {function_name}({function_args})")
+                        function_result = function_to_call(**function_args)
+                    except Exception as e:
+                        function_result = f"Error executing {function_name}: {e}"
+                else:
+                    function_result = f"Error: Skill '{function_name}' not found."
+                
+                messages.append({
+                    "tool_call_id": tool_call.id,
+                    "role": "tool",
+                    "name": function_name,
+                    "content": str(function_result),
+                })
+            
+            # Refresh skills in case a new one was created/installed
+            self.skill_manager.load_skills()
         
         # 4. Update short-term history
         self.history.append({"role": "user", "content": user_input})

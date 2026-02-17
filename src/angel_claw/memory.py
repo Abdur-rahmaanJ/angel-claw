@@ -8,7 +8,8 @@ class MemoryManager:
             os.makedirs(settings.memory_persist_dir)
             
     def get_memos(self, session_id: str) -> MemOS:
-        persist_dir = os.path.join(settings.memory_persist_dir, session_id)
+        # For CLI, we use a fixed 'default' vault to ensure long-term memory across sessions
+        persist_dir = os.path.join(settings.memory_persist_dir, "default")
         return MemOS(persist_directory=persist_dir, model=settings.model)
 
 memory_manager = MemoryManager()

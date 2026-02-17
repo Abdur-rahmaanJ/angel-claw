@@ -1,4 +1,5 @@
 import litellm
+
 from .models import Message, Role
 from .memory import memory_manager
 from .config import settings
@@ -11,18 +12,27 @@ class Agent:
         self.memos = memory_manager.get_memos(session_id)
         # Update memos model if overridden
         self.memos.reader.model = self.model
-        
+        self.soul = self._load_soul()
+
+    def _load_soul(self) -> str:
+        try:
+            with open("SOUL.md", "r") as f:
+                return f.read()
+        except FileNotFoundError:
+            return "You are Angel Claw, a helpful personal AI assistant."
+
     async def chat(self, user_input: str) -> str:
         # 1. Process memory (Retrieval)
-        # In angel-recall, memos.process() handles both storage and retrieval 
-        # based on the content. We can call it to get context.
-        memory_context = self.memos.process(f"Retrieve context for: {user_input}")
+        # Using a consistent user 'alice' for the CLI
+        memory_context = self.memos.process(f"Retrieve context for: {user_input}", user="alice")
         
         # 2. Build messages
         system_prompt = (
-            "You are Angel Claw, a helpful personal AI assistant. "
-            "Use the following memory context if relevant:\n"
-            f"{memory_context.get('response', 'No relevant memory found.')}"
+            f"{self.soul}\n\n"
+            "Use the following memory context to answer. "
+            "IMPORTANT: Memories are listed from NEWEST to OLDEST. "
+            "If there is conflicting information, ALWAYS trust the NEWEST memory.\n\n"
+            f"Memory Context:\n{memory_context.get('response', 'No relevant memory found.')}"
         )
         
         messages = [
@@ -39,8 +49,12 @@ class Agent:
         
         assistant_content = response.choices[0].message.content
         
-        # 4. Store interaction in memory (Implicitly)
-        # We can store the fact that this interaction happened or let memos.process decide
-        self.memos.process(f"User said: {user_input}\nAssistant said: {assistant_content}")
+        # 4. Store interaction in memory (Explicitly)
+        # We use 'Remember:' to trigger storage even with fallback parser
+        # And we store the fact directly for better retrieval later
+        if any(trigger in user_input.lower() for trigger in ["i live in", "i am", "my name is", "i work at"]):
+             self.memos.process(f"Remember: {user_input}", user="alice")
+        else:
+             self.memos.process(f"Remember: User said '{user_input}' and Assistant replied '{assistant_content}'", user="alice")
         
         return assistant_content

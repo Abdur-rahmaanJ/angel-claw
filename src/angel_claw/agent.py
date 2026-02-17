@@ -1,4 +1,9 @@
 import litellm
+import logging
+
+# Silence litellm logging to stop the "Give Feedback" messages
+litellm.suppress_debug_info = True
+logging.getLogger("LiteLLM").setLevel(logging.WARNING)
 
 from .models import Message, Role
 from .memory import memory_manager
@@ -13,6 +18,7 @@ class Agent:
         # Update memos model if overridden
         self.memos.reader.model = self.model
         self.soul = self._load_soul()
+        self.history: List[dict] = []
 
     def _load_soul(self) -> str:
         try:
@@ -23,8 +29,13 @@ class Agent:
 
     async def chat(self, user_input: str) -> str:
         # 1. Process memory (Retrieval)
-        # Using a consistent user 'alice' for the CLI
-        memory_context = self.memos.process(f"Retrieve context for: {user_input}", user="alice")
+        # Use last turn to improve retrieval for short inputs like "yes"
+        last_turn = self.history[-1]["content"] if self.history else ""
+        retrieval_query = user_input
+        if len(user_input.split()) < 3 and last_turn:
+            retrieval_query = f"{last_turn} -> {user_input}"
+            
+        memory_context = self.memos.process(f"Retrieve context for: {retrieval_query}", user="alice")
         
         # 2. Build messages
         system_prompt = (
@@ -35,10 +46,10 @@ class Agent:
             f"Memory Context:\n{memory_context.get('response', 'No relevant memory found.')}"
         )
         
-        messages = [
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_input}
-        ]
+        messages = [{"role": "system", "content": system_prompt}]
+        # Include last 4 turns of history for short-term context
+        messages.extend(self.history[-4:])
+        messages.append({"role": "user", "content": user_input})
         
         # 3. Call LLM via litellm
         response = await litellm.acompletion(
@@ -49,12 +60,17 @@ class Agent:
         
         assistant_content = response.choices[0].message.content
         
-        # 4. Store interaction in memory (Explicitly)
-        # We use 'Remember:' to trigger storage even with fallback parser
-        # And we store the fact directly for better retrieval later
-        if any(trigger in user_input.lower() for trigger in ["i live in", "i am", "my name is", "i work at"]):
-             self.memos.process(f"Remember: {user_input}", user="alice")
-        else:
+        # 4. Update short-term history
+        self.history.append({"role": "user", "content": user_input})
+        self.history.append({"role": "assistant", "content": assistant_content})
+        
+        # 5. Store interaction in memory
+        # Let the memory system parse the user input to see if it's a fact to store
+        mem_res = self.memos.process(user_input, user="alice")
+        
+        # If the memory system didn't identify this as a storage/update operation,
+        # we store the full dialogue turn as context for future retrieval.
+        if mem_res.get("parsed", {}).get("operation") not in ["store", "update"]:
              self.memos.process(f"Remember: User said '{user_input}' and Assistant replied '{assistant_content}'", user="alice")
         
         return assistant_content

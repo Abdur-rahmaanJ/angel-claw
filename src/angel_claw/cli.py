@@ -1,6 +1,8 @@
 import asyncio
 import uuid
 import sys
+import logging
+import warnings
 from .agent import Agent
 from .config import settings
 from .gateway import start as start_gateway
@@ -8,23 +10,35 @@ from .cron import cron_manager
 from .telegram_bridge import telegram_bridge
 from .whatsapp_bridge import whatsapp_bridge
 
+# Suppress all library logging for CLI mode to keep it clean
+logging.getLogger().setLevel(logging.ERROR)
+logging.getLogger("angel-claw-cron").setLevel(logging.ERROR)
+logging.getLogger("angel-claw-telegram").setLevel(logging.ERROR)
+logging.getLogger("angel-claw-whatsapp").setLevel(logging.ERROR)
+logging.getLogger("LiteLLM").setLevel(logging.ERROR)
+logging.getLogger("whatsmeow").setLevel(logging.ERROR)
+logging.getLogger("neonize").setLevel(logging.ERROR)
+
+# Suppress litellm specific RuntimeWarning about async_success_handler
+warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine 'Logging.async_success_handler' was never awaited")
+
 async def interactive_chat(model: str = None):
-    # Start background workers
+    # Start background workers silently
     cron_task = asyncio.create_task(cron_manager.run())
     telegram_task = asyncio.create_task(telegram_bridge.run())
     whatsapp_task = asyncio.create_task(whatsapp_bridge.run())
-    
-    # Give background tasks a moment to initialize before we start blocking with input()
-    await asyncio.sleep(1)
     
     # Use a persistent session ID for CLI by default
     session_id = "cli-default"
     agent = Agent(session_id, model=model)
     
-    print(f"--- Angel Claw CLI Chat ---")
+    print(f"\n--- Angel Claw CLI Chat ---")
     print(f"Model: {agent.model}")
     print(f"Session: {session_id}")
     print("Type 'exit' or 'quit' to stop.\n")
+    
+    # Give background tasks a moment to initialize before showing 'You:'
+    await asyncio.sleep(0.5) 
     
     while True:
         try:

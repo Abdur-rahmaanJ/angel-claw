@@ -10,7 +10,8 @@ async def interactive_chat(model: str = None):
     # Start cron worker in the background
     cron_task = asyncio.create_task(cron_manager.run())
     
-    session_id = str(uuid.uuid4())
+    # Use a persistent session ID for CLI by default
+    session_id = "cli-default"
     agent = Agent(session_id, model=model)
     
     print(f"--- Angel Claw CLI Chat ---")

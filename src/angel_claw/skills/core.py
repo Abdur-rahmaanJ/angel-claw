@@ -1,7 +1,8 @@
 import os
 import shutil
 import subprocess
-from .manager import skill
+from angel_claw.skills.manager import skill
+from angel_claw.cron import cron_manager, Job, JobSchedule, JobPayload
 
 @skill
 def create_skill(name: str, code: str) -> str:
@@ -90,11 +91,9 @@ def list_skills() -> str:
 def schedule_task(name: str, schedule_kind: str, schedule_value: str, payload_kind: str, content: str = None, skill_name: str = None, args: dict = None) -> str:
     """
     Schedules a task.
-    - schedule_kind: 'at' (isoformat), 'every' (e.g. '30m', '1h'), 'cron' (standard cron expression).
+    - schedule_kind: 'at' (isoformat), 'in' (relative, e.g. '1m', '30s'), 'every' (recurring, e.g. '1h'), 'cron' (expression).
     - payload_kind: 'message' (send content to user), 'prompt' (ask agent content), 'skill' (run skill_name with args).
     """
-    from angel_claw.cron import cron_manager, Job, JobSchedule, JobPayload
-    
     try:
         job = Job(
             name=name,
@@ -114,7 +113,6 @@ def schedule_task(name: str, schedule_kind: str, schedule_value: str, payload_ki
 @skill
 def list_tasks() -> str:
     """Lists all scheduled tasks."""
-    from angel_claw.cron import cron_manager
     if not cron_manager.jobs:
         return "No tasks scheduled."
     
@@ -128,7 +126,6 @@ def list_tasks() -> str:
 @skill
 def delete_task(name: str) -> str:
     """Deletes a scheduled task by name."""
-    from angel_claw.cron import cron_manager
     if name in cron_manager.jobs:
         cron_manager.delete_job(name)
         return f"Task '{name}' deleted."

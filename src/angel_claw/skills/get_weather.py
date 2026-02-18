@@ -1,4 +1,4 @@
-from .manager import skill
+from angel_claw.skills.manager import skill
 
 @skill
 def get_weather(city: str, units: str = 'metric') -> str:

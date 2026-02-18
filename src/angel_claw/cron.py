@@ -12,8 +12,8 @@ from .config import settings
 logger = logging.getLogger("angel-claw-cron")
 
 class JobSchedule(BaseModel):
-    kind: str  # "at", "every", "cron"
-    value: str  # e.g., "2026-02-18 15:00:00", "30m", "0 9 * * *"
+    kind: str  # "at", "every", "cron", "in"
+    value: str  # e.g., "2026-02-18 15:00:00", "30m", "0 9 * * *", "1h"
 
 class JobPayload(BaseModel):
     kind: str  # "message", "prompt", "skill"
@@ -76,25 +76,38 @@ class CronManager:
                     job.next_run = None
             except ValueError:
                 logger.error(f"Invalid 'at' schedule for job {job.name}: {job.schedule.value}")
-        elif job.schedule.kind == "every":
-            # Simple implementation: e.g., "30m", "1h", "1d"
+        elif job.schedule.kind in ["every", "in"]:
+            # e.g., "30s", "1m", "1h", "1d"
             value = job.schedule.value
             try:
-                if value.endswith("m"):
+                if value.endswith("s"):
+                    delta = timedelta(seconds=int(value[:-1]))
+                elif value.endswith("m"):
                     delta = timedelta(minutes=int(value[:-1]))
                 elif value.endswith("h"):
                     delta = timedelta(hours=int(value[:-1]))
                 elif value.endswith("d"):
                     delta = timedelta(days=int(value[:-1]))
                 else:
-                    raise ValueError("Unknown 'every' unit")
+                    raise ValueError("Unknown unit")
                 
-                if job.last_run:
-                    job.next_run = job.last_run + delta
+                if job.schedule.kind == "in":
+                     # One-shot relative to creation if not run, else none
+                     if not job.last_run:
+                         # We use job.next_run if it was already set, otherwise now + delta
+                         if not job.next_run:
+                             job.next_run = now + delta
+                     else:
+                         job.next_run = None
+                         job.enabled = False
                 else:
-                    job.next_run = now + delta
+                    # Recurring
+                    if job.last_run:
+                        job.next_run = job.last_run + delta
+                    else:
+                        job.next_run = now + delta
             except ValueError:
-                logger.error(f"Invalid 'every' schedule for job {job.name}: {job.schedule.value}")
+                logger.error(f"Invalid {job.schedule.kind} schedule for job {job.name}: {job.schedule.value}")
         elif job.schedule.kind == "cron":
             try:
                 base = job.last_run or now
@@ -134,7 +147,7 @@ class CronManager:
             logger.error(f"Error executing job {job.name}: {e}")
         
         # Recalculate next run or disable if one-shot
-        if job.schedule.kind == "at":
+        if job.schedule.kind in ["at", "in"]:
             job.enabled = False
             job.next_run = None
         else:
@@ -154,8 +167,9 @@ class CronManager:
             except Exception as e:
                 logger.error(f"Error sending proactive message to webhook: {e}")
         else:
-            # Fallback: log it
+            # Fallback: log it and print to console for CLI visibility
             logger.info(f"PROACTIVE MESSAGE to {user_id}: {message}")
+            print(f"\n[PROACTIVE] {user_id}: {message}\nYou: ", end="", flush=True)
 
     async def run(self):
         logger.info("Cron worker started.")

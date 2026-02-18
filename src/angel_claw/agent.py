@@ -84,6 +84,10 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
             "   def my_tool(param1: str) -> str:\n"
             "       \"\"\"Description of the tool.\"\"\"\n"
             "       return f'Result: {param1}'\n\n"
+            "IMPORTANT for 'schedule_task':\n"
+            "- Use 'in' for one-shot relative reminders (e.g., 'remind me in 1 minute' -> kind='in', value='1m').\n"
+            "- Use 'every' for recurring tasks (e.g., 'every day' -> kind='every', value='1d').\n"
+            "- Seconds ('s'), minutes ('m'), hours ('h'), and days ('d') are all supported.\n\n"
             f"Memory Context:\n{memory_context.get('response', 'No relevant memory found.')}"
         )
         

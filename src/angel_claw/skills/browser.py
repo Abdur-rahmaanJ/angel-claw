@@ -3,6 +3,7 @@ import os
 import asyncio
 import httpx
 from angel_claw.config import settings
+from angel_claw.skills.manager import skill
 
 _browser = None
 _page = None

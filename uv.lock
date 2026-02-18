@@ -172,7 +172,9 @@ version = "0.2.0"
 source = { editable = "." }
 dependencies = [
     { name = "angel-recall" },
+    { name = "croniter" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "litellm" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
@@ -189,7 +191,9 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "angel-recall" },
+    { name = "croniter" },
     { name = "fastapi" },
+    { name = "httpx" },
     { name = "litellm" },
     { name = "pydantic" },
     { name = "pydantic-settings" },

@@ -17,6 +17,9 @@ class Settings(BaseSettings):
     # Memory Settings (Angel Recall)
     memory_persist_dir: str = "./vaults"
 
+    # Proactive Messaging Settings
+    proactive_webhook_url: Optional[str] = Field(None, validation_alias="PROACTIVE_WEBHOOK_URL")
+
     # Search Settings
     brave_api_key: Optional[str] = Field(None, validation_alias="BRAVE_API_KEY")
     

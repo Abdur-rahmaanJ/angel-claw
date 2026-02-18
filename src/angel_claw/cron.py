@@ -160,12 +160,16 @@ class CronManager:
         self.save_job(job)
 
     async def _send_proactive_message(self, message: str, user_id: str, session_id: str = "default"):
-        # Call registered handlers (e.g., Telegram)
+        # Call registered handlers (e.g., Telegram, WhatsApp)
+        import inspect
         for handler in self.proactive_handlers:
             try:
-                await handler(message, user_id, session_id)
+                if inspect.iscoroutinefunction(handler):
+                    await handler(message, user_id, session_id)
+                else:
+                    handler(message, user_id, session_id)
             except Exception as e:
-                logger.error(f"Error in proactive handler: {e}")
+                logger.error(f"Error in proactive handler {handler}: {e}")
 
         if settings.proactive_webhook_url:
             try:

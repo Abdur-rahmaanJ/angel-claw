@@ -160,6 +160,12 @@ class WhatsAppBridge:
                 return
             
             sender_jid = message.Info.MessageSource.Chat
+            
+            # Ignore group chats (JIDs ending in @g.us)
+            if str(sender_jid).endswith("@g.us"):
+                logger.debug(f"Ignoring group chat message from {sender_jid}")
+                return
+
             sender_id = str(sender_jid).split("@")[0]
 
             # We need to bridge back to Async Agent. 
@@ -173,6 +179,10 @@ class WhatsAppBridge:
             logger.error(f"Error handling WhatsApp message: {e}")
 
     async def _process_agent_response(self, client: NewClient, sender_jid: Any, sender_id: str, text: str):
+        # Double check it's not a group (JID ending in @g.us)
+        if str(sender_jid).endswith("@g.us"):
+            return
+
         # Determine if it's a command or chat
         if text.startswith("/"):
             await self._handle_command(client, sender_jid, sender_id, text)
@@ -210,7 +220,7 @@ class WhatsAppBridge:
             logger.error(f"Error in WhatsApp chat: {e}")
             client.send_message(sender_jid, f"⚠️ Error: {e}")
 
-    async def send_proactive(self, message: str, user_id: str, session_id: str):
+    def send_proactive(self, message: str, user_id: str, session_id: str):
         if not self.client or not self.client.is_logged_in():
             return
 

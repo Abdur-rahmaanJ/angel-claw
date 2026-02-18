@@ -1,6 +1,7 @@
 import os
 import shutil
 import subprocess
+from .manager import skill
 
 @skill
 def create_skill(name: str, code: str) -> str:
@@ -84,3 +85,52 @@ def list_skills() -> str:
     skills_dir = os.path.dirname(__file__)
     skills = [f[:-3] for f in os.listdir(skills_dir) if f.endswith(".py") and f != "__init__.py"]
     return f"Installed skills: {', '.join(skills)}"
+
+@skill
+def schedule_task(name: str, schedule_kind: str, schedule_value: str, payload_kind: str, content: str = None, skill_name: str = None, args: dict = None) -> str:
+    """
+    Schedules a task.
+    - schedule_kind: 'at' (isoformat), 'every' (e.g. '30m', '1h'), 'cron' (standard cron expression).
+    - payload_kind: 'message' (send content to user), 'prompt' (ask agent content), 'skill' (run skill_name with args).
+    """
+    from angel_claw.cron import cron_manager, Job, JobSchedule, JobPayload
+    
+    try:
+        job = Job(
+            name=name,
+            schedule=JobSchedule(kind=schedule_kind, value=schedule_value),
+            payload=JobPayload(kind=payload_kind, content=content, skill_name=skill_name, args=args)
+        )
+        # Recalculate next run to ensure it's valid
+        cron_manager._calculate_next_run(job)
+        if not job.next_run and schedule_kind != "at":
+             return f"Error: Invalid schedule {schedule_kind}: {schedule_value}"
+             
+        cron_manager.save_job(job)
+        return f"Task '{name}' scheduled. Next run: {job.next_run}"
+    except Exception as e:
+        return f"Error scheduling task: {e}"
+
+@skill
+def list_tasks() -> str:
+    """Lists all scheduled tasks."""
+    from angel_claw.cron import cron_manager
+    if not cron_manager.jobs:
+        return "No tasks scheduled."
+    
+    tasks = []
+    for name, job in cron_manager.jobs.items():
+        status = "Enabled" if job.enabled else "Disabled"
+        tasks.append(f"- {name}: {job.schedule.kind}({job.schedule.value}) | {job.payload.kind} | Next run: {job.next_run} | {status}")
+    
+    return "\n".join(tasks)
+
+@skill
+def delete_task(name: str) -> str:
+    """Deletes a scheduled task by name."""
+    from angel_claw.cron import cron_manager
+    if name in cron_manager.jobs:
+        cron_manager.delete_job(name)
+        return f"Task '{name}' deleted."
+    else:
+        return f"Task '{name}' not found."

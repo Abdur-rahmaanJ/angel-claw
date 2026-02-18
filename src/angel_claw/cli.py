@@ -4,8 +4,12 @@ import sys
 from .agent import Agent
 from .config import settings
 from .gateway import start as start_gateway
+from .cron import cron_manager
 
 async def interactive_chat(model: str = None):
+    # Start cron worker in the background
+    cron_task = asyncio.create_task(cron_manager.run())
+    
     session_id = str(uuid.uuid4())
     agent = Agent(session_id, model=model)
     
@@ -16,13 +20,15 @@ async def interactive_chat(model: str = None):
     
     while True:
         try:
-            user_input = input("You: ").strip()
+            user_input = await asyncio.get_event_loop().run_in_executor(None, input, "You: ")
+            user_input = user_input.strip()
             if user_input.lower() in ["exit", "quit"]:
                 break
             if not user_input:
                 continue
                 
             print("Assistant: ", end="", flush=True)
+            # Use asyncio for chat as it is async
             response = await agent.chat(user_input)
             print(response + "\n")
             
@@ -30,6 +36,13 @@ async def interactive_chat(model: str = None):
             break
         except Exception as e:
             print(f"\nError: {e}")
+    
+    # Cancel the cron worker task
+    cron_task.cancel()
+    try:
+        await cron_task
+    except asyncio.CancelledError:
+        pass
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":

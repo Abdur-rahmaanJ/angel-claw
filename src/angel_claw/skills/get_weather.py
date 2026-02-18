@@ -1,3 +1,5 @@
+from .manager import skill
+
 @skill
 def get_weather(city: str, units: str = 'metric') -> str:
     """Returns a mock weather string for the specified city and units (metric or imperial)."""

@@ -11,7 +11,9 @@ dependencies = [
     "pydantic-settings",
     "python-dotenv",
     "angel-recall",
-    "litellm"
+    "litellm",
+    "croniter",
+    "httpx"
 ]
 
 [project.optional-dependencies]

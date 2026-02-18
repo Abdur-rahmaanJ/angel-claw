@@ -140,6 +140,10 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                 
                 if function_name in self.skill_manager.skills:
                     function_to_call = self.skill_manager.skills[function_name]
+                    # Automatically inject session_id into schedule_task if not provided
+                    if function_name == "schedule_task" and "session_id" not in function_args:
+                        function_args["session_id"] = self.session_id
+                        
                     try:
                         print(f"DEBUG: Executing skill {function_name}({function_args})")
                         if inspect.iscoroutinefunction(function_to_call):

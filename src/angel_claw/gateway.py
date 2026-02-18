@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from .models import AgentRequest, AgentResponse
 from .agent import Agent
 from .cron import cron_manager
+from .telegram_bridge import telegram_bridge
 from typing import Dict, Any
 import uvicorn
 import asyncio
@@ -10,8 +11,9 @@ app = FastAPI(title="Angel Claw Gateway")
 
 @app.on_event("startup")
 async def startup_event():
-    # Start cron worker in the background
+    # Start background workers
     asyncio.create_task(cron_manager.run())
+    asyncio.create_task(telegram_bridge.run())
 
 @app.post("/chat", response_model=AgentResponse)
 async def chat(request: AgentRequest):
@@ -46,7 +48,7 @@ async def handle_webhook(payload: Dict[str, Any]):
         response = await agent.chat(context_message)
         
         # Send the agent's reaction back via the proactive message mechanism
-        await cron_manager._send_proactive_message(response, user_id)
+        await cron_manager._send_proactive_message(response, user_id, session_id)
         
         return {"status": "success", "agent_response": response}
     except Exception as e:

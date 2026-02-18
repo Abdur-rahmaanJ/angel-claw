@@ -25,8 +25,10 @@ class Agent:
         self.history: List[dict] = []
         
         # Initialize Skill Manager
-        skills_dir = os.path.join(os.path.dirname(__file__), "skills")
-        self.skill_manager = SkillManager(skills_dir)
+        # Load from both the installed package and the current working directory
+        internal_skills = os.path.join(os.path.dirname(__file__), "skills")
+        local_skills = os.path.join(os.getcwd(), "skills")
+        self.skill_manager = SkillManager([internal_skills, local_skills])
 
     def _load_soul(self) -> str:
         try:

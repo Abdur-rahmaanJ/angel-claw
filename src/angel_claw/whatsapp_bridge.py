@@ -205,7 +205,7 @@ class WhatsAppBridge:
         try:
             agent = Agent(session_id)
             response = await agent.chat(text)
-            client.send_message(sender_jid, response)
+            client.send_message(sender_jid, f"Bot: {response}")
         except Exception as e:
             logger.error(f"Error in WhatsApp chat: {e}")
             client.send_message(sender_jid, f"⚠️ Error: {e}")
@@ -218,7 +218,7 @@ class WhatsAppBridge:
             if paired_sid == session_id:
                 sender_jid = f"{sender_id}@s.whatsapp.net"
                 try:
-                    self.client.send_message(sender_jid, message)
+                    self.client.send_message(sender_jid, f"Bot: {message}")
                 except Exception as e:
                     logger.error(f"Failed to send proactive WhatsApp message: {e}")
 

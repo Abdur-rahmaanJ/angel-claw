@@ -14,6 +14,9 @@ async def interactive_chat(model: str = None):
     telegram_task = asyncio.create_task(telegram_bridge.run())
     whatsapp_task = asyncio.create_task(whatsapp_bridge.run())
     
+    # Give background tasks a moment to initialize before we start blocking with input()
+    await asyncio.sleep(1)
+    
     # Use a persistent session ID for CLI by default
     session_id = "cli-default"
     agent = Agent(session_id, model=model)
@@ -25,7 +28,8 @@ async def interactive_chat(model: str = None):
     
     while True:
         try:
-            user_input = await asyncio.get_event_loop().run_in_executor(None, input, "You: ")
+            # Use to_thread to keep the event loop running for background tasks while waiting for input
+            user_input = await asyncio.to_thread(input, "You: ")
             user_input = user_input.strip()
             if user_input.lower() in ["exit", "quit"]:
                 break

@@ -2,6 +2,7 @@ import litellm
 import logging
 import os
 import json
+import inspect
 
 # Silence litellm logging to stop the "Give Feedback" messages
 litellm.suppress_debug_info = True
@@ -135,8 +136,12 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                     function_to_call = self.skill_manager.skills[function_name]
                     try:
                         print(f"DEBUG: Executing skill {function_name}({function_args})")
-                        function_result = function_to_call(**function_args)
+                        if inspect.iscoroutinefunction(function_to_call):
+                            function_result = await function_to_call(**function_args)
+                        else:
+                            function_result = function_to_call(**function_args)
                     except Exception as e:
+                        print(f"DEBUG: Error in skill {function_name}: {e}")
                         function_result = f"Error executing {function_name}: {e}"
                 else:
                     function_result = f"Error: Skill '{function_name}' not found."

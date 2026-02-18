@@ -10,7 +10,7 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "python-dotenv",
-    "angel-recall @ file://localhost/home/appinv/code/angel-recall",
+    "angel-recall",
     "litellm"
 ]
 

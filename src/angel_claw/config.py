@@ -16,5 +16,8 @@ class Settings(BaseSettings):
     
     # Memory Settings (Angel Recall)
     memory_persist_dir: str = "./vaults"
+
+    # Search Settings
+    brave_api_key: Optional[str] = Field(None, validation_alias="BRAVE_API_KEY")
     
 settings = Settings()

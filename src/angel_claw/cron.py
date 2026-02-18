@@ -4,7 +4,7 @@ import asyncio
 import logging
 import httpx
 from datetime import datetime, timedelta
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Callable
 from pydantic import BaseModel, Field
 from croniter import croniter
 from .config import settings
@@ -38,6 +38,10 @@ class CronManager:
             os.makedirs(self.persist_dir)
         self.jobs: Dict[str, Job] = {}
         self.load_jobs()
+        self.proactive_handlers: List[Callable] = []
+
+    def register_proactive_handler(self, handler: Callable):
+        self.proactive_handlers.append(handler)
 
     def load_jobs(self):
         for filename in os.listdir(self.persist_dir):
@@ -122,12 +126,12 @@ class CronManager:
         
         try:
             if job.payload.kind == "message":
-                await self._send_proactive_message(job.payload.content, job.user_id)
+                await self._send_proactive_message(job.payload.content, job.user_id, job.session_id)
             elif job.payload.kind == "prompt":
                 from .agent import Agent
                 agent = Agent(job.session_id)
                 response = await agent.chat(job.payload.content)
-                await self._send_proactive_message(response, job.user_id)
+                await self._send_proactive_message(response, job.user_id, job.session_id)
             elif job.payload.kind == "skill":
                 from .agent import Agent
                 agent = Agent(job.session_id)
@@ -155,21 +159,29 @@ class CronManager:
         
         self.save_job(job)
 
-    async def _send_proactive_message(self, message: str, user_id: str):
+    async def _send_proactive_message(self, message: str, user_id: str, session_id: str = "default"):
+        # Call registered handlers (e.g., Telegram)
+        for handler in self.proactive_handlers:
+            try:
+                await handler(message, user_id, session_id)
+            except Exception as e:
+                logger.error(f"Error in proactive handler: {e}")
+
         if settings.proactive_webhook_url:
             try:
                 async with httpx.AsyncClient() as client:
                     await client.post(settings.proactive_webhook_url, json={
                         "user_id": user_id,
+                        "session_id": session_id,
                         "message": message,
                         "source": "angel-claw-cron"
                     })
             except Exception as e:
                 logger.error(f"Error sending proactive message to webhook: {e}")
-        else:
-            # Fallback: log it and print to console for CLI visibility
-            logger.info(f"PROACTIVE MESSAGE to {user_id}: {message}")
-            print(f"\n[PROACTIVE] {user_id}: {message}\nYou: ", end="", flush=True)
+        
+        # Always log to console for CLI visibility
+        logger.info(f"PROACTIVE MESSAGE to {user_id} ({session_id}): {message}")
+        print(f"\n[PROACTIVE] {user_id} ({session_id}): {message}\nYou: ", end="", flush=True)
 
     async def run(self):
         logger.info("Cron worker started.")

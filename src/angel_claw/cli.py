@@ -5,10 +5,12 @@ from .agent import Agent
 from .config import settings
 from .gateway import start as start_gateway
 from .cron import cron_manager
+from .telegram_bridge import telegram_bridge
 
 async def interactive_chat(model: str = None):
-    # Start cron worker in the background
+    # Start background workers
     cron_task = asyncio.create_task(cron_manager.run())
+    telegram_task = asyncio.create_task(telegram_bridge.run())
     
     # Use a persistent session ID for CLI by default
     session_id = "cli-default"

@@ -1,6 +1,6 @@
 [project]
 name = "angel-claw"
-version = "0.2.0"
+version = "0.3.1"
 description = "Angel Claw personal AI agent framework"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -13,7 +13,9 @@ dependencies = [
     "angel-recall",
     "litellm",
     "croniter",
-    "httpx"
+    "httpx",
+    "python-telegram-bot",
+    "telegram>=0.0.1",
 ]
 
 [project.optional-dependencies]

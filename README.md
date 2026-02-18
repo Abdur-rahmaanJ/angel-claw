@@ -5,9 +5,10 @@ A personal AI agent framework based on OpenClaw, using `angel-recall` for memory
 ## Features
 
 - **FastAPI Gateway**: HTTP interface for interacting with the agent.
+- **Multi-Channel Bridge**: Connect and pair your agent with **Telegram** for mobile access.
 - **Agent-Native Memory**: Powered by `angel-recall`, providing long-term, evolvable memory for each session.
+- **Proactive Tasks**: Built-in background worker for `at`, `every`, and `cron` schedules.
 - **Multi-Model Support**: Uses `litellm` to connect to various providers (OpenAI, Anthropic, Ollama, etc.).
-- **Lane-Based Isolation**: Each session has its own memory vault.
 
 ## Setup
 
@@ -18,6 +19,8 @@ A personal AI agent framework based on OpenClaw, using `angel-recall` for memory
 
 2. **Configure environment**:
    Copy `.env.example` to `.env` and fill in your API keys.
+   - `MODEL_KEY`: Your LLM API key.
+   - `TELEGRAM_TOKEN`: (Optional) Your bot token from @BotFather.
    ```bash
    cp .env.example .env
    ```
@@ -55,6 +58,14 @@ The agent can browse the web to find information or interact with sites.
 ### 4. Custom Skill Generation
 If Angel Claw doesn't have a tool, it can write one for itself.
 - **Prompt:** "Create a skill called 'currency_converter' that uses an API to convert USD to EUR."
+
+### Telegram Bridge
+
+You can interact with Angel Claw from your phone using Telegram:
+1.  **Get a Bot Token**: Create a bot using [@BotFather](https://t.me/botfather) and add `TELEGRAM_TOKEN` to your `.env`.
+2.  **Start your bot** on Telegram and press "Start".
+3.  **Pair your chat**: Use the `/pair` command with your session ID (e.g., `/pair cli-default`).
+4.  Angel Claw will now respond to your Telegram messages using that session's memory and skills.
 
 ### Basic Chat
 Send a POST request to `/chat`:

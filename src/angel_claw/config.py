@@ -20,6 +20,9 @@ class Settings(BaseSettings):
     # Proactive Messaging Settings
     proactive_webhook_url: Optional[str] = Field(None, validation_alias="PROACTIVE_WEBHOOK_URL")
 
+    # Telegram Bridge Settings
+    telegram_token: Optional[str] = Field(None, validation_alias="TELEGRAM_TOKEN")
+
     # Search Settings
     brave_api_key: Optional[str] = Field(None, validation_alias="BRAVE_API_KEY")
     

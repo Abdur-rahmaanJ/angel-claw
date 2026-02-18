@@ -88,17 +88,19 @@ def list_skills() -> str:
     return f"Installed skills: {', '.join(skills)}"
 
 @skill
-def schedule_task(name: str, schedule_kind: str, schedule_value: str, payload_kind: str, content: str = None, skill_name: str = None, args: dict = None) -> str:
+def schedule_task(name: str, schedule_kind: str, schedule_value: str, payload_kind: str, content: str = None, skill_name: str = None, args: dict = None, session_id: str = "cli-default") -> str:
     """
     Schedules a task.
     - schedule_kind: 'at' (isoformat), 'in' (relative, e.g. '1m', '30s'), 'every' (recurring, e.g. '1h'), 'cron' (expression).
     - payload_kind: 'message' (send content to user), 'prompt' (ask agent content), 'skill' (run skill_name with args).
+    - session_id: The session ID this task belongs to (defaults to cli-default).
     """
     try:
         job = Job(
             name=name,
             schedule=JobSchedule(kind=schedule_kind, value=schedule_value),
-            payload=JobPayload(kind=payload_kind, content=content, skill_name=skill_name, args=args)
+            payload=JobPayload(kind=payload_kind, content=content, skill_name=skill_name, args=args),
+            session_id=session_id
         )
         # Recalculate next run to ensure it's valid
         cron_manager._calculate_next_run(job)
@@ -111,23 +113,31 @@ def schedule_task(name: str, schedule_kind: str, schedule_value: str, payload_ki
         return f"Error scheduling task: {e}"
 
 @skill
-def list_tasks() -> str:
-    """Lists all scheduled tasks."""
+def list_tasks(session_id: str = "cli-default") -> str:
+    """Lists all scheduled tasks for a specific session."""
     if not cron_manager.jobs:
         return "No tasks scheduled."
     
     tasks = []
     for name, job in cron_manager.jobs.items():
-        status = "Enabled" if job.enabled else "Disabled"
-        tasks.append(f"- {name}: {job.schedule.kind}({job.schedule.value}) | {job.payload.kind} | Next run: {job.next_run} | {status}")
+        if job.session_id == session_id:
+            status = "Enabled" if job.enabled else "Disabled"
+            tasks.append(f"- {name}: {job.schedule.kind}({job.schedule.value}) | {job.payload.kind} | Next run: {job.next_run} | {status}")
     
+    if not tasks:
+        return f"No tasks scheduled for session '{session_id}'."
+        
     return "\n".join(tasks)
 
 @skill
-def delete_task(name: str) -> str:
-    """Deletes a scheduled task by name."""
+def delete_task(name: str, session_id: str = "cli-default") -> str:
+    """Deletes a scheduled task by name for a specific session."""
     if name in cron_manager.jobs:
-        cron_manager.delete_job(name)
-        return f"Task '{name}' deleted."
+        job = cron_manager.jobs[name]
+        if job.session_id == session_id:
+            cron_manager.delete_job(name)
+            return f"Task '{name}' deleted."
+        else:
+            return f"Task '{name}' found but belongs to a different session."
     else:
         return f"Task '{name}' not found."

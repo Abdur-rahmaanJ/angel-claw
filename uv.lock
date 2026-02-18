@@ -2,7 +2,8 @@ version = 1
 revision = 3
 requires-python = ">=3.12"
 resolution-markers = [
-    "python_full_version >= '3.13'",
+    "python_full_version >= '3.14'",
+    "python_full_version == '3.13.*'",
     "python_full_version < '3.13'",
 ]
 
@@ -168,7 +169,7 @@ wheels = [
 
 [[package]]
 name = "angel-claw"
-version = "0.2.0"
+version = "0.3.0"
 source = { editable = "." }
 dependencies = [
     { name = "angel-recall" },
@@ -179,6 +180,8 @@ dependencies = [
     { name = "pydantic" },
     { name = "pydantic-settings" },
     { name = "python-dotenv" },
+    { name = "python-telegram-bot" },
+    { name = "telegram" },
     { name = "uvicorn" },
 ]
 
@@ -200,6 +203,8 @@ requires-dist = [
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
     { name = "python-dotenv" },
+    { name = "python-telegram-bot" },
+    { name = "telegram", specifier = ">=0.0.1" },
     { name = "uvicorn" },
 ]
 provides-extras = ["test"]
@@ -3086,6 +3091,19 @@ wheels = [
 ]
 
 [[package]]
+name = "python-telegram-bot"
+version = "22.6"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpcore", marker = "python_full_version >= '3.14'" },
+    { name = "httpx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/cd/9b/8df90c85404166a6631e857027866263adb27440d8af1dbeffbdc4f0166c/python_telegram_bot-22.6.tar.gz", hash = "sha256:50ae8cc10f8dff01445628687951020721f37956966b92a91df4c1bf2d113742", size = 1503761, upload-time = "2026-01-24T13:57:00.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/13/97/7298f0e1afe3a1ae52ff4c5af5087ed4de319ea73eb3b5c8c4dd4e76e708/python_telegram_bot-22.6-py3-none-any.whl", hash = "sha256:e598fe171c3dde2dfd0f001619ee9110eece66761a677b34719fb18934935ce0", size = 737267, upload-time = "2026-01-24T13:56:58.06Z" },
+]
+
+[[package]]
 name = "pytz"
 version = "2025.2"
 source = { registry = "https://pypi.org/simple" }
@@ -3542,6 +3560,12 @@ sdist = { url = "https://files.pythonhosted.org/packages/83/d3/803453b36afefb7c2
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a2/09/77d55d46fd61b4a135c444fc97158ef34a095e5681d0a6c10b75bf356191/sympy-1.14.0-py3-none-any.whl", hash = "sha256:e091cc3e99d2141a0ba2847328f5479b05d94a6635cb96148ccb3f34671bd8f5", size = 6299353, upload-time = "2025-04-27T18:04:59.103Z" },
 ]
+
+[[package]]
+name = "telegram"
+version = "0.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9d/ca/8bdf2deb93b9f6971dabf2ddc827c2a98ce23e13582a15b37e9bc169f226/telegram-0.0.1.tar.gz", hash = "sha256:d405a0af4c868a8dbeae6d03e297e21c7ee6269e11e2ed3810e15544aba02591", size = 879, upload-time = "2015-09-29T07:32:18.348Z" }
 
 [[package]]
 name = "tenacity"

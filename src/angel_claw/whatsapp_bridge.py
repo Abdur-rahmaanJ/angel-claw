@@ -195,7 +195,13 @@ class WhatsAppBridge:
             if text.startswith("Bot: "):
                 return
 
-            if str(chat_jid).endswith("@g.us"):
+            # Only allow private chats (users and hidden users)
+            # This ignores groups (@g.us), status updates (@broadcast), and newsletters (@newsletter)
+            if chat_jid.Server not in ("s.whatsapp.net", "lid"):
+                return
+
+            # Explicitly ignore status updates if they somehow bypass the server check
+            if sender_id == "status":
                 return
 
             logger.info(f"Incoming WhatsApp from {sender_id}: {text}")

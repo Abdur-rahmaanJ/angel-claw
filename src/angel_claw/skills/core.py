@@ -1,6 +1,10 @@
 import os
 import shutil
 import subprocess
+import httpx
+import zipfile
+import io
+import json
 from angel_claw.skills.manager import skill
 from angel_claw.cron import cron_manager, Job, JobSchedule, JobPayload
 
@@ -141,3 +145,69 @@ def delete_task(name: str, session_id: str = "cli-default") -> str:
             return f"Task '{name}' found but belongs to a different session."
     else:
         return f"Task '{name}' not found."
+
+@skill
+def search_clawhub(query: str = "") -> str:
+    """
+    Searches ClawHub.ai for skills matching the query.
+    Returns a list of skill slugs and descriptions.
+    """
+    url = "https://clawhub.ai/api/v1/skills"
+    try:
+        with httpx.Client() as client:
+            response = client.get(url, follow_redirects=True)
+            response.raise_for_status()
+            data = response.json()
+            items = data.get("items", [])
+            
+            if query:
+                # Basic client-side filtering
+                filtered = [i for i in items if query.lower() in i.get("slug", "").lower() or query.lower() in i.get("description", "").lower()]
+            else:
+                filtered = items[:10] # Show top 10 if no query
+            
+            if not filtered:
+                return f"No skills found on ClawHub matching '{query}'."
+            
+            results = ["ClawHub Search Results:"]
+            for i in filtered:
+                slug = i.get('slug')
+                desc = i.get('description', 'No description.')
+                results.append(f"- {slug}: {desc}")
+            
+            return "\n".join(results)
+    except Exception as e:
+        return f"Error searching ClawHub: {e}"
+
+@skill
+def install_skill_from_clawhub(slug: str) -> str:
+    """
+    Downloads and installs a skill from ClawHub.ai by its slug.
+    The skill will be saved as a SKILL.md file which provides instructions to the agent.
+    WARNING: ClawHub skills are community-contributed; use with extreme caution.
+    """
+    url = f"https://auth.clawdhub.com/api/v1/download?slug={slug}"
+    # Use consistent local skills directory in CWD
+    skills_dir = os.path.join(os.getcwd(), "skills", "clawhub", slug)
+    
+    try:
+        if not os.path.exists(skills_dir):
+            os.makedirs(skills_dir)
+            
+        with httpx.Client() as client:
+            response = client.get(url, follow_redirects=True)
+            response.raise_for_status()
+            
+            with zipfile.ZipFile(io.BytesIO(response.content)) as z:
+                z.extractall(skills_dir)
+        
+        skill_file = os.path.join(skills_dir, "SKILL.md")
+        if os.path.exists(skill_file):
+            with open(skill_file, "r") as f:
+                content = f.read()
+            return f"Successfully installed ClawHub skill '{slug}'.\n\n--- SKILL.md ---\n{content}"
+        else:
+            return f"Successfully installed ClawHub skill '{slug}' but no SKILL.md was found in the archive."
+            
+    except Exception as e:
+        return f"Error installing skill from ClawHub: {e}"

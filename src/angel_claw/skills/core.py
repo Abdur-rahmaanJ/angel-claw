@@ -152,28 +152,34 @@ def search_clawhub(query: str = "") -> str:
     Searches ClawHub.ai for skills matching the query.
     Returns a list of skill slugs and descriptions.
     """
-    url = "https://clawhub.ai/api/v1/skills"
+    # Use the dedicated search API if a query is provided, otherwise list latest
+    if query:
+        url = f"https://clawhub.ai/api/v1/search?q={query}&nonSuspicious=true"
+    else:
+        url = "https://clawhub.ai/api/v1/skills"
+
     try:
         with httpx.Client() as client:
             response = client.get(url, follow_redirects=True)
             response.raise_for_status()
             data = response.json()
-            items = data.get("items", [])
             
-            if query:
-                # Basic client-side filtering
-                filtered = [i for i in items if query.lower() in i.get("slug", "").lower() or query.lower() in i.get("description", "").lower()]
-            else:
-                filtered = items[:10] # Show top 10 if no query
+            # search API uses 'results', skills API uses 'items'
+            items = data.get("results") or data.get("items", [])
             
-            if not filtered:
+            if not items:
                 return f"No skills found on ClawHub matching '{query}'."
             
-            results = ["ClawHub Search Results:"]
-            for i in filtered:
+            # Limit to top 10 for context safety
+            items = items[:10]
+            
+            results = [f"ClawHub Search Results for '{query or 'latest'}':"]
+            for i in items:
                 slug = i.get('slug')
-                desc = i.get('description', 'No description.')
-                results.append(f"- {slug}: {desc}")
+                # Prefer 'summary' which is used by ClawHub for short descriptions
+                desc = i.get('summary') or i.get('description', 'No description.')
+                display_name = i.get('displayName', slug)
+                results.append(f"- {display_name} ({slug}): {desc}")
             
             return "\n".join(results)
     except Exception as e:

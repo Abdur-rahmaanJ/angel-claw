@@ -1,6 +1,6 @@
-# Angel Claw
+# 🪽 Angel Claw
 
-A personal AI agent framework based on OpenClaw, using `angel-recall` for memory and `litellm` for LLM interactions.
+A personal AI agent framework inspired by OpenClaw, using `angel-recall` for memory and `litellm` for LLM interactions.
 
 ## Features
 

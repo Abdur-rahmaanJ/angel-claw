@@ -3,7 +3,9 @@ from .models import AgentRequest, AgentResponse
 from .agent import Agent
 from .cron import cron_manager
 from .telegram_bridge import telegram_bridge
-from typing import Dict, Any
+from .whatsapp_bridge import whatsapp_bridge
+from typing import Dict, Any, Optional
+from fastapi import Request, Response
 import uvicorn
 import asyncio
 
@@ -14,6 +16,11 @@ async def startup_event():
     # Start background workers
     asyncio.create_task(cron_manager.run())
     asyncio.create_task(telegram_bridge.run())
+    asyncio.create_task(whatsapp_bridge.run())
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    await whatsapp_bridge.close()
 
 @app.post("/chat", response_model=AgentResponse)
 async def chat(request: AgentRequest):

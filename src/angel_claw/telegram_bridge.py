@@ -61,6 +61,8 @@ class TelegramBridge:
         await update.message.reply_text(f"Successfully paired! I am now your Angel Claw for session: `{session_id}`")
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not update.effective_chat or update.effective_chat.type != "private":
+            return
         chat_id = str(update.effective_chat.id)
         if chat_id not in self.pairings:
             await update.message.reply_text("This chat is not paired. Use `/pair <session-id>` to start.")

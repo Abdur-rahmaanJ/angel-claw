@@ -23,6 +23,9 @@ class Settings(BaseSettings):
     # Telegram Bridge Settings
     telegram_token: Optional[str] = Field(None, validation_alias="TELEGRAM_TOKEN")
 
+    # WhatsApp Bridge Settings
+    whatsapp_enabled: bool = Field(False, validation_alias="WHATSAPP_ENABLED")
+
     # Search Settings
     brave_api_key: Optional[str] = Field(None, validation_alias="BRAVE_API_KEY")
     

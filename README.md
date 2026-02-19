@@ -67,6 +67,19 @@ You can interact with Angel Claw from your phone using Telegram:
 3.  **Pair your chat**: Use the `/pair` command with your session ID (e.g., `/pair cli-default`).
 4.  Angel Claw will now respond to your Telegram messages using that session's memory and skills.
 
+### WhatsApp Bridge
+
+Angel Claw supports WhatsApp via a "Link Device" (QR code) method:
+1.  **Enable WhatsApp**: Add `WHATSAPP_ENABLED=True` to your `.env`.
+2.  **Link Your Device**: Run the dedicated login command:
+    ```bash
+    angel-claw login-whatsapp
+    ```
+3.  **Scan QR Code**: Scan the QR code that appears in your terminal using your phone (WhatsApp > Linked Devices).
+4.  **Start Angel Claw**: Once linked, you can run `angel-claw chat` as normal.
+5.  **Pair your chat**: On WhatsApp, send `/pair <session-id>` (e.g., `/pair cli-default`) to yourself or the bot's number.
+6.  Angel Claw is now connected to your WhatsApp!
+
 ### Basic Chat
 Send a POST request to `/chat`:
 

@@ -160,12 +160,23 @@ class CronManager:
         self.save_job(job)
 
     async def _send_proactive_message(self, message: str, user_id: str, session_id: str = "default"):
-        # Call registered handlers (e.g., Telegram)
+        # Call registered handlers (e.g., Telegram, WhatsApp)
+        import inspect
         for handler in self.proactive_handlers:
             try:
-                await handler(message, user_id, session_id)
+                if not callable(handler):
+                    logger.error(f"Proactive handler {handler} is not callable!")
+                    continue
+                    
+                if inspect.iscoroutinefunction(handler):
+                    await handler(message, user_id, session_id)
+                else:
+                    # Check if it returns a coroutine (some bound methods behave this way)
+                    res = handler(message, user_id, session_id)
+                    if inspect.isawaitable(res):
+                        await res
             except Exception as e:
-                logger.error(f"Error in proactive handler: {e}")
+                logger.error(f"Error in proactive handler {handler}: {e}", exc_info=True)
 
         if settings.proactive_webhook_url:
             try:
@@ -179,9 +190,10 @@ class CronManager:
             except Exception as e:
                 logger.error(f"Error sending proactive message to webhook: {e}")
         
-        # Always log to console for CLI visibility
+        # Always log to console for CLI visibility if debug is on
         logger.info(f"PROACTIVE MESSAGE to {user_id} ({session_id}): {message}")
-        print(f"\n[PROACTIVE] {user_id} ({session_id}): {message}\nYou: ", end="", flush=True)
+        if settings.debug:
+            print(f"\n[PROACTIVE] {user_id} ({session_id}): {message}", flush=True)
 
     async def run(self):
         logger.info("Cron worker started.")

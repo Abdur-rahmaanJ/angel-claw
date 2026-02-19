@@ -59,6 +59,14 @@ The agent can browse the web to find information or interact with sites.
 If Angel Claw doesn't have a tool, it can write one for itself.
 - **Prompt:** "Create a skill called 'currency_converter' that uses an API to convert USD to EUR."
 
+### 5. ClawHub Skills
+Angel Claw can search for and install community-contributed skills from [ClawHub.ai](https://clawhub.ai).
+- **Search:** "Search ClawHub for frontend skills."
+- **Install:** "Install the 'slopwork-marketplace' skill from ClawHub."
+- **Note:** Installed skills provide instructions (SKILL.md) that the agent will follow immediately.
+
+> ⚠️ **Security Warning:** ClawHub skills are community-contributed and unvetted. Always review skills before use, as malicious skills may attempt to steal API keys or sensitive data.
+
 ### Telegram Bridge
 
 You can interact with Angel Claw from your phone using Telegram:

@@ -69,6 +69,7 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
         # 2. Build messages
         system_prompt = (
             f"{self.soul}\n\n"
+            f"CURRENT SESSION ID: {self.session_id}\n\n"
             "Use the following memory context to answer. "
             "IMPORTANT: Memories are listed from NEWEST to OLDEST. "
             "If there is conflicting information, ALWAYS trust the NEWEST memory.\n\n"
@@ -85,6 +86,7 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
             "       \"\"\"Description of the tool.\"\"\"\n"
             "       return f'Result: {param1}'\n\n"
             "IMPORTANT for 'schedule_task':\n"
+            f"- ALWAYS use the current session ID: '{self.session_id}' unless the user explicitly requests otherwise.\n"
             "- Use 'in' for one-shot relative reminders (e.g., 'remind me in 1 minute' -> kind='in', value='1m').\n"
             "- Use 'every' for recurring tasks (e.g., 'every day' -> kind='every', value='1d').\n"
             "- Seconds ('s'), minutes ('m'), hours ('h'), and days ('d') are all supported.\n\n"
@@ -140,8 +142,8 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                 
                 if function_name in self.skill_manager.skills:
                     function_to_call = self.skill_manager.skills[function_name]
-                    # Automatically inject session_id into schedule_task if not provided
-                    if function_name == "schedule_task" and "session_id" not in function_args:
+                    # Automatically inject current session_id into schedule_task to ensure correct routing
+                    if function_name == "schedule_task":
                         function_args["session_id"] = self.session_id
                         
                     try:

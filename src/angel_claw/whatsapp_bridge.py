@@ -9,7 +9,7 @@ from typing import Optional, Dict, Any
 # Use Synchronous Client for everything to avoid asyncio loop conflicts
 from neonize.client import NewClient
 from neonize.events import MessageEv, ConnectedEv, QREv
-from neonize.utils.jid import build_jid
+from neonize.utils.jid import build_jid, Jid2String
 from .config import settings
 from .agent import Agent
 from .cron import cron_manager
@@ -52,7 +52,9 @@ class WhatsAppBridge:
         if os.path.exists(self.pairings_file):
             try:
                 with open(self.pairings_file, "r") as f:
-                    return json.load(f)
+                    data = json.load(f)
+                    # Clean up: remove multiline keys (from old protobuf str() bugs)
+                    return {k: v for k, v in data.items() if "\n" not in k}
             except Exception as e:
                 logger.error(f"Error loading WhatsApp pairings: {e}")
         return {}
@@ -149,7 +151,12 @@ class WhatsAppBridge:
                 jid, message = self.out_queue.get(timeout=1)
                 
                 # Wait for stable connection
+                if settings.debug:
+                    print(f"\n[DEBUG WhatsApp] Outgoing message to {jid} queued.", flush=True)
+
                 while not self.client or not getattr(self.client, 'is_logged_in', False):
+                    if settings.debug:
+                        print(f"\n[DEBUG WhatsApp] Waiting for connection to send message...", flush=True)
                     time.sleep(2)
 
                 success = False
@@ -159,10 +166,14 @@ class WhatsAppBridge:
                         if attempt > 0: time.sleep(3)
                         
                         self.client.send_message(jid, message)
+                        if settings.debug:
+                            print(f"\n[DEBUG WhatsApp] Message sent successfully to {jid}.", flush=True)
                         success = True
                         break
                     except Exception as e:
                         logger.warning(f"WhatsApp send attempt {attempt+1} failed: {e}")
+                        if settings.debug:
+                            print(f"\n[DEBUG WhatsApp] Send attempt {attempt+1} failed: {e}", flush=True)
                         # Exponential backoff
                         time.sleep(2 * (attempt + 1))
                 
@@ -177,9 +188,15 @@ class WhatsAppBridge:
 
     def _handle_message_sync(self, client: NewClient, message: MessageEv):
         try:
-            # Get the JID and extract the clean user ID (phone number)
+            # Get the JID and extract the clean user ID (phone number or LID)
             chat_jid = message.Info.MessageSource.Chat
-            sender_id = chat_jid.User.split("@")[0]
+            
+            # Only allow private chats (users and hidden users)
+            # This ignores groups (@g.us), status updates (@broadcast), and newsletters (@newsletter)
+            if chat_jid.Server not in ("s.whatsapp.net", "lid"):
+                return
+
+            sender_id = Jid2String(chat_jid)
             
             # Extract text
             text = ""
@@ -195,13 +212,8 @@ class WhatsAppBridge:
             if text.startswith("Bot: "):
                 return
 
-            # Only allow private chats (users and hidden users)
-            # This ignores groups (@g.us), status updates (@broadcast), and newsletters (@newsletter)
-            if chat_jid.Server not in ("s.whatsapp.net", "lid"):
-                return
-
             # Explicitly ignore status updates if they somehow bypass the server check
-            if sender_id == "status":
+            if chat_jid.User == "status":
                 return
 
             logger.info(f"Incoming WhatsApp from {sender_id}: {text}")
@@ -225,19 +237,28 @@ class WhatsAppBridge:
         parts = text.split()
         cmd = parts[0].lower()
         if cmd == "/pair" and len(parts) > 1:
-            self.pairings[sender_id] = parts[1]
+            session_id = parts[1]
+            self.pairings[sender_id] = session_id
             self._save_pairings()
-            self.out_queue.put((sender_jid, f"Bot: ✅ Paired with session: `{parts[1]}`"))
+            self.out_queue.put((sender_jid, f"Bot: ✅ Paired with session: `{session_id}`"))
         elif cmd == "/start":
             self.out_queue.put((sender_jid, "Bot: 👋 Welcome to Angel Claw!\nUse `/pair <session-id>` to connect your session."))
 
     async def _handle_chat(self, client: NewClient, sender_jid: Any, sender_id: str, text: str):
-        if sender_id not in self.pairings:
+        # sender_id is already a clean string from Jid2String
+        session_id = self.pairings.get(sender_id)
+        
+        # Fallback for old pairings that only stored the phone number
+        if not session_id and "@" in sender_id:
+            phone_number = sender_id.split("@")[0]
+            session_id = self.pairings.get(phone_number)
+
+        if not session_id:
             logger.warning(f"Unpaired message from {sender_id}")
             self.out_queue.put((sender_jid, "Bot: ⚠️ Chat not paired. Use `/pair <session-id>` to start."))
             return
 
-        session_id = self.pairings[sender_id]
+        session_id = str(session_id) # Ensure it's a string
         logger.info(f"Processing message for session {session_id} from {sender_id}")
         try:
             agent = Agent(session_id)
@@ -249,14 +270,37 @@ class WhatsAppBridge:
             self.out_queue.put((sender_jid, f"Bot: ⚠️ Error processing your request."))
 
     def send_proactive(self, message: str, user_id: str, session_id: str):
+        if settings.debug:
+            print(f"\n[DEBUG WhatsApp] send_proactive: checking session '{session_id}' against {len(self.pairings)} pairings.", flush=True)
+        
         logger.info(f"WhatsApp send_proactive triggered for session: {session_id}")
         logger.debug(f"Current pairings: {self.pairings}")
         
-        for sender_id, paired_sid in self.pairings.items():
+        # We collect target JIDs first to avoid duplicates if possible
+        target_jids = []
+        for sender_id_str, paired_sid in self.pairings.items():
             if paired_sid == session_id:
-                logger.info(f"Match found! Sending reminder to WhatsApp ID: {sender_id}")
-                sender_jid = build_jid(f"{sender_id}")
-                self.out_queue.put((sender_jid, f"Bot: {message}"))
+                # Extra safety: skip multiline keys if they somehow made it in
+                if "\n" in str(sender_id_str):
+                    continue
+                
+                if settings.debug:
+                    print(f"\n[DEBUG WhatsApp] Match found! Sender: {sender_id_str}", flush=True)
+                
+                # Parse full JID string (User@Server)
+                if "@" in str(sender_id_str):
+                    user_part, server_part = str(sender_id_str).split("@", 1)
+                    sender_jid = build_jid(user_part, server_part)
+                else:
+                    # Fallback for old pairings
+                    sender_jid = build_jid(str(sender_id_str))
+                
+                target_jids.append(sender_jid)
+        
+        # Send to all matched targets
+        for jid in target_jids:
+            logger.info(f"Enqueuing proactive message to JID: {jid.User}@{jid.Server}")
+            self.out_queue.put((jid, f"Bot: {message}"))
 
     async def close(self): pass
 

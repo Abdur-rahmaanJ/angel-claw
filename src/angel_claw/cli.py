@@ -24,6 +24,14 @@ logging.getLogger("neonize").setLevel(logging.CRITICAL)
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine 'Logging.async_success_handler' was never awaited")
 
 async def interactive_chat(model: str = None):
+    # Register CLI proactive handler
+    def cli_proactive_handler(message: str, user_id: str, session_id: str):
+        if session_id == "cli-default":
+            # Use \r to clear 'You: ' and then print the reminder
+            print(f"\r\n[REMINDER] {message}\nYou: ", end="", flush=True)
+
+    cron_manager.register_proactive_handler(cli_proactive_handler)
+
     # Start background workers silently
     cron_task = asyncio.create_task(cron_manager.run())
     telegram_task = asyncio.create_task(telegram_bridge.run())

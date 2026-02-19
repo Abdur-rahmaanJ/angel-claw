@@ -9,13 +9,15 @@ from typing import Optional, Dict, Any
 # Use Synchronous Client for everything to avoid asyncio loop conflicts
 from neonize.client import NewClient
 from neonize.events import MessageEv, ConnectedEv, QREv
-from neonize.utils import log as nlog
+from neonize.utils.jid import build_jid
 from .config import settings
 from .agent import Agent
 from .cron import cron_manager
 
-# Set neonize logging to warning to avoid too much noise for normal ops
-logging.getLogger("neonize").setLevel(logging.WARNING)
+# Set neonize logging to warning to avoid too much noise
+logging.getLogger("neonize").setLevel(logging.CRITICAL)
+logging.getLogger("whatsmeow").setLevel(logging.CRITICAL)
+logging.getLogger("Whatsmeow").setLevel(logging.CRITICAL)
 logger = logging.getLogger("angel-claw-whatsapp")
 
 class WhatsAppBridge:
@@ -29,10 +31,22 @@ class WhatsAppBridge:
         self.pairings = self._load_pairings()
         self.enabled = settings.whatsapp_enabled
         self.client = None
-        self.thread = None
+        self.main_thread = None
+        self.sender_thread = None
+        self.out_queue = queue.Queue()
+        self.process_loop = None
         
         # Register for proactive reminders
         cron_manager.register_proactive_handler(self.send_proactive)
+
+    def _start_process_loop(self):
+        """Starts a background thread with an asyncio loop for agent processing."""
+        def _runner():
+            self.process_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.process_loop)
+            self.process_loop.run_forever()
+        
+        threading.Thread(target=_runner, daemon=True).start()
 
     def _load_pairings(self):
         if os.path.exists(self.pairings_file):
@@ -51,18 +65,10 @@ class WhatsAppBridge:
             logger.error(f"Error saving WhatsApp pairings: {e}")
 
     async def run(self):
-        """
-        Main entry point. 
-        For 'angel-claw chat', this is called as an async task but we offload 
-        the blocking Neonize client to a thread immediately.
-        """
         if not self.enabled:
-            logger.info("WhatsApp bridge is disabled.")
             return
 
-        # Check if we have an existing session
         has_session = os.path.exists(self.db_file)
-        
         import sys
         is_login_cmd = "login-whatsapp" in sys.argv
 
@@ -70,120 +76,140 @@ class WhatsAppBridge:
             logger.warning("WhatsApp session not found. Please run 'angel-claw login-whatsapp' to link your account.")
             return
 
-        # We use a Queue to communicate QR codes back to the main thread if needed
         qr_queue = queue.Queue()
         connected_event = threading.Event()
 
         def _sync_client_runner():
-            logger.info(f"Starting WhatsApp bridge (Threaded Sync Mode)...")
-            # If logging in, enable debug
-            if is_login_cmd:
-                logging.getLogger("neonize").setLevel(logging.DEBUG)
-            
+            logger.info("Initializing WhatsApp client...")
             self.client = NewClient(self.db_file)
 
             @self.client.event(QREv)
             def on_qr(_: NewClient, qr: QREv):
-                # Put QR in queue for main thread to display
-                try:
-                    qr_str = qr if isinstance(qr, str) else qr.Code
-                except AttributeError:
-                    qr_str = str(qr)
-                qr_queue.put(qr_str)
+                if is_login_cmd:
+                    try:
+                        qr_str = qr if isinstance(qr, str) else qr.Code
+                    except AttributeError:
+                        qr_str = str(qr)
+                    qr_queue.put(qr_str)
+                else:
+                    logger.warning("QR Code requested but not in login mode. Session may have expired.")
 
             @self.client.event(ConnectedEv)
             def on_connected(_: NewClient, __: ConnectedEv):
-                logger.info("⚡ WhatsApp Connected!")
+                logger.info("⚡ WhatsApp Connected and Authenticated!")
                 connected_event.set()
 
             @self.client.event(MessageEv)
             def on_message(client: NewClient, message: MessageEv):
-                # Run message handling logic
-                # Since this is in a thread, we can call a helper
+                logger.debug(f"Received raw message event: {message}")
                 self._handle_message_sync(client, message)
 
-            # connect() is blocking in the synchronous client
             try:
+                logger.info("Connecting to WhatsApp servers...")
                 self.client.connect()
             except Exception as e:
-                logger.error(f"WhatsApp client disconnected: {e}")
+                logger.error(f"WhatsApp connection failed: {e}")
 
-        # Start the thread
-        self.thread = threading.Thread(target=_sync_client_runner, daemon=True)
-        self.thread.start()
+        # Start Main Client Thread
+        self.main_thread = threading.Thread(target=_sync_client_runner, daemon=True)
+        self.main_thread.start()
 
-        # If this is the login command, we block and wait for QR/Connection
+        # Start Outgoing Sender Thread
+        self.sender_thread = threading.Thread(target=self._sender_worker, daemon=True)
+        self.sender_thread.start()
+
+        # Start Agent Processing Loop
+        self._start_process_loop()
+
         if is_login_cmd:
-            print("\n" + "="*40)
-            print("   Waiting for WhatsApp QR Code...")
-            print("="*40 + "\n")
+            print("\nWaiting for WhatsApp QR Code...")
             try:
-                # Wait for QR
                 while not connected_event.is_set():
                     try:
                         qr_code_data = qr_queue.get(timeout=1)
                         import qrcode
                         qr_gen = qrcode.QRCode()
                         qr_gen.add_data(qr_code_data)
-                        print("\n" + "="*40)
-                        print("   SCAN THIS QR CODE WITH WHATSAPP")
-                        print("="*40 + "\n")
+                        print("\n" + "="*40 + "\n   SCAN THIS QR CODE WITH WHATSAPP\n" + "="*40 + "\n")
                         qr_gen.print_ascii()
-                        print("\n" + "="*40)
-                        print("   Waiting for scan...")
-                        print("="*40 + "\n")
-                    except queue.Empty:
-                        pass
-                    
-                    # Check connection
+                        print("\nWaiting for scan...\n")
+                    except queue.Empty: pass
                     if connected_event.is_set():
-                        print("\n✅ Successfully linked! You can now exit (Ctrl+C) and use 'angel-claw chat'.")
-                        # Keep alive to show logs until user exits
-                        while True:
-                            time.sleep(1)
-            except (KeyboardInterrupt, asyncio.CancelledError):
-                print("\nLogin process interrupted.")
+                        print("\n✅ Successfully linked! You can now exit (Ctrl+C).")
+                        while True: time.sleep(1)
+            except (KeyboardInterrupt, asyncio.CancelledError): pass
             return
 
-        # If NOT login command (background mode), we just return immediately 
-        # and let the thread run in the background.
-        logger.info("WhatsApp bridge running in background thread.")
-        # We need a small sleep to ensure thread starts before main loop continues heavily
-        import asyncio
-        await asyncio.sleep(0.5) 
+        await asyncio.sleep(0.1) 
+
+    def _sender_worker(self):
+        """Worker thread that drains the outgoing message queue."""
+        while True:
+            try:
+                jid, message = self.out_queue.get(timeout=1)
+                
+                # Wait for stable connection
+                while not self.client or not getattr(self.client, 'is_logged_in', False):
+                    time.sleep(2)
+
+                success = False
+                for attempt in range(3):
+                    try:
+                        # Small delay to ensure Go bridge is ready for usync
+                        if attempt > 0: time.sleep(3)
+                        
+                        self.client.send_message(jid, message)
+                        success = True
+                        break
+                    except Exception as e:
+                        logger.warning(f"WhatsApp send attempt {attempt+1} failed: {e}")
+                        # Exponential backoff
+                        time.sleep(2 * (attempt + 1))
+                
+                if not success:
+                    logger.error(f"Failed to send message to {jid} after 3 attempts.")
+                
+                self.out_queue.task_done()
+            except queue.Empty:
+                continue
+            except Exception as e:
+                logger.error(f"Error in WhatsApp sender worker: {e}")
 
     def _handle_message_sync(self, client: NewClient, message: MessageEv):
-        """Handle messages in the sync thread."""
         try:
-            text = message.Message.conversation or message.Message.extendedTextMessage.text
-            if not text:
-                return
+            # Get the JID and extract the clean user ID (phone number)
+            chat_jid = message.Info.MessageSource.Chat
+            sender_id = chat_jid.User.split("@")[0]
             
-            sender_jid = message.Info.MessageSource.Chat
+            # Extract text
+            text = ""
+            if message.Message.conversation:
+                text = message.Message.conversation
+            elif message.Message.extendedTextMessage and message.Message.extendedTextMessage.text:
+                text = message.Message.extendedTextMessage.text
             
-            # Ignore group chats (JIDs ending in @g.us)
-            if str(sender_jid).endswith("@g.us"):
-                logger.debug(f"Ignoring group chat message from {sender_jid}")
+            if not text: return
+            
+            # Use 'Bot: ' prefix check instead of IsFromMe
+            # This allows responding to 'Message to Yourself' where IsFromMe is always True
+            if text.startswith("Bot: "):
                 return
 
-            sender_id = str(sender_jid).split("@")[0]
+            if str(chat_jid).endswith("@g.us"):
+                return
 
-            # We need to bridge back to Async Agent. 
-            # Since we are in a sync thread, we run a mini-asyncio runner for the agent chat
-            # OR we can simply schedule it if we had access to the main loop.
-            # For robustness, we'll run a one-off async call here.
+            logger.info(f"Incoming WhatsApp from {sender_id}: {text}")
             
-            asyncio.run(self._process_agent_response(client, sender_jid, sender_id, text))
+            # Always reply to the Chat JID
+            threading.Thread(
+                target=lambda: asyncio.run(self._process_agent_response(client, chat_jid, sender_id, text)),
+                daemon=True
+            ).start()
             
         except Exception as e:
             logger.error(f"Error handling WhatsApp message: {e}")
 
     async def _process_agent_response(self, client: NewClient, sender_jid: Any, sender_id: str, text: str):
-        # Double check it's not a group (JID ending in @g.us)
-        if str(sender_jid).endswith("@g.us"):
-            return
-
-        # Determine if it's a command or chat
         if text.startswith("/"):
             await self._handle_command(client, sender_jid, sender_id, text)
         else:
@@ -192,49 +218,40 @@ class WhatsAppBridge:
     async def _handle_command(self, client: NewClient, sender_jid: Any, sender_id: str, text: str):
         parts = text.split()
         cmd = parts[0].lower()
-        response = ""
-        
         if cmd == "/pair" and len(parts) > 1:
-            session_id = parts[1]
-            self.pairings[sender_id] = session_id
+            self.pairings[sender_id] = parts[1]
             self._save_pairings()
-            response = f"✅ Paired with session: `{session_id}`"
+            self.out_queue.put((sender_jid, f"Bot: ✅ Paired with session: `{parts[1]}`"))
         elif cmd == "/start":
-            response = "👋 Welcome to Angel Claw!\nUse `/pair <session-id>` to connect your session."
-        else:
-            response = f"Unknown command: {cmd}"
-            
-        client.send_message(sender_jid, response)
+            self.out_queue.put((sender_jid, "Bot: 👋 Welcome to Angel Claw!\nUse `/pair <session-id>` to connect your session."))
 
     async def _handle_chat(self, client: NewClient, sender_jid: Any, sender_id: str, text: str):
         if sender_id not in self.pairings:
-            client.send_message(sender_jid, "⚠️ Chat not paired. Use `/pair <session-id>` to start.")
+            logger.warning(f"Unpaired message from {sender_id}")
+            self.out_queue.put((sender_jid, "Bot: ⚠️ Chat not paired. Use `/pair <session-id>` to start."))
             return
 
         session_id = self.pairings[sender_id]
+        logger.info(f"Processing message for session {session_id} from {sender_id}")
         try:
             agent = Agent(session_id)
             response = await agent.chat(text)
-            client.send_message(sender_jid, f"Bot: {response}")
+            logger.info(f"Sending response to {sender_id}")
+            self.out_queue.put((sender_jid, f"Bot: {response}"))
         except Exception as e:
-            logger.error(f"Error in WhatsApp chat: {e}")
-            client.send_message(sender_jid, f"⚠️ Error: {e}")
+            logger.error(f"Error in WhatsApp chat: {e}", exc_info=True)
+            self.out_queue.put((sender_jid, f"Bot: ⚠️ Error processing your request."))
 
     def send_proactive(self, message: str, user_id: str, session_id: str):
-        if not self.client or not self.client.is_logged_in():
-            return
-
+        logger.info(f"WhatsApp send_proactive triggered for session: {session_id}")
+        logger.debug(f"Current pairings: {self.pairings}")
+        
         for sender_id, paired_sid in self.pairings.items():
             if paired_sid == session_id:
-                sender_jid = f"{sender_id}@s.whatsapp.net"
-                try:
-                    self.client.send_message(sender_jid, f"Bot: {message}")
-                except Exception as e:
-                    logger.error(f"Failed to send proactive WhatsApp message: {e}")
+                logger.info(f"Match found! Sending reminder to WhatsApp ID: {sender_id}")
+                sender_jid = build_jid(f"{sender_id}")
+                self.out_queue.put((sender_jid, f"Bot: {message}"))
 
-    async def close(self):
-        # Sync client doesn't have a clean stop from another thread easily
-        # but daemon thread will die with process
-        pass
+    async def close(self): pass
 
 whatsapp_bridge = WhatsAppBridge()

@@ -15,9 +15,10 @@ logging.getLogger().setLevel(logging.ERROR)
 logging.getLogger("angel-claw-cron").setLevel(logging.ERROR)
 logging.getLogger("angel-claw-telegram").setLevel(logging.ERROR)
 logging.getLogger("angel-claw-whatsapp").setLevel(logging.ERROR)
-logging.getLogger("LiteLLM").setLevel(logging.ERROR)
-logging.getLogger("whatsmeow").setLevel(logging.ERROR)
-logging.getLogger("neonize").setLevel(logging.ERROR)
+logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
+logging.getLogger("whatsmeow").setLevel(logging.CRITICAL)
+logging.getLogger("Whatsmeow").setLevel(logging.CRITICAL)
+logging.getLogger("neonize").setLevel(logging.CRITICAL)
 
 # Suppress litellm specific RuntimeWarning about async_success_handler
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine 'Logging.async_success_handler' was never awaited")
@@ -50,7 +51,7 @@ async def interactive_chat(model: str = None):
             if not user_input:
                 continue
                 
-            print("Assistant: ", end="", flush=True)
+            print("\nAssistant: ", end="", flush=True)
             # Use asyncio for chat as it is async
             response = await agent.chat(user_input)
             print(response + "\n")
@@ -60,12 +61,15 @@ async def interactive_chat(model: str = None):
         except Exception as e:
             print(f"\nError: {e}")
     
-    # Cancel the cron worker task
-    cron_task.cancel()
-    try:
-        await cron_task
-    except asyncio.CancelledError:
-        pass
+    # Cancel and cleanup all background tasks
+    for task in [cron_task, telegram_task, whatsapp_task]:
+        task.cancel()
+    
+    # Wait for tasks to finish cancelling
+    await asyncio.gather(*[cron_task, telegram_task, whatsapp_task], return_exceptions=True)
+    
+    # Cleanup bridge resources
+    await whatsapp_bridge.close()
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":

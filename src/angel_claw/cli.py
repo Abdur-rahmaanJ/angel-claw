@@ -3,6 +3,9 @@ import uuid
 import sys
 import logging
 import warnings
+import os
+import shutil
+import importlib.resources
 from .agent import Agent
 from .config import settings
 from .gateway import start as start_gateway
@@ -22,6 +25,22 @@ logging.getLogger("neonize").setLevel(logging.CRITICAL)
 
 # Suppress litellm specific RuntimeWarning about async_success_handler
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine 'Logging.async_success_handler' was never awaited")
+
+def ensure_env():
+    """Ensures a .env file exists in the current working directory."""
+    if not os.path.exists(".env"):
+        print("No .env file found. Creating one from .env.example...")
+        try:
+            # Try to get .env.example from the package resources
+            # In modern python (3.11+), importlib.resources.files is preferred
+            example_path = importlib.resources.files("angel_claw").joinpath(".env.example")
+            if example_path.is_file():
+                shutil.copy(str(example_path), ".env")
+                print("Created .env file. Please edit it to include your API keys.")
+            else:
+                print("Warning: .env.example not found in package.")
+        except Exception as e:
+            print(f"Warning: Could not create .env file: {e}")
 
 async def interactive_chat(model: str = None):
     # Register CLI proactive handler
@@ -81,9 +100,11 @@ async def interactive_chat(model: str = None):
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":
+        ensure_env()
         model_override = sys.argv[2] if len(sys.argv) > 2 else None
         asyncio.run(interactive_chat(model_override))
     elif len(sys.argv) > 1 and sys.argv[1] == "login-whatsapp":
+        ensure_env()
         from .whatsapp_bridge import whatsapp_bridge
         print("--- Angel Claw WhatsApp Login ---")
         print("Ensure WHATSAPP_ENABLED=True is set in your .env")

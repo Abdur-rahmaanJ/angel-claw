@@ -15,7 +15,10 @@ def create_skill(name: str, code: str) -> str:
     'name' should be the filename (without .py).
     'code' should be the full Python code, including the @skill decorator and necessary imports.
     """
-    skills_dir = os.path.dirname(__file__)
+    skills_dir = os.path.join(os.getcwd(), "skills")
+    if not os.path.exists(skills_dir):
+        os.makedirs(skills_dir)
+        
     file_path = os.path.join(skills_dir, f"{name}.py")
     
     try:
@@ -32,7 +35,9 @@ def install_skill_from_github(repo_url: str) -> str:
     The repo should contain .py files with skills.
     """
     temp_dir = os.path.join(os.path.dirname(__file__), "_temp_repo")
-    skills_dir = os.path.dirname(__file__)
+    skills_dir = os.path.join(os.getcwd(), "skills")
+    if not os.path.exists(skills_dir):
+        os.makedirs(skills_dir)
     
     try:
         if os.path.exists(temp_dir):
@@ -87,9 +92,17 @@ def import_skills_from_directory(path: str = "skills") -> str:
 @skill
 def list_skills() -> str:
     """Lists all currently installed skills."""
-    skills_dir = os.path.dirname(__file__)
-    skills = [f[:-3] for f in os.listdir(skills_dir) if f.endswith(".py") and f != "__init__.py"]
-    return f"Installed skills: {', '.join(skills)}"
+    internal_dir = os.path.dirname(__file__)
+    local_dir = os.path.join(os.getcwd(), "skills")
+    
+    all_skills = set()
+    for d in [internal_dir, local_dir]:
+        if os.path.exists(d):
+            for f in os.listdir(d):
+                if f.endswith(".py") and f != "__init__.py":
+                    all_skills.add(f[:-3])
+                    
+    return f"Installed skills: {', '.join(sorted(list(all_skills)))}"
 
 @skill
 def schedule_task(name: str, schedule_kind: str, schedule_value: str, payload_kind: str, content: str = None, skill_name: str = None, args: dict = None, session_id: str = "cli-default") -> str:

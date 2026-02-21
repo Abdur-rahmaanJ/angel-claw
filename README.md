@@ -18,7 +18,7 @@
 
 ---
 
-## 🚀 What Is Angel Claw?
+## What Is Angel Claw?
 
 **Angel Claw** is a powerful, extensible AI agent framework inspired by OpenClaw designed to give you:
 

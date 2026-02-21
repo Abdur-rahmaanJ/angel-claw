@@ -12,6 +12,7 @@ from .gateway import start as start_gateway
 from .cron import cron_manager
 from .telegram_bridge import telegram_bridge
 from .whatsapp_bridge import whatsapp_bridge
+from .mcp_manager import mcp_manager
 
 # Suppress all library logging for CLI mode to keep it clean
 logging.getLogger().setLevel(logging.ERROR)
@@ -97,6 +98,7 @@ async def interactive_chat(model: str = None):
     
     # Cleanup bridge resources
     await whatsapp_bridge.close()
+    await mcp_manager.disconnect()
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":
@@ -111,6 +113,26 @@ def main():
         # Force enable for this command
         whatsapp_bridge.enabled = True
         asyncio.run(whatsapp_bridge.run())
+    elif len(sys.argv) > 1 and sys.argv[1] == "mcp":
+        if len(sys.argv) > 2 and sys.argv[2] == "list":
+            async def list_mcp():
+                await mcp_manager.connect()
+                tools = await mcp_manager.get_tool_definitions()
+                print(f"\n--- Discovered {len(tools)} MCP Tools ---")
+                for t in tools:
+                    print(f"- {t['function']['name']}: {t['function']['description']}")
+                await mcp_manager.disconnect()
+            asyncio.run(list_mcp())
+        elif len(sys.argv) > 2 and sys.argv[2] == "test":
+            async def test_mcp():
+                print("Testing MCP connections...")
+                await mcp_manager.connect()
+                for name, session in mcp_manager.sessions.items():
+                    print(f"✅ Connected to: {name}")
+                await mcp_manager.disconnect()
+            asyncio.run(test_mcp())
+        else:
+            print("Usage: angel-claw mcp [list|test]")
     else:
         # Default to starting the gateway if no subcommand or 'serve'
         start_gateway()

@@ -21,6 +21,11 @@ class MCPManager:
         self.server_configs = {}
         self.auth_configs = {}
         self.is_connected = False
+        self.restarts: Dict[str, int] = {}
+        self.max_restarts = 3
+        
+        # Per-server concurrency limits
+        self.semaphores: Dict[str, asyncio.Semaphore] = {}
         
         # Robust JSON parsing for .env strings
         self.server_configs = self._parse_json_setting(settings.mcp_servers)
@@ -45,55 +50,78 @@ class MCPManager:
             return
             
         for server_name, config in self.server_configs.items():
-            try:
-                auth = self.auth_configs.get(server_name, {})
-                
-                if "url" in config:
-                    # Remote SSE Server (e.g. Zapier)
-                    url = config["url"]
-                    headers = {}
-                    if "token" in auth:
-                        headers["Authorization"] = f"Bearer {auth['token']}"
-                    if "headers" in auth:
-                        headers.update(auth["headers"])
-                    
-                    logger.info(f"Connecting to SSE MCP server '{server_name}' at {url}...")
-                    try:
-                        # Use FastMCP Client as it handles Zapier SSE more robustly
-                        transport = StreamableHttpTransport(url, headers=headers)
-                        client = FastMCPClient(transport=transport)
-                        # Enter the context manager and store the client
-                        await self.exit_stack.enter_async_context(client)
-                        self.sessions[server_name] = client
-                        logger.info(f"Successfully connected to SSE MCP server: {server_name}")
-                    except Exception as e:
-                        self._log_complex_error(server_name, e)
-                else:
-                    # Local Stdio Server
-                    command = config.get("command")
-                    if not command or not shutil.which(command):
-                        logger.warning(f"Skipping Stdio MCP server '{server_name}': command '{command}' not found.")
-                        continue
-
-                    params = StdioServerParameters(
-                        command=command, 
-                        args=config.get("args", []), 
-                        env=config.get("env")
-                    )
-                    
-                    try:
-                        read, write = await self.exit_stack.enter_async_context(stdio_client(params))
-                        session = await self.exit_stack.enter_async_context(ClientSession(read, write))
-                        await session.initialize()
-                        self.sessions[server_name] = session
-                        logger.info(f"Successfully connected to Stdio MCP server: {server_name}")
-                    except Exception as e:
-                        self._log_complex_error(server_name, e)
-            except Exception as e:
-                logger.error(f"Unexpected error configuring MCP server '{server_name}': {e}")
+            if config.get("disabled", False):
+                logger.info(f"MCP server '{server_name}' is disabled. Skipping.")
+                continue
+            
+            # Initialize semaphore for concurrency control (ADR 6)
+            concurrency = config.get("max_concurrency", settings.mcp_max_concurrency)
+            self.semaphores[server_name] = asyncio.Semaphore(concurrency)
+            
+            await self._connect_server(server_name, config)
 
         await self._refresh_tools_cache()
         self.is_connected = True
+
+    async def _connect_server(self, server_name: str, config: Dict[str, Any]):
+        try:
+            auth = self.auth_configs.get(server_name, {})
+            
+            if "url" in config:
+                # Remote SSE Server (e.g. Zapier)
+                url = config["url"]
+                headers = {}
+                if "token" in auth:
+                    headers["Authorization"] = f"Bearer {auth['token']}"
+                if "headers" in auth:
+                    headers.update(auth["headers"])
+                
+                logger.info(f"Connecting to SSE MCP server '{server_name}' at {url}...")
+                try:
+                    # Use FastMCP Client as it handles Zapier SSE more robustly
+                    transport = StreamableHttpTransport(url, headers=headers)
+                    client = FastMCPClient(transport=transport)
+                    # Enter the context manager and store the client
+                    await self.exit_stack.enter_async_context(client)
+                    self.sessions[server_name] = client
+                    logger.info(f"Successfully connected to SSE MCP server: {server_name}")
+                except Exception as e:
+                    self._log_complex_error(server_name, e)
+                    await self._handle_server_failure(server_name, config)
+            else:
+                # Local Stdio Server
+                command = config.get("command")
+                if not command or not shutil.which(command):
+                    logger.warning(f"Skipping Stdio MCP server '{server_name}': command '{command}' not found.")
+                    return
+
+                params = StdioServerParameters(
+                    command=command, 
+                    args=config.get("args", []), 
+                    env=config.get("env")
+                )
+                
+                try:
+                    read, write = await self.exit_stack.enter_async_context(stdio_client(params))
+                    session = await self.exit_stack.enter_async_context(ClientSession(read, write))
+                    await session.initialize()
+                    self.sessions[server_name] = session
+                    logger.info(f"Successfully connected to Stdio MCP server: {server_name}")
+                except Exception as e:
+                    self._log_complex_error(server_name, e)
+                    await self._handle_server_failure(server_name, config)
+        except Exception as e:
+            logger.error(f"Unexpected error configuring MCP server '{server_name}': {e}")
+
+    async def _handle_server_failure(self, server_name: str, config: Dict[str, Any]):
+        """Restart policy (Plan Section 7)"""
+        self.restarts[server_name] = self.restarts.get(server_name, 0) + 1
+        if self.restarts[server_name] <= self.max_restarts:
+            logger.info(f"Attempting to restart MCP server '{server_name}' (attempt {self.restarts[server_name]})...")
+            await asyncio.sleep(2 ** self.restarts[server_name]) # Exponential backoff
+            await self._connect_server(server_name, config)
+        else:
+            logger.error(f"MCP server '{server_name}' failed after {self.max_restarts} attempts.")
 
     def _log_complex_error(self, server_name: str, e: Exception):
         if hasattr(e, "exceptions"):
@@ -141,16 +169,32 @@ class MCPManager:
             return f"Error: MCP Server for tool '{tool_name}' not found."
             
         session = self.sessions[server_name]
+        semaphore = self.semaphores.get(server_name, asyncio.Semaphore(settings.mcp_max_concurrency))
+        
         try:
-            if isinstance(session, FastMCPClient):
-                result = await session.call_tool(tool_name, arguments)
-                # FastMCP result.content is usually a list of items
-                output = [item.text for item in result.content if hasattr(item, 'text')]
-            else:
-                result = await session.call_tool(tool_name, arguments)
-                output = [item.text for item in result.content if hasattr(item, 'text')]
+            async with semaphore:
+                # Enforce output size limit (ADR 8.2.2)
+                max_size = 1 * 1024 * 1024 # 1MB default
+                timeout = self.server_configs.get(server_name, {}).get("timeout", settings.mcp_timeout)
                 
-            return "\n".join(output) if output else "Tool execution returned no text content."
+                if isinstance(session, FastMCPClient):
+                    result = await asyncio.wait_for(session.call_tool(tool_name, arguments), timeout=timeout)
+                    output = [item.text for item in result.content if hasattr(item, 'text')]
+                else:
+                    result = await asyncio.wait_for(session.call_tool(tool_name, arguments), timeout=timeout)
+                    output = [item.text for item in result.content if hasattr(item, 'text')]
+                    
+                combined_output = "\n".join(output) if output else "Tool execution returned no text content."
+                
+                # Security: Output size guard (ADR 8.2.2)
+                if len(combined_output) > max_size:
+                    logger.warning(f"Tool {tool_name} output exceeds size limit. Truncating.")
+                    return combined_output[:max_size] + "\n... (output truncated)"
+                    
+                return combined_output
+        except asyncio.TimeoutError:
+            logger.error(f"Tool {tool_name} timed out after {timeout}s.")
+            return f"Error: Tool '{tool_name}' timed out after {timeout}s."
         except Exception as e:
             logger.error(f"Error calling MCP tool '{tool_name}' on server '{server_name}': {e}")
             return f"Error executing MCP tool '{tool_name}': {e}"

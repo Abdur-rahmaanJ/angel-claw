@@ -4,6 +4,7 @@ from .agent import Agent
 from .cron import cron_manager
 from .telegram_bridge import telegram_bridge
 from .whatsapp_bridge import whatsapp_bridge
+from .mcp_manager import mcp_manager
 from typing import Dict, Any, Optional
 from fastapi import Request, Response
 from contextlib import asynccontextmanager
@@ -19,6 +20,7 @@ async def lifespan(app: FastAPI):
     yield
     # Shutdown logic
     await whatsapp_bridge.close()
+    await mcp_manager.disconnect()
 
 app = FastAPI(title="Angel Claw Gateway", lifespan=lifespan)
 

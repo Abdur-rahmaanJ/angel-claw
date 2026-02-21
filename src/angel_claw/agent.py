@@ -12,6 +12,7 @@ from .models import Message, Role
 from .memory import memory_manager
 from .config import settings
 from .skills.manager import SkillManager
+from .mcp_manager import mcp_manager
 from typing import List, Optional
 
 class Agent:
@@ -57,6 +58,10 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
 -   When the user provides new information, acknowledge it briefly and store it directly. NEVER ask for confirmation (e.g., "Is that correct?" or "Would you like me to remember this?")."""
 
     async def chat(self, user_input: str) -> str:
+        # Ensure MCP Manager is connected before chat
+        if not mcp_manager.is_connected:
+            await mcp_manager.connect()
+            
         # 1. Process memory (Retrieval)
         # Use last turn to improve retrieval for short inputs like "yes"
         last_turn = self.history[-1]["content"] if self.history else ""
@@ -101,14 +106,17 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
         # 3. Call LLM with Tool Support
         assistant_content = ""
         while True:
+            # Combine internal skills and MCP tools
             tools = self.skill_manager.get_tool_definitions()
+            mcp_tools = await mcp_manager.get_tool_definitions()
+            all_tools = tools + mcp_tools
             
             response = await litellm.acompletion(
                 model=self.model,
                 messages=messages,
                 api_key=settings.api_key,
-                tools=tools if tools else None,
-                tool_choice="auto" if tools else None
+                tools=all_tools if all_tools else None,
+                tool_choice="auto" if all_tools else None
             )
             
             message = response.choices[0].message
@@ -155,8 +163,11 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                     except Exception as e:
                         print(f"DEBUG: Error in skill {function_name}: {e}")
                         function_result = f"Error executing {function_name}: {e}"
+                elif function_name in mcp_manager.tool_to_server:
+                    print(f"DEBUG: Executing MCP tool {function_name}({function_args})")
+                    function_result = await mcp_manager.call_tool(function_name, function_args)
                 else:
-                    function_result = f"Error: Skill '{function_name}' not found."
+                    function_result = f"Error: Skill or MCP tool '{function_name}' not found."
                 
                 messages.append({
                     "tool_call_id": tool_call.id,

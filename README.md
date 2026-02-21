@@ -17,15 +17,18 @@ A personal AI agent framework inspired by OpenClaw, using `angel-recall` for mem
    pip install angel-claw
    ```
 
-2. **Configure environment**:
-   Copy `.env.example` to `.env` and fill in your API keys.
+2. **Run the CLI chat**:
+   ```bash
+   angel-claw chat
+   ```
+   *Note: On your first run, Angel Claw will automatically create a `.env` file from `.env.example`. Make sure to edit it and add your API keys.*
+
+3. **Configure environment**:
+   Edit the `.env` file and fill in your API keys.
    - `MODEL_KEY`: Your LLM API key.
    - `TELEGRAM_TOKEN`: (Optional) Your bot token from @BotFather.
-   ```bash
-   cp .env.example .env
-   ```
 
-3. **Run the gateway**:
+4. **Run the gateway (optional)**:
    ```bash
    angel-claw
    ```

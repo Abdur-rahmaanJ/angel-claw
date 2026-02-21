@@ -173,8 +173,8 @@ class MCPManager:
         
         try:
             async with semaphore:
-                # Enforce output size limit (ADR 8.2.2)
-                max_size = 1 * 1024 * 1024 # 1MB default
+                # Enforce output size limit (ADR 8.2.2) - Reduced for rate limits
+                max_size = settings.mcp_max_output_size
                 timeout = self.server_configs.get(server_name, {}).get("timeout", settings.mcp_timeout)
                 
                 if isinstance(session, FastMCPClient):
@@ -188,8 +188,9 @@ class MCPManager:
                 
                 # Security: Output size guard (ADR 8.2.2)
                 if len(combined_output) > max_size:
-                    logger.warning(f"Tool {tool_name} output exceeds size limit. Truncating.")
-                    return combined_output[:max_size] + "\n... (output truncated)"
+                    logger.warning(f"Tool {tool_name} output ({len(combined_output)} chars) exceeds limit. Truncating.")
+                    truncated = combined_output[:max_size]
+                    return f"{truncated}\n\n[WARNING: Tool output was truncated to {max_size} chars due to context limits. Please ask for more specific details if needed.]"
                     
                 return combined_output
         except asyncio.TimeoutError:

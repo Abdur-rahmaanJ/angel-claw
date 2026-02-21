@@ -20,23 +20,7 @@
 
 ## What Is Angel Claw?
 
-<<<<<<< HEAD
-2. **Run the CLI chat**:
-   ```bash
-   angel-claw chat
-   ```
-   *Note: On your first run, Angel Claw will automatically create a `.env` file from `.env.example`. Make sure to edit it and add your API keys.*
 
-3. **Configure environment**:
-   Edit the `.env` file and fill in your API keys.
-   - `MODEL_KEY`: Your LLM API key.
-   - `TELEGRAM_TOKEN`: (Optional) Your bot token from @BotFather.
-
-4. **Run the gateway (optional)**:
-   ```bash
-   angel-claw
-   ```
-=======
 **Angel Claw** is a powerful, extensible AI agent framework inspired by OpenClaw designed to give you:
 
 - 🧠 Long-term, evolvable memory  
@@ -44,7 +28,6 @@
 - 📅 Proactive scheduling & automation  
 - 🌍 Web browsing & tool usage  
 - 📱 Telegram & WhatsApp integration  
->>>>>>> 7b5685862e9f5e764170532111fed029d151c4cc
 
 All powered by:
 

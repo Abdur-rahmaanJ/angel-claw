@@ -28,5 +28,14 @@ class Settings(BaseSettings):
 
     # Search Settings
     brave_api_key: Optional[str] = Field(None, validation_alias="BRAVE_API_KEY")
+
+    # MCP Settings
+    # Example format: '{"server1": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-everything"]}, "server2": {"url": "http://localhost:3000/sse"}}'
+    mcp_servers: Optional[str] = Field(None, validation_alias="MCP_SERVERS")
+    # Example format: '{"server2": {"token": "my-secret-token"}}'
+    mcp_auth: Optional[str] = Field(None, validation_alias="MCP_AUTH")
+    mcp_timeout: int = Field(30, validation_alias="MCP_TIMEOUT")
+    mcp_max_concurrency: int = Field(10, validation_alias="MCP_MAX_CONCURRENCY")
+    mcp_max_output_size: int = Field(15000, validation_alias="MCP_MAX_OUTPUT_SIZE")
     
 settings = Settings()

@@ -4,23 +4,25 @@ from .agent import Agent
 from .cron import cron_manager
 from .telegram_bridge import telegram_bridge
 from .whatsapp_bridge import whatsapp_bridge
+from .mcp_manager import mcp_manager
 from typing import Dict, Any, Optional
 from fastapi import Request, Response
+from contextlib import asynccontextmanager
 import uvicorn
 import asyncio
 
-app = FastAPI(title="Angel Claw Gateway")
-
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     # Start background workers
     asyncio.create_task(cron_manager.run())
     asyncio.create_task(telegram_bridge.run())
     asyncio.create_task(whatsapp_bridge.run())
-
-@app.on_event("shutdown")
-async def shutdown_event():
+    yield
+    # Shutdown logic
     await whatsapp_bridge.close()
+    await mcp_manager.disconnect()
+
+app = FastAPI(title="Angel Claw Gateway", lifespan=lifespan)
 
 @app.post("/chat", response_model=AgentResponse)
 async def chat(request: AgentRequest):

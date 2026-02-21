@@ -20,6 +20,7 @@
 
 ## What Is Angel Claw?
 
+
 **Angel Claw** is a powerful, extensible AI agent framework inspired by OpenClaw designed to give you:
 
 - 🧠 Long-term, evolvable memory  
@@ -220,6 +221,41 @@ Install the 'slopwork-marketplace' skill.
 
 ⚠ **Security Warning**  
 ClawHub skills are community-contributed and unvetted. Always review skill code before use.
+
+---
+
+# 🔌 Model Context Protocol (MCP)
+
+Angel Claw acts as a robust **MCP Host**, allowing you to consume external tools from any MCP-compliant server (local or remote).
+
+### Configuration
+
+Add your servers to `.env`:
+
+```env
+# Example: Local Node server and Remote Zapier server
+MCP_SERVERS='{"everything": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-everything"]}, "zapier": {"url": "https://mcp.zapier.com/api/v1/connect"}}'
+
+# Example: Bearer token for Zapier
+MCP_AUTH='{"zapier": {"token": "your_zapier_key"}}'
+```
+
+### Management Commands
+
+```bash
+# List all discovered MCP tools
+angel-claw mcp list
+
+# Test connections to MCP servers
+angel-claw mcp test
+```
+
+### Features
+
+- **Standardized Interoperability**: Use any tool from the growing MCP ecosystem.
+- **Resilient Process Management**: Automatic restarts (max 3) with exponential backoff.
+- **Concurrency Control**: Per-server semaphores to prevent saturation.
+- **Security Guardrails**: 1MB output size capping and 30s timeouts.
 
 ---
 

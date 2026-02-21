@@ -3,7 +3,7 @@ name = "angel-claw"
 version = "0.5.0"
 description = "Angel Claw personal AI agent framework"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 dependencies = [
     "fastapi",
     "uvicorn",
@@ -19,6 +19,8 @@ dependencies = [
     "aiohttp",
     "qrcode",
     "neonize",
+    "mcp[cli]",
+    "fastmcp",
 ]
 
 [project.optional-dependencies]

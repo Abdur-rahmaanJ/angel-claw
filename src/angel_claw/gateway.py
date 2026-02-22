@@ -27,7 +27,7 @@ app = FastAPI(title="Angel Claw Gateway", lifespan=lifespan)
 @app.post("/chat", response_model=AgentResponse)
 async def chat(request: AgentRequest):
     try:
-        agent = Agent(request.session_id, model=request.model)
+        agent = Agent(request.session_id, model=request.model, api_base=request.api_base)
         response_content = await agent.chat(request.message)
         return AgentResponse(
             response=response_content,
@@ -49,9 +49,10 @@ async def handle_webhook(payload: Dict[str, Any]):
     session_id = payload.get("session_id", "default")
     message = payload.get("message", "External trigger received.")
     user_id = payload.get("user_id", "alice")
+    api_base = payload.get("api_base")
     
     try:
-        agent = Agent(session_id)
+        agent = Agent(session_id, api_base=api_base)
         # We wrap the webhook message with context
         context_message = f"[Webhook Trigger]: {message}"
         response = await agent.chat(context_message)

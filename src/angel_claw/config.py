@@ -13,6 +13,7 @@ class Settings(BaseSettings):
     # LLM Settings
     model: str = Field("gpt-4o-mini", validation_alias="MODEL")
     api_key: Optional[str] = Field(None, validation_alias="MODEL_KEY")
+    api_base: Optional[str] = Field(None, validation_alias="MODEL_BASE_URL")
     
     # Memory Settings (Angel Recall)
     memory_persist_dir: str = "./vaults"

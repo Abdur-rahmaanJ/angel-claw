@@ -21,6 +21,7 @@ class AgentRequest(BaseModel):
     message: str
     user_id: str
     model: Optional[str] = None
+    api_base: Optional[str] = None
 
 class AgentResponse(BaseModel):
     response: str

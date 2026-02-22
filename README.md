@@ -25,7 +25,7 @@
 
 - 🧠 Long-term, evolvable memory  
 - 🛠 Self-generating skills & load skills from clawhub
-- 🔌 Model Context Protocol (MCP) Host — standardized external tool interoperability 
+- 🔌 Model Context Protocol (MCP) Host: standardized external tool interoperability 
 - 📅 Proactive scheduling & automation  
 - 🌍 Web browsing & tool usage  
 - 📱 Telegram & WhatsApp integration  

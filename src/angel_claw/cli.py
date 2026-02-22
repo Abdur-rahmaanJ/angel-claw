@@ -43,7 +43,7 @@ def ensure_env():
         except Exception as e:
             print(f"Warning: Could not create .env file: {e}")
 
-async def interactive_chat(model: str = None):
+async def interactive_chat(model: str = None, api_base: str = None):
     # Register CLI proactive handler
     def cli_proactive_handler(message: str, user_id: str, session_id: str):
         if session_id == "cli-default":
@@ -59,10 +59,12 @@ async def interactive_chat(model: str = None):
     
     # Use a persistent session ID for CLI by default
     session_id = "cli-default"
-    agent = Agent(session_id, model=model)
+    agent = Agent(session_id, model=model, api_base=api_base)
     
     print(f"\n--- Angel Claw CLI Chat ---")
     print(f"Model: {agent.model}")
+    if agent.api_base:
+        print(f"API Base: {agent.api_base}")
     print(f"Session: {session_id}")
     print("Type 'exit' or 'quit' to stop.\n")
     
@@ -103,8 +105,16 @@ async def interactive_chat(model: str = None):
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":
         ensure_env()
-        model_override = sys.argv[2] if len(sys.argv) > 2 else None
-        asyncio.run(interactive_chat(model_override))
+        model_override = None
+        api_base_override = None
+        # Parse arguments for model and api_base
+        for i, arg in enumerate(sys.argv):
+            if arg == "--model" and i + 1 < len(sys.argv):
+                model_override = sys.argv[i+1]
+            if arg == "--api-base" and i + 1 < len(sys.argv):
+                api_base_override = sys.argv[i+1]
+                
+        asyncio.run(interactive_chat(model=model_override, api_base=api_base_override))
     elif len(sys.argv) > 1 and sys.argv[1] == "login-whatsapp":
         ensure_env()
         from .whatsapp_bridge import whatsapp_bridge

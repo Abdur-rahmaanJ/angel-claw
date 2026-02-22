@@ -16,12 +16,14 @@ from .mcp_manager import mcp_manager
 from typing import List, Optional
 
 class Agent:
-    def __init__(self, session_id: str, model: str = None):
+    def __init__(self, session_id: str, model: str = None, api_base: str = None):
         self.session_id = session_id
         self.model = model or settings.model
+        self.api_base = api_base or settings.api_base
         self.memos = memory_manager.get_memos(session_id)
-        # Update memos model if overridden
+        # Update memos model and api_base if overridden
         self.memos.reader.model = self.model
+        self.memos.reader.api_base = self.api_base
         self.soul = self._load_soul()
         self.history: List[dict] = []
         
@@ -115,6 +117,7 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                 model=self.model,
                 messages=messages,
                 api_key=settings.api_key,
+                api_base=self.api_base,
                 tools=all_tools if all_tools else None,
                 tool_choice="auto" if all_tools else None
             )

@@ -9,6 +9,10 @@ class MemoryManager:
             
     def get_memos(self, session_id: str) -> MemOS:
         persist_dir = os.path.join(settings.memory_persist_dir, session_id)
-        return MemOS(persist_directory=persist_dir, model=settings.model)
+        return MemOS(
+            persist_directory=persist_dir, 
+            model=settings.model,
+            api_base=settings.api_base
+        )
 
 memory_manager = MemoryManager()

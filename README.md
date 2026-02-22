@@ -24,7 +24,8 @@
 **Angel Claw** is a powerful, extensible AI agent framework inspired by OpenClaw designed to give you:
 
 - 🧠 Long-term, evolvable memory  
-- 🛠 Self-generating skills  
+- 🛠 Self-generating skills & load skills from clawhub
+- 🔌 Model Context Protocol (MCP) Host — standardized external tool interoperability 
 - 📅 Proactive scheduling & automation  
 - 🌍 Web browsing & tool usage  
 - 📱 Telegram & WhatsApp integration  

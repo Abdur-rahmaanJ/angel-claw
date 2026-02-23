@@ -38,5 +38,12 @@ class Settings(BaseSettings):
     mcp_timeout: int = Field(30, validation_alias="MCP_TIMEOUT")
     mcp_max_concurrency: int = Field(10, validation_alias="MCP_MAX_CONCURRENCY")
     mcp_max_output_size: int = Field(15000, validation_alias="MCP_MAX_OUTPUT_SIZE")
+
+    # Lane Queue Settings
+    lane_queue_global_max_tasks: int = Field(100, validation_alias="LANE_QUEUE_GLOBAL_MAX_TASKS")
+    lane_queue_default_concurrency: int = Field(2, validation_alias="LANE_QUEUE_DEFAULT_CONCURRENCY")
+    lane_queue_num_workers: int = Field(4, validation_alias="LANE_QUEUE_NUM_WORKERS")
+    lane_queue_task_timeout_seconds: int = Field(300, validation_alias="LANE_QUEUE_TASK_TIMEOUT_SECONDS")
+    lane_queue_max_lane_depth: int = Field(100, validation_alias="LANE_QUEUE_MAX_LANE_DEPTH")
     
 settings = Settings()

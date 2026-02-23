@@ -7,6 +7,8 @@ from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, fil
 from .config import settings
 from .agent import Agent
 from .cron import cron_manager
+from .models import AgentRequest
+from .lane_queue.process import process_chat_request
 
 logger = logging.getLogger("angel-claw-telegram")
 
@@ -75,9 +77,13 @@ class TelegramBridge:
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
         
         try:
-            agent = Agent(session_id)
-            response = await agent.chat(user_input)
-            await update.message.reply_text(response)
+            request = AgentRequest(
+                session_id=session_id,
+                message=user_input,
+                user_id=f"telegram_{chat_id}"
+            )
+            response_content = await process_chat_request(request)
+            await update.message.reply_text(response_content)
         except Exception as e:
             logger.error(f"Error in Telegram chat: {e}")
             await update.message.reply_text(f"⚠️ Error: {e}")

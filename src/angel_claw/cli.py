@@ -13,6 +13,9 @@ from .cron import cron_manager
 from .telegram_bridge import telegram_bridge
 from .whatsapp_bridge import whatsapp_bridge
 from .mcp_manager import mcp_manager
+from .lane_queue.queue import lane_queue
+from .lane_queue.process import process_chat_request
+from .models import AgentRequest
 
 # Suppress all library logging for CLI mode to keep it clean
 logging.getLogger().setLevel(logging.ERROR)
@@ -53,18 +56,18 @@ async def interactive_chat(model: str = None, api_base: str = None):
     cron_manager.register_proactive_handler(cli_proactive_handler)
 
     # Start background workers silently
+    lane_queue.start_workers()
     cron_task = asyncio.create_task(cron_manager.run())
     telegram_task = asyncio.create_task(telegram_bridge.run())
     whatsapp_task = asyncio.create_task(whatsapp_bridge.run())
     
     # Use a persistent session ID for CLI by default
     session_id = "cli-default"
-    agent = Agent(session_id, model=model, api_base=api_base)
     
     print(f"\n--- Angel Claw CLI Chat ---")
-    print(f"Model: {agent.model}")
-    if agent.api_base:
-        print(f"API Base: {agent.api_base}")
+    print(f"Model: {model or settings.model}")
+    if api_base or settings.api_base:
+        print(f"API Base: {api_base or settings.api_base}")
     print(f"Session: {session_id}")
     print("Type 'exit' or 'quit' to stop.\n")
     
@@ -82,8 +85,14 @@ async def interactive_chat(model: str = None, api_base: str = None):
                 continue
                 
             print("\nAssistant: ", end="", flush=True)
-            # Use asyncio for chat as it is async
-            response = await agent.chat(user_input)
+            request = AgentRequest(
+                session_id=session_id,
+                message=user_input,
+                user_id="cli",
+                model=model,
+                api_base=api_base
+            )
+            response = await process_chat_request(request)
             print(response + "\n")
             
         except KeyboardInterrupt:

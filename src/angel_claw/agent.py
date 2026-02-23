@@ -4,9 +4,12 @@ import os
 import json
 import inspect
 
+logger = logging.getLogger("angel-claw-agent")
+
 # Silence litellm logging to stop the "Give Feedback" messages
 litellm.suppress_debug_info = True
-logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
+logging.getLogger("litellm").setLevel(logging.CRITICAL)
 
 from .models import Message, Role
 from .memory import memory_manager
@@ -158,16 +161,16 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                         function_args["session_id"] = self.session_id
                         
                     try:
-                        print(f"DEBUG: Executing skill {function_name}({function_args})")
+                        logger.info(f"⚙️ [Skill] {function_name}({function_args})")
                         if inspect.iscoroutinefunction(function_to_call):
                             function_result = await function_to_call(**function_args)
                         else:
                             function_result = function_to_call(**function_args)
                     except Exception as e:
-                        print(f"DEBUG: Error in skill {function_name}: {e}")
+                        logger.error(f"❌ [Error] skill {function_name}: {e}")
                         function_result = f"Error executing {function_name}: {e}"
                 elif function_name in mcp_manager.tool_to_server:
-                    print(f"DEBUG: Executing MCP tool {function_name}({function_args})")
+                    logger.info(f"⚙️ [MCP] {function_name}({function_args})")
                     function_result = await mcp_manager.call_tool(function_name, function_args)
                 else:
                     function_result = f"Error: Skill or MCP tool '{function_name}' not found."

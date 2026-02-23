@@ -109,9 +109,7 @@ pip install angel-claw
 
 ## ⚙️ Configure Environment
 
-```bash
-cp .env.example .env
-```
+On running angel-claw chat, a .env is automatically created
 
 Add your keys:
 

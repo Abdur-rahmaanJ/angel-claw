@@ -17,11 +17,28 @@ from .lane_queue.queue import lane_queue
 from .lane_queue.process import process_chat_request
 from .models import AgentRequest
 
+# Custom formatter for clean CLI progress output
+class CLIProgressFormatter(logging.Formatter):
+    def format(self, record):
+        if record.msg.startswith("⚙️") or record.msg.startswith("❌"):
+            # Return just the message for our progress indicators
+            return f"\r{record.msg}\n"
+        return super().format(record)
+
 # Suppress all library logging for CLI mode to keep it clean
 logging.getLogger().setLevel(logging.ERROR)
 logging.getLogger("angel-claw-cron").setLevel(logging.ERROR)
 logging.getLogger("angel-claw-telegram").setLevel(logging.ERROR)
 logging.getLogger("angel-claw-whatsapp").setLevel(logging.ERROR)
+
+# Setup Agent logging for visibility in CLI
+agent_logger = logging.getLogger("angel-claw-agent")
+agent_logger.setLevel(logging.INFO)
+agent_handler = logging.StreamHandler(sys.stdout)
+agent_handler.setFormatter(CLIProgressFormatter())
+agent_logger.addHandler(agent_handler)
+agent_logger.propagate = False # Don't send to root logger
+
 logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
 logging.getLogger("whatsmeow").setLevel(logging.CRITICAL)
 logging.getLogger("Whatsmeow").setLevel(logging.CRITICAL)
@@ -84,7 +101,7 @@ async def interactive_chat(model: str = None, api_base: str = None):
             if not user_input:
                 continue
                 
-            print("\nAssistant: ", end="", flush=True)
+            print("Thinking...", end="\r", flush=True)
             request = AgentRequest(
                 session_id=session_id,
                 message=user_input,
@@ -93,7 +110,9 @@ async def interactive_chat(model: str = None, api_base: str = None):
                 api_base=api_base
             )
             response = await process_chat_request(request)
-            print(response + "\n")
+            # Clear the "thinking" line if it was still there
+            print(" " * 40, end="\r", flush=True)
+            print(f"Assistant: {response}\n")
             
         except KeyboardInterrupt:
             break

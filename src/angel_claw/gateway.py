@@ -5,6 +5,8 @@ from .cron import cron_manager
 from .telegram_bridge import telegram_bridge
 from .whatsapp_bridge import whatsapp_bridge
 from .mcp_manager import mcp_manager
+from .lane_queue.queue import lane_queue
+from .lane_queue.process import process_chat_request
 from typing import Dict, Any, Optional
 from fastapi import Request, Response
 from contextlib import asynccontextmanager
@@ -14,6 +16,7 @@ import asyncio
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Start background workers
+    lane_queue.start_workers()
     asyncio.create_task(cron_manager.run())
     asyncio.create_task(telegram_bridge.run())
     asyncio.create_task(whatsapp_bridge.run())
@@ -27,8 +30,10 @@ app = FastAPI(title="Angel Claw Gateway", lifespan=lifespan)
 @app.post("/chat", response_model=AgentResponse)
 async def chat(request: AgentRequest):
     try:
-        agent = Agent(request.session_id, model=request.model, api_base=request.api_base)
-        response_content = await agent.chat(request.message)
+        response_content = await process_chat_request(request)
+        if response_content.startswith("Error:"):
+             raise HTTPException(status_code=500, detail=response_content)
+             
         return AgentResponse(
             response=response_content,
             session_id=request.session_id

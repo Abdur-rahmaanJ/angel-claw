@@ -2,6 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.7.0] - 2026-02-24
+
+### Added
+- **Lane-based Task Management**: 
+    - Introduced a robust internal queuing system (`lane_queue`) for request processing.
+    - Improved concurrency control and task isolation through "lanes".
+    - Background workers now handle chat requests asynchronously for better responsiveness.
+    - Configurable queue parameters (workers, timeouts, concurrency) via environment variables.
+- **Custom API Base Support**:
+    - Added support for `MODEL_BASE_URL` in `.env`.
+    - Users can now connect to any OpenAI-compatible endpoint (e.g., NVIDIA NIM, LiteLLM proxy, local Ollama).
+    - CLI commands now support `--model` and `--api-base` overrides.
+
+### Changed
+- **Clean CLI Experience**:
+    - Refactored the CLI to utilize the new lane-based processing engine.
+    - Optimized logging and output formatting for a more focused, noise-free interface.
+- **Improved Project Structure**:
+    - Relocated `.env.example` to the internal package directory for better distribution and consistency.
+
+### Removed
+- Top-level `.env.example` (merged into the package structure).
+
 ## [0.6.0] - 2026-02-21
 
 ### Added

@@ -13,6 +13,7 @@ from contextlib import asynccontextmanager
 import uvicorn
 import asyncio
 
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Start background workers
@@ -25,50 +26,63 @@ async def lifespan(app: FastAPI):
     await whatsapp_bridge.close()
     await mcp_manager.disconnect()
 
+
 app = FastAPI(title="Angel Claw Gateway", lifespan=lifespan)
+
 
 @app.post("/chat", response_model=AgentResponse)
 async def chat(request: AgentRequest):
     try:
         response_content = await process_chat_request(request)
         if response_content.startswith("Error:"):
-             raise HTTPException(status_code=500, detail=response_content)
-             
-        return AgentResponse(
-            response=response_content,
-            session_id=request.session_id
-        )
+            raise HTTPException(status_code=500, detail=response_content)
+
+        return AgentResponse(response=response_content, session_id=request.session_id)
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.get("/health")
 async def health():
     return {"status": "healthy"}
 
+
 @app.post("/webhook")
-async def handle_webhook(payload: Dict[str, Any]):
+async def handle_webhook(payload: Dict[str, Any], request: Request):
     """
     Receives an external webhook and triggers a proactive response from the agent.
     The payload should ideally include 'session_id' and 'message'.
+    Requires X-Webhook-Key header if WEBHOOK_KEY is configured in .env.
     """
+    from .config import settings
+
+    if settings.webhook_key:
+        webhook_key = request.headers.get("X-Webhook-Key")
+        if webhook_key != settings.webhook_key:
+            raise HTTPException(
+                status_code=401, detail="Invalid or missing webhook key"
+            )
+
     session_id = payload.get("session_id", "default")
     message = payload.get("message", "External trigger received.")
     user_id = payload.get("user_id", "alice")
     api_base = payload.get("api_base")
-    
+
     try:
         agent = Agent(session_id, api_base=api_base)
         # We wrap the webhook message with context
         context_message = f"[Webhook Trigger]: {message}"
         response = await agent.chat(context_message)
-        
+
         # Send the agent's reaction back via the proactive message mechanism
         await cron_manager._send_proactive_message(response, user_id, session_id)
-        
+
         return {"status": "success", "agent_response": response}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
 def start():
     from .config import settings
+
     uvicorn.run(app, host=settings.host, port=settings.port)

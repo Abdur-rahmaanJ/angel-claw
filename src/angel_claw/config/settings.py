@@ -2,24 +2,30 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Optional
 
+
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
-    
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+    )
+
     # Gateway Settings
     host: str = "0.0.0.0"
     port: int = 8000
     debug: bool = False
-    
+    webhook_key: Optional[str] = Field(None, validation_alias="WEBHOOK_KEY")
+
     # LLM Settings
     model: str = Field("openai/gpt-4o-mini", validation_alias="MODEL")
     api_key: Optional[str] = Field(None, validation_alias="MODEL_KEY")
     api_base: Optional[str] = Field(None, validation_alias="MODEL_BASE_URL")
-    
+
     # Memory Settings (Angel Recall)
     memory_persist_dir: str = "./vaults"
 
     # Proactive Messaging Settings
-    proactive_webhook_url: Optional[str] = Field(None, validation_alias="PROACTIVE_WEBHOOK_URL")
+    proactive_webhook_url: Optional[str] = Field(
+        None, validation_alias="PROACTIVE_WEBHOOK_URL"
+    )
 
     # Telegram Bridge Settings
     telegram_token: Optional[str] = Field(None, validation_alias="TELEGRAM_TOKEN")
@@ -40,10 +46,19 @@ class Settings(BaseSettings):
     mcp_max_output_size: int = Field(15000, validation_alias="MCP_MAX_OUTPUT_SIZE")
 
     # Lane Queue Settings
-    lane_queue_global_max_tasks: int = Field(100, validation_alias="LANE_QUEUE_GLOBAL_MAX_TASKS")
-    lane_queue_default_concurrency: int = Field(2, validation_alias="LANE_QUEUE_DEFAULT_CONCURRENCY")
+    lane_queue_global_max_tasks: int = Field(
+        100, validation_alias="LANE_QUEUE_GLOBAL_MAX_TASKS"
+    )
+    lane_queue_default_concurrency: int = Field(
+        2, validation_alias="LANE_QUEUE_DEFAULT_CONCURRENCY"
+    )
     lane_queue_num_workers: int = Field(4, validation_alias="LANE_QUEUE_NUM_WORKERS")
-    lane_queue_task_timeout_seconds: int = Field(300, validation_alias="LANE_QUEUE_TASK_TIMEOUT_SECONDS")
-    lane_queue_max_lane_depth: int = Field(100, validation_alias="LANE_QUEUE_MAX_LANE_DEPTH")
-    
+    lane_queue_task_timeout_seconds: int = Field(
+        300, validation_alias="LANE_QUEUE_TASK_TIMEOUT_SECONDS"
+    )
+    lane_queue_max_lane_depth: int = Field(
+        100, validation_alias="LANE_QUEUE_MAX_LANE_DEPTH"
+    )
+
+
 settings = Settings()

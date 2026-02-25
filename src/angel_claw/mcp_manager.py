@@ -212,20 +212,10 @@ class MCPManager:
                     "timeout", settings.mcp_timeout
                 )
 
-                if isinstance(session, FastMCPClient):
-                    result = await asyncio.wait_for(
-                        session.call_tool(tool_name, arguments), timeout=timeout
-                    )
-                    output = [
-                        item.text for item in result.content if hasattr(item, "text")
-                    ]
-                else:
-                    result = await asyncio.wait_for(
-                        session.call_tool(tool_name, arguments), timeout=timeout
-                    )
-                    output = [
-                        item.text for item in result.content if hasattr(item, "text")
-                    ]
+                result = await asyncio.wait_for(
+                    session.call_tool(tool_name, arguments), timeout=timeout
+                )
+                output = [item.text for item in result.content if hasattr(item, "text")]
 
                 combined_output = (
                     "\n".join(output)

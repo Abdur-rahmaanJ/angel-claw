@@ -76,6 +76,13 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
         if len(user_input.split()) < 3 and last_turn:
             retrieval_query = f"{last_turn} -> {user_input}"
 
+        # 1b. Get recent history for context (with bounds checking)
+        recent_history = (
+            self.history[-4:]
+            if len(self.history) >= 4
+            else (self.history if self.history else [])
+        )
+
         memory_context = self.memos.process(
             f"Retrieve context for: {retrieval_query}", user="alice"
         )
@@ -109,7 +116,7 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
 
         messages = [{"role": "system", "content": system_prompt}]
         # Include last 4 turns of history for short-term context
-        messages.extend(self.history[-4:])
+        messages.extend(recent_history)
         messages.append({"role": "user", "content": user_input})
 
         # 3. Call LLM with Tool Support

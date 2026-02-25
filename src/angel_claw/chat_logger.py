@@ -1,5 +1,5 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 
@@ -70,13 +70,7 @@ class ChatLogger:
             if file_path.exists():
                 with open(file_path, "r", encoding="utf-8") as f:
                     all_logs.append(f.read())
-            current = (
-                current.replace(day=current.day + 1)
-                if current.month < 12
-                else current.replace(month=1, day=1, year=current.year + 1)
-            )
-            if current > end_date:
-                break
+            current += timedelta(days=1)
 
         if not all_logs:
             return f"No chat logs found between {start_date.strftime('%Y-%m-%d')} and {end_date.strftime('%Y-%m-%d')}."

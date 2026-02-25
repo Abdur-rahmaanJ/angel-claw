@@ -21,6 +21,7 @@ dependencies = [
     "neonize",
     "mcp[cli]",
     "fastmcp",
+    "questionary",
 ]
 
 [project.optional-dependencies]

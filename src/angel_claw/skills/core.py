@@ -11,6 +11,28 @@ from angel_claw.cron import cron_manager, Job, JobSchedule, JobPayload
 from angel_claw.chat_logger import chat_logger
 
 
+def _parse_date(date_str: str) -> datetime:
+    """Parse date string to datetime."""
+    if date_str.lower() == "today":
+        return datetime.now()
+    elif date_str.lower() == "yesterday":
+        return datetime.now() - timedelta(days=1)
+    return datetime.strptime(date_str, "%Y-%m-%d")
+
+
+def _filter_by_session(chats: str, session_filter: str) -> str:
+    """Filter chat logs by session ID."""
+    lines = chats.split("\n")
+    filtered = []
+    include = False
+    for line in lines:
+        if "Session:" in line:
+            include = session_filter in line
+        if include:
+            filtered.append(line)
+    return "\n".join(filtered)
+
+
 @skill
 def create_skill(name: str, code: str) -> str:
     """
@@ -264,25 +286,11 @@ def get_chat_history(date: str, session_filter: str = None) -> str:
     - session_filter: Optional session ID to filter messages (e.g., 'cli-default')
     """
     try:
-        if date.lower() == "today":
-            target_date = datetime.now()
-        elif date.lower() == "yesterday":
-            target_date = datetime.now() - timedelta(days=1)
-        else:
-            target_date = datetime.strptime(date, "%Y-%m-%d")
-
+        target_date = _parse_date(date)
         chats = chat_logger.get_chats_for_date(target_date)
 
         if session_filter:
-            lines = chats.split("\n")
-            filtered = []
-            include = False
-            for line in lines:
-                if "Session:" in line:
-                    include = session_filter in line
-                if include:
-                    filtered.append(line)
-            chats = "\n".join(filtered)
+            chats = _filter_by_session(chats, session_filter)
             if not chats:
                 return f"No chat logs found for session '{session_filter}' on {date}."
 
@@ -304,30 +312,13 @@ def get_chat_history_range(
     - session_filter: Optional session ID to filter messages
     """
     try:
-
-        def parse_date(d: str) -> datetime:
-            if d.lower() == "today":
-                return datetime.now()
-            elif d.lower() == "yesterday":
-                return datetime.now() - timedelta(days=1)
-            else:
-                return datetime.strptime(d, "%Y-%m-%d")
-
-        start = parse_date(start_date)
-        end = parse_date(end_date) if end_date else datetime.now()
+        start = _parse_date(start_date)
+        end = _parse_date(end_date) if end_date else datetime.now()
 
         chats = chat_logger.get_chats_for_date_range(start, end)
 
         if session_filter:
-            lines = chats.split("\n")
-            filtered = []
-            include = False
-            for line in lines:
-                if "Session:" in line:
-                    include = session_filter in line
-                if include:
-                    filtered.append(line)
-            chats = "\n".join(filtered)
+            chats = _filter_by_session(chats, session_filter)
             if not chats:
                 return f"No chat logs found for session '{session_filter}' between {start_date} and {end_date or 'today'}."
 

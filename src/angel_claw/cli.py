@@ -6,6 +6,7 @@ import warnings
 import os
 import shutil
 import importlib.resources
+import questionary
 from .agent import Agent
 from .config import settings
 from .gateway import start as start_gateway
@@ -16,6 +17,8 @@ from .mcp_manager import mcp_manager
 from .lane_queue.queue import lane_queue
 from .lane_queue.process import process_chat_request
 from .models import AgentRequest
+from .config.validator import is_config_complete
+from .config.wizard import run_wizard
 
 # Custom formatter for clean CLI progress output
 class CLIProgressFormatter(logging.Formatter):
@@ -48,20 +51,29 @@ logging.getLogger("neonize").setLevel(logging.CRITICAL)
 warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine 'Logging.async_success_handler' was never awaited")
 
 def ensure_env():
-    """Ensures a .env file exists in the current working directory."""
-    if not os.path.exists(".env"):
-        print("No .env file found. Creating one from .env.example...")
-        try:
-            # Try to get .env.example from the package resources
-            # In modern python (3.11+), importlib.resources.files is preferred
-            example_path = importlib.resources.files("angel_claw").joinpath(".env.example")
-            if example_path.is_file():
-                shutil.copy(str(example_path), ".env")
-                print("Created .env file. Please edit it to include your API keys.")
-            else:
-                print("Warning: .env.example not found in package.")
-        except Exception as e:
-            print(f"Warning: Could not create .env file: {e}")
+    """Ensures a .env file exists and is complete in the current working directory."""
+    if "--skip-setup" in sys.argv:
+        return
+
+    if not os.path.exists(".env") or not is_config_complete():
+        print("Angel Claw is not configured yet.")
+        if questionary.confirm("Do you want to run the setup wizard?").ask():
+            run_wizard()
+            # Re-load settings after wizard finishes
+            from .config import settings
+            settings.__init__(_env_file='.env')
+        else:
+            if not os.path.exists(".env"):
+                print("No .env file found. Creating one from .env.example...")
+                try:
+                    example_path = importlib.resources.files("angel_claw").joinpath(".env.example")
+                    if example_path.is_file():
+                        shutil.copy(str(example_path), ".env")
+                        print("Created .env file. Please edit it to include your API keys.")
+                    else:
+                        print("Warning: .env.example not found in package.")
+                except Exception as e:
+                    print(f"Warning: Could not create .env file: {e}")
 
 async def interactive_chat(model: str = None, api_base: str = None):
     # Register CLI proactive handler
@@ -132,6 +144,9 @@ async def interactive_chat(model: str = None, api_base: str = None):
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":
+        if "--reconfigure" in sys.argv:
+            run_wizard()
+        
         ensure_env()
         model_override = None
         api_base_override = None
@@ -143,6 +158,11 @@ def main():
                 api_base_override = sys.argv[i+1]
                 
         asyncio.run(interactive_chat(model=model_override, api_base=api_base_override))
+    elif len(sys.argv) > 1 and sys.argv[1] == "tutorial":
+        ensure_env()
+        # Tutorial implementation will go here
+        from .tutorial import run_tutorial
+        asyncio.run(run_tutorial())
     elif len(sys.argv) > 1 and sys.argv[1] == "login-whatsapp":
         ensure_env()
         from .whatsapp_bridge import whatsapp_bridge
@@ -162,13 +182,32 @@ def main():
                 await mcp_manager.disconnect()
             asyncio.run(list_mcp())
         elif len(sys.argv) > 2 and sys.argv[2] == "test":
-            async def test_mcp():
-                print("Testing MCP connections...")
+            async def test_diagnostics():
+                from .config.validator import validate_llm
+                print("\n--- Angel Claw Diagnostics ---")
+                
+                # 1. LLM Test
+                print(f"Testing LLM ({settings.model})...")
+                l_success, l_msg = await validate_llm(settings.model, settings.api_key, settings.api_base)
+                if l_success:
+                    print(f"✅ LLM: {l_msg}")
+                else:
+                    print(f"❌ LLM: {l_msg}")
+                    print("👉 Suggestion: Run 'angel-claw chat --reconfigure' to check your API key.")
+
+                # 2. MCP Test
+                print("\nTesting MCP connections...")
                 await mcp_manager.connect()
-                for name, session in mcp_manager.sessions.items():
-                    print(f"✅ Connected to: {name}")
+                diagnostics = mcp_manager.get_diagnostics()
+                for name, info in diagnostics.items():
+                    if info["status"] == "Connected":
+                        print(f"✅ MCP [{name}]: Connected")
+                    else:
+                        print(f"❌ MCP [{name}]: {info['status']}")
+                        if info["error"]:
+                            print(f"   Error: {info['error']}")
                 await mcp_manager.disconnect()
-            asyncio.run(test_mcp())
+            asyncio.run(test_diagnostics())
         else:
             print("Usage: angel-claw mcp [list|test]")
     else:

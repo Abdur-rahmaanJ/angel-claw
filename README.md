@@ -38,8 +38,8 @@ All powered by:
 
 ```
 $ pip install angel-claw
-# replace .env values
-$ angel-claw chat
+$ angel-claw chat  # Interactive setup wizard runs automatically!
+$ angel-claw tutorial  # Start the guided tour
 ```
 
 ---
@@ -92,31 +92,32 @@ It writes and installs a new capability.
 
 # 🏁 Get Started in 30 Seconds
 
-## 🔧 Prerequisites
-
-- Python 3.10+
-- An LLM API key (OpenAI, Anthropic, Ollama, etc.)
-
----
-
-## 📦 Installation
+### 📦 Installation
 
 ```bash
 pip install angel-claw
 ```
 
----
+### ⚙️ Interactive Configuration
 
-## ⚙️ Configure Environment
+Run the chat command to start the integrated setup wizard:
 
-On running angel-claw chat, a .env is automatically created
+```bash
+angel-claw chat
+```
 
-Add your keys:
+The wizard will help you:
+- Select your LLM provider (OpenAI, Anthropic, Ollama, etc.)
+- Validate your API key
+- Set up optional channels (Telegram, WhatsApp)
+- Configure MCP servers
 
-```env
-MODEL_KEY=your_llm_api_key
-TELEGRAM_TOKEN=optional
-WHATSAPP_ENABLED=False
+### 🎓 Guided Tutorial
+
+New to Angel Claw? Run the interactive tutorial to learn the basics:
+
+```bash
+angel-claw tutorial
 ```
 
 ---
@@ -298,6 +299,20 @@ Scan QR → Pair session:
 ```
 
 Now Angel Claw is on WhatsApp.
+
+# 🩺 Troubleshooting
+
+### "Authentication Error" or "401"
+Your LLM API key is likely missing or incorrect.
+- **Fix:** Run `angel-claw chat --reconfigure` to re-enter your key.
+
+### "Model Not Found"
+The model specified in your `.env` (e.g., `gpt-4o-mini`) is not available to your account or is misspelled.
+- **Fix:** Run `angel-claw chat --reconfigure` and select a different model.
+
+### MCP Server Fails to Connect
+The command for a local MCP server might not be installed (e.g., `npx` not found).
+- **Fix:** Ensure Node.js is installed or run `angel-claw mcp test` to diagnose specific server failures.
 
 ---
 

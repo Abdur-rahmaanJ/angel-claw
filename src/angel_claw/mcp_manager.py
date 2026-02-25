@@ -205,4 +205,24 @@ class MCPManager:
         self.sessions = {}
         self.is_connected = False
 
+    def get_diagnostics(self) -> Dict[str, Dict[str, Any]]:
+        """Returns diagnostic information for all configured servers."""
+        diag = {}
+        for name, config in self.server_configs.items():
+            status = "Disconnected"
+            error = None
+            if name in self.sessions:
+                status = "Connected"
+            elif self.restarts.get(name, 0) > self.max_restarts:
+                status = "Failed"
+                error = f"Max restarts reached ({self.max_restarts})."
+            
+            diag[name] = {
+                "status": status,
+                "config": config,
+                "restarts": self.restarts.get(name, 0),
+                "error": error
+            }
+        return diag
+
 mcp_manager = MCPManager()

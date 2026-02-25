@@ -116,14 +116,25 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
             mcp_tools = await mcp_manager.get_tool_definitions()
             all_tools = tools + mcp_tools
             
-            response = await litellm.acompletion(
-                model=self.model,
-                messages=messages,
-                api_key=settings.api_key,
-                api_base=self.api_base,
-                tools=all_tools if all_tools else None,
-                tool_choice="auto" if all_tools else None
-            )
+            try:
+                response = await litellm.acompletion(
+                    model=self.model,
+                    messages=messages,
+                    api_key=settings.api_key,
+                    api_base=self.api_base,
+                    tools=all_tools if all_tools else None,
+                    tool_choice="auto" if all_tools else None
+                )
+            except Exception as e:
+                # Handle common errors with friendly messages
+                error_msg = str(e)
+                if "401" in error_msg or "authentication" in error_msg.lower():
+                    return "❌ LLM Authentication Error: Your API key seems invalid. Run 'angel-claw chat --reconfigure' to update it."
+                elif "quota" in error_msg.lower() or "limit" in error_msg.lower():
+                    return "❌ LLM Quota Error: You have exceeded your API quota. Please check your provider dashboard."
+                elif "model" in error_msg.lower() and "not found" in error_msg.lower():
+                    return f"❌ LLM Model Error: Model '{self.model}' not found. Run 'angel-claw chat --reconfigure' to change it."
+                return f"❌ LLM Error: {e}"
             
             message = response.choices[0].message
             # litellm returns a message object that we need to convert to dict for history if it has tool_calls

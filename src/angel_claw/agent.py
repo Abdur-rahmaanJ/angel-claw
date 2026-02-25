@@ -211,8 +211,8 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                     }
                 )
 
-            # Refresh skills in case a new one was created/installed
-            self.skill_manager.load_skills()
+            # Smart reload skills only if files changed
+            self.skill_manager.reload_if_needed()
 
         # 4. Update short-term history
         self.history.append({"role": "user", "content": user_input})

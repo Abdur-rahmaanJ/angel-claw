@@ -29,6 +29,18 @@ test = [
     "pytest",
     "pytest-asyncio"
 ]
+file-handler = [
+    "PyPDF2",
+    "Pillow",
+    "pytesseract",
+]
+google-calendar = [
+    "google-api-python-client",
+    "google-auth",
+]
+email = [
+    "python-dateutil",
+]
 
 [project.scripts]
 angel-claw = "angel_claw.cli:main"

@@ -67,11 +67,11 @@ class Settings(BaseSettings):
     smtp_password: Optional[str] = Field(None, validation_alias="SMTP_PASSWORD")
     smtp_use_tls: bool = Field(True, validation_alias="SMTP_USE_TLS")
 
-    # Calendar Settings (Google Calendar API)
-    google_credentials_json: Optional[str] = Field(
-        None, validation_alias="GOOGLE_CREDENTIALS_JSON"
+    # Google Calendar Settings
+    google_client_id: Optional[str] = Field(None, validation_alias="GOOGLE_CLIENT_ID")
+    google_client_secret: Optional[str] = Field(
+        None, validation_alias="GOOGLE_CLIENT_SECRET"
     )
-    google_token_json: Optional[str] = Field(None, validation_alias="GOOGLE_TOKEN_JSON")
 
 
 settings = Settings()

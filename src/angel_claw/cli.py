@@ -20,6 +20,7 @@ from .models import AgentRequest
 from .config.validator import is_config_complete
 from .config.wizard import run_wizard
 
+
 # Custom formatter for clean CLI progress output
 class CLIProgressFormatter(logging.Formatter):
     def format(self, record):
@@ -27,6 +28,7 @@ class CLIProgressFormatter(logging.Formatter):
             # Return just the message for our progress indicators
             return f"\r{record.msg}\n"
         return super().format(record)
+
 
 # Suppress all library logging for CLI mode to keep it clean
 logging.getLogger().setLevel(logging.ERROR)
@@ -40,7 +42,7 @@ agent_logger.setLevel(logging.INFO)
 agent_handler = logging.StreamHandler(sys.stdout)
 agent_handler.setFormatter(CLIProgressFormatter())
 agent_logger.addHandler(agent_handler)
-agent_logger.propagate = False # Don't send to root logger
+agent_logger.propagate = False  # Don't send to root logger
 
 logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
 logging.getLogger("whatsmeow").setLevel(logging.CRITICAL)
@@ -48,7 +50,12 @@ logging.getLogger("Whatsmeow").setLevel(logging.CRITICAL)
 logging.getLogger("neonize").setLevel(logging.CRITICAL)
 
 # Suppress litellm specific RuntimeWarning about async_success_handler
-warnings.filterwarnings("ignore", category=RuntimeWarning, message="coroutine 'Logging.async_success_handler' was never awaited")
+warnings.filterwarnings(
+    "ignore",
+    category=RuntimeWarning,
+    message="coroutine 'Logging.async_success_handler' was never awaited",
+)
+
 
 def ensure_env():
     """Ensures a .env file exists and is complete in the current working directory."""
@@ -61,19 +68,25 @@ def ensure_env():
             run_wizard()
             # Re-load settings after wizard finishes
             from .config import settings
-            settings.__init__(_env_file='.env')
+
+            settings.__init__(_env_file=".env")
         else:
             if not os.path.exists(".env"):
                 print("No .env file found. Creating one from .env.example...")
                 try:
-                    example_path = importlib.resources.files("angel_claw").joinpath(".env.example")
+                    example_path = importlib.resources.files("angel_claw").joinpath(
+                        ".env.example"
+                    )
                     if example_path.is_file():
                         shutil.copy(str(example_path), ".env")
-                        print("Created .env file. Please edit it to include your API keys.")
+                        print(
+                            "Created .env file. Please edit it to include your API keys."
+                        )
                     else:
                         print("Warning: .env.example not found in package.")
                 except Exception as e:
                     print(f"Warning: Could not create .env file: {e}")
+
 
 async def interactive_chat(model: str = None, api_base: str = None):
     # Register CLI proactive handler
@@ -89,20 +102,20 @@ async def interactive_chat(model: str = None, api_base: str = None):
     cron_task = asyncio.create_task(cron_manager.run())
     telegram_task = asyncio.create_task(telegram_bridge.run())
     whatsapp_task = asyncio.create_task(whatsapp_bridge.run())
-    
+
     # Use a persistent session ID for CLI by default
     session_id = "cli-default"
-    
+
     print(f"\n--- Angel Claw CLI Chat ---")
     print(f"Model: {model or settings.model}")
     if api_base or settings.api_base:
         print(f"API Base: {api_base or settings.api_base}")
     print(f"Session: {session_id}")
     print("Type 'exit' or 'quit' to stop.\n")
-    
+
     # Give background tasks a moment to initialize before showing 'You:'
-    await asyncio.sleep(0.5) 
-    
+    await asyncio.sleep(0.5)
+
     while True:
         try:
             # Use to_thread to keep the event loop running for background tasks while waiting for input
@@ -112,60 +125,66 @@ async def interactive_chat(model: str = None, api_base: str = None):
                 break
             if not user_input:
                 continue
-                
+
             print("Thinking...", end="\r", flush=True)
             request = AgentRequest(
                 session_id=session_id,
                 message=user_input,
                 user_id="cli",
                 model=model,
-                api_base=api_base
+                api_base=api_base,
             )
             response = await process_chat_request(request)
             # Clear the "thinking" line if it was still there
             print(" " * 40, end="\r", flush=True)
             print(f"Assistant: {response}\n")
-            
+
         except KeyboardInterrupt:
             break
         except Exception as e:
             print(f"\nError: {e}")
-    
+
     # Cancel and cleanup all background tasks
     for task in [cron_task, telegram_task, whatsapp_task]:
         task.cancel()
-    
+
     # Wait for tasks to finish cancelling
-    await asyncio.gather(*[cron_task, telegram_task, whatsapp_task], return_exceptions=True)
-    
+    await asyncio.gather(
+        *[cron_task, telegram_task, whatsapp_task], return_exceptions=True
+    )
+
     # Cleanup bridge resources
     await whatsapp_bridge.close()
+    await telegram_bridge.close()
     await mcp_manager.disconnect()
+
 
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":
         if "--reconfigure" in sys.argv:
             run_wizard()
-        
+
         ensure_env()
         model_override = None
         api_base_override = None
         # Parse arguments for model and api_base
         for i, arg in enumerate(sys.argv):
             if arg == "--model" and i + 1 < len(sys.argv):
-                model_override = sys.argv[i+1]
+                model_override = sys.argv[i + 1]
             if arg == "--api-base" and i + 1 < len(sys.argv):
-                api_base_override = sys.argv[i+1]
-                
+                api_base_override = sys.argv[i + 1]
+
         asyncio.run(interactive_chat(model=model_override, api_base=api_base_override))
     elif len(sys.argv) > 1 and sys.argv[1] == "tutorial":
         ensure_env()
         # Tutorial implementation will go here
         from .tutorial import run_tutorial
+
         asyncio.run(run_tutorial())
     elif len(sys.argv) > 1 and sys.argv[1] == "login-whatsapp":
         ensure_env()
         from .whatsapp_bridge import whatsapp_bridge
+
         print("--- Angel Claw WhatsApp Login ---")
         print("Ensure WHATSAPP_ENABLED=True is set in your .env")
         # Force enable for this command
@@ -173,6 +192,7 @@ def main():
         asyncio.run(whatsapp_bridge.run())
     elif len(sys.argv) > 1 and sys.argv[1] == "mcp":
         if len(sys.argv) > 2 and sys.argv[2] == "list":
+
             async def list_mcp():
                 await mcp_manager.connect()
                 tools = await mcp_manager.get_tool_definitions()
@@ -180,20 +200,27 @@ def main():
                 for t in tools:
                     print(f"- {t['function']['name']}: {t['function']['description']}")
                 await mcp_manager.disconnect()
+
             asyncio.run(list_mcp())
         elif len(sys.argv) > 2 and sys.argv[2] == "test":
+
             async def test_diagnostics():
                 from .config.validator import validate_llm
+
                 print("\n--- Angel Claw Diagnostics ---")
-                
+
                 # 1. LLM Test
                 print(f"Testing LLM ({settings.model})...")
-                l_success, l_msg = await validate_llm(settings.model, settings.api_key, settings.api_base)
+                l_success, l_msg = await validate_llm(
+                    settings.model, settings.api_key, settings.api_base
+                )
                 if l_success:
                     print(f"✅ LLM: {l_msg}")
                 else:
                     print(f"❌ LLM: {l_msg}")
-                    print("👉 Suggestion: Run 'angel-claw chat --reconfigure' to check your API key.")
+                    print(
+                        "👉 Suggestion: Run 'angel-claw chat --reconfigure' to check your API key."
+                    )
 
                 # 2. MCP Test
                 print("\nTesting MCP connections...")
@@ -207,12 +234,14 @@ def main():
                         if info["error"]:
                             print(f"   Error: {info['error']}")
                 await mcp_manager.disconnect()
+
             asyncio.run(test_diagnostics())
         else:
             print("Usage: angel-claw mcp [list|test]")
     else:
         # Default to starting the gateway if no subcommand or 'serve'
         start_gateway()
+
 
 if __name__ == "__main__":
     main()

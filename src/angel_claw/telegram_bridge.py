@@ -3,7 +3,13 @@ import os
 import json
 import asyncio
 from telegram import Update
-from telegram.ext import ApplicationBuilder, CommandHandler, MessageHandler, filters, ContextTypes
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+)
 from .config import settings
 from .agent import Agent
 from .cron import cron_manager
@@ -12,15 +18,19 @@ from .lane_queue.process import process_chat_request
 
 logger = logging.getLogger("angel-claw-telegram")
 
+
 class TelegramBridge:
     def __init__(self, persist_dir: str = None):
-        self.persist_dir = persist_dir or os.path.join(settings.memory_persist_dir, "telegram")
+        self.persist_dir = persist_dir or os.path.join(
+            settings.memory_persist_dir, "telegram"
+        )
         if not os.path.exists(self.persist_dir):
             os.makedirs(self.persist_dir)
         self.pairings_file = os.path.join(self.persist_dir, "pairings.json")
         self.pairings = self._load_pairings()
         self.token = settings.telegram_token
         self.app = None
+        self._shutdown_event = asyncio.Event()
         cron_manager.register_proactive_handler(self.send_proactive)
 
     def _load_pairings(self):
@@ -42,7 +52,9 @@ class TelegramBridge:
     async def start_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = str(update.effective_chat.id)
         if chat_id in self.pairings:
-            await update.message.reply_text(f"Welcome back! You are paired with session: {self.pairings[chat_id]}")
+            await update.message.reply_text(
+                f"Welcome back! You are paired with session: {self.pairings[chat_id]}"
+            )
         else:
             await update.message.reply_text(
                 "Welcome to Angel Claw! 🐾\n\n"
@@ -54,33 +66,37 @@ class TelegramBridge:
     async def pair_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = str(update.effective_chat.id)
         if not context.args:
-            await update.message.reply_text("Please provide a session ID: `/pair <session-id>`")
+            await update.message.reply_text(
+                "Please provide a session ID: `/pair <session-id>`"
+            )
             return
-        
+
         session_id = context.args[0]
         self.pairings[chat_id] = session_id
         self._save_pairings()
-        await update.message.reply_text(f"Successfully paired! I am now your Angel Claw for session: `{session_id}`")
+        await update.message.reply_text(
+            f"Successfully paired! I am now your Angel Claw for session: `{session_id}`"
+        )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not update.effective_chat or update.effective_chat.type != "private":
             return
         chat_id = str(update.effective_chat.id)
         if chat_id not in self.pairings:
-            await update.message.reply_text("This chat is not paired. Use `/pair <session-id>` to start.")
+            await update.message.reply_text(
+                "This chat is not paired. Use `/pair <session-id>` to start."
+            )
             return
 
         session_id = self.pairings[chat_id]
         user_input = update.message.text
-        
+
         # Show typing indicator
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-        
+
         try:
             request = AgentRequest(
-                session_id=session_id,
-                message=user_input,
-                user_id=f"telegram_{chat_id}"
+                session_id=session_id, message=user_input, user_id=f"telegram_{chat_id}"
             )
             response_content = await process_chat_request(request)
             await update.message.reply_text(response_content)
@@ -94,21 +110,20 @@ class TelegramBridge:
             return
 
         self.app = ApplicationBuilder().token(self.token).build()
-        
+
         self.app.add_handler(CommandHandler("start", self.start_cmd))
         self.app.add_handler(CommandHandler("pair", self.pair_cmd))
-        self.app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_message))
-        
+        self.app.add_handler(
+            MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_message)
+        )
+
         logger.info("Telegram bridge starting...")
-        # Note: run_polling is blocking, we might want to run it in a separate thread if needed,
-        # but here we'll use it as the main entry point for the bridge.
         await self.app.initialize()
         await self.app.start()
         await self.app.updater.start_polling()
-        
-        # Keep running
-        while True:
-            await asyncio.sleep(3600)
+
+        # Wait for shutdown signal
+        await self._shutdown_event.wait()
 
     async def send_proactive(self, message: str, user_id: str, session_id: str):
         if not self.app:
@@ -121,6 +136,24 @@ class TelegramBridge:
                     await self.app.bot.send_message(chat_id=chat_id, text=message)
                     logger.info(f"Sent proactive message to Telegram chat {chat_id}")
                 except Exception as e:
-                    logger.error(f"Failed to send proactive message to Telegram chat {chat_id}: {e}")
+                    logger.error(
+                        f"Failed to send proactive message to Telegram chat {chat_id}: {e}"
+                    )
+
+    async def close(self):
+        """Gracefully shutdown the Telegram bridge."""
+        logger.info("Shutting down Telegram bridge...")
+        self._shutdown_event.set()
+
+        if self.app:
+            try:
+                await self.app.updater.stop()
+                await self.app.stop()
+                await self.app.shutdown()
+            except Exception as e:
+                logger.warning(f"Error during Telegram bridge shutdown: {e}")
+
+        logger.info("Telegram bridge shut down.")
+
 
 telegram_bridge = TelegramBridge()

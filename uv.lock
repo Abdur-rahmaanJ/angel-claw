@@ -217,7 +217,7 @@ wheels = [
 
 [[package]]
 name = "angel-claw"
-version = "0.7.1"
+version = "0.8.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -231,6 +231,7 @@ dependencies = [
     { name = "neonize" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "python-dateutil" },
     { name = "python-dotenv" },
     { name = "python-telegram-bot" },
     { name = "qrcode" },
@@ -240,6 +241,15 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+file-handler = [
+    { name = "pillow" },
+    { name = "pypdf2" },
+    { name = "pytesseract" },
+]
+google-calendar = [
+    { name = "google-api-python-client" },
+    { name = "google-auth" },
+]
 test = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -252,14 +262,20 @@ requires-dist = [
     { name = "croniter" },
     { name = "fastapi" },
     { name = "fastmcp" },
+    { name = "google-api-python-client", marker = "extra == 'google-calendar'" },
+    { name = "google-auth", marker = "extra == 'google-calendar'" },
     { name = "httpx" },
     { name = "litellm" },
     { name = "mcp", extras = ["cli"] },
     { name = "neonize" },
+    { name = "pillow", marker = "extra == 'file-handler'" },
     { name = "pydantic" },
     { name = "pydantic-settings" },
+    { name = "pypdf2", marker = "extra == 'file-handler'" },
+    { name = "pytesseract", marker = "extra == 'file-handler'" },
     { name = "pytest", marker = "extra == 'test'" },
     { name = "pytest-asyncio", marker = "extra == 'test'" },
+    { name = "python-dateutil" },
     { name = "python-dotenv" },
     { name = "python-telegram-bot" },
     { name = "qrcode" },
@@ -267,7 +283,7 @@ requires-dist = [
     { name = "telegram", specifier = ">=0.0.1" },
     { name = "uvicorn" },
 ]
-provides-extras = ["test"]
+provides-extras = ["test", "file-handler", "google-calendar"]
 
 [[package]]
 name = "angel-recall"
@@ -3684,6 +3700,15 @@ wheels = [
 ]
 
 [[package]]
+name = "pypdf2"
+version = "3.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/bb/18dc3062d37db6c491392007dfd1a7f524bb95886eb956569ac38a23a784/PyPDF2-3.0.1.tar.gz", hash = "sha256:a74408f69ba6271f71b9352ef4ed03dc53a31aa404d29b5d31f53bfecfee1440", size = 227419, upload-time = "2022-12-31T10:36:13.13Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8e/5e/c86a5643653825d3c913719e788e41386bee415c2b87b4f955432f2de6b2/pypdf2-3.0.1-py3-none-any.whl", hash = "sha256:d16e4205cfee272fbdc0568b68d82be796540b1537508cef59388f839c191928", size = 232572, upload-time = "2022-12-31T10:36:10.327Z" },
+]
+
+[[package]]
 name = "pyperclip"
 version = "1.11.0"
 source = { registry = "https://pypi.org/simple" }
@@ -3756,6 +3781,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/dc/05/443d97600b7d6cc5e87c31783605db2400aaa4157823e4e20638a41d5e7f/pystemmer-3.0.0-pp310-pypy310_pp73-macosx_10_15_x86_64.whl", hash = "sha256:f8f6ac3d031776d4512e7feb0f4411b43dacda3de91c24c418d2cff7e4e2db82", size = 187846, upload-time = "2025-05-08T03:23:51.577Z" },
     { url = "https://files.pythonhosted.org/packages/67/9d/e61425f8221913f21b0045a8a974c932267f407527202e21a51df0db7609/pystemmer-3.0.0-pp310-pypy310_pp73-macosx_11_0_arm64.whl", hash = "sha256:67e4d3f04829e672399542476163ed2e9067d56159d4a65d87d6839aa0b4fd25", size = 190857, upload-time = "2025-05-08T03:23:53.214Z" },
     { url = "https://files.pythonhosted.org/packages/2e/7e/b47f2a9402a56d4f4d026f570e8f986e805c60bbd7103ccaba89160fa5cc/pystemmer-3.0.0-pp310-pypy310_pp73-win_amd64.whl", hash = "sha256:753dde65d031a9181d3d1def6c69cf29f90d749f60dbe257360a2bf52d06870d", size = 196810, upload-time = "2025-05-08T03:23:56.863Z" },
+]
+
+[[package]]
+name = "pytesseract"
+version = "0.3.13"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+    { name = "pillow" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/9f/a6/7d679b83c285974a7cb94d739b461fa7e7a9b17a3abfd7bf6cbc5c2394b0/pytesseract-0.3.13.tar.gz", hash = "sha256:4bf5f880c99406f52a3cfc2633e42d9dc67615e69d8a509d74867d3baddb5db9", size = 17689, upload-time = "2024-08-16T02:33:56.762Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7a/33/8312d7ce74670c9d39a532b2c246a853861120486be9443eebf048043637/pytesseract-0.3.13-py3-none-any.whl", hash = "sha256:7a99c6c2ac598360693d83a416e36e0b33a67638bb9d77fdcac094a3589d4b34", size = 14705, upload-time = "2024-08-16T02:36:10.09Z" },
 ]
 
 [[package]]

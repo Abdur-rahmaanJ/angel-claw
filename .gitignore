@@ -207,6 +207,6 @@ marimo/_lsp/
 __marimo__/
 
 vaults/
-!src/angel_claw/skills/
 skills/
+!src/angel_claw/skills/
 .angelclaw/

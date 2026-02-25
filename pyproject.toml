@@ -22,6 +22,7 @@ dependencies = [
     "mcp[cli]",
     "fastmcp",
     "questionary",
+    "python-dateutil",
 ]
 
 [project.optional-dependencies]
@@ -37,9 +38,6 @@ file-handler = [
 google-calendar = [
     "google-api-python-client",
     "google-auth",
-]
-email = [
-    "python-dateutil",
 ]
 
 [project.scripts]

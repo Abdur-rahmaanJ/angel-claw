@@ -60,5 +60,12 @@ class Settings(BaseSettings):
         100, validation_alias="LANE_QUEUE_MAX_LANE_DEPTH"
     )
 
+    # Email Settings (IMAP/SMTP)
+    smtp_host: Optional[str] = Field(None, validation_alias="SMTP_HOST")
+    smtp_port: int = Field(587, validation_alias="SMTP_PORT")
+    smtp_user: Optional[str] = Field(None, validation_alias="SMTP_USER")
+    smtp_password: Optional[str] = Field(None, validation_alias="SMTP_PASSWORD")
+    smtp_use_tls: bool = Field(True, validation_alias="SMTP_USE_TLS")
+
 
 settings = Settings()

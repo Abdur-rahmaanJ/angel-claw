@@ -5,28 +5,32 @@ import httpx
 import zipfile
 import io
 import json
+from datetime import datetime, timedelta
 from angel_claw.skills.manager import skill
 from angel_claw.cron import cron_manager, Job, JobSchedule, JobPayload
+from angel_claw.chat_logger import chat_logger
+
 
 @skill
 def create_skill(name: str, code: str) -> str:
     """
-    Creates a new Python skill for Angel Claw. 
+    Creates a new Python skill for Angel Claw.
     'name' should be the filename (without .py).
     'code' should be the full Python code, including the @skill decorator and necessary imports.
     """
     skills_dir = os.path.join(os.getcwd(), "skills")
     if not os.path.exists(skills_dir):
         os.makedirs(skills_dir)
-        
+
     file_path = os.path.join(skills_dir, f"{name}.py")
-    
+
     try:
         with open(file_path, "w") as f:
             f.write(code)
         return f"Skill '{name}' created successfully at {file_path}."
     except Exception as e:
         return f"Error creating skill: {e}"
+
 
 @skill
 def install_skill_from_github(repo_url: str) -> str:
@@ -38,13 +42,13 @@ def install_skill_from_github(repo_url: str) -> str:
     skills_dir = os.path.join(os.getcwd(), "skills")
     if not os.path.exists(skills_dir):
         os.makedirs(skills_dir)
-    
+
     try:
         if os.path.exists(temp_dir):
             shutil.rmtree(temp_dir)
-            
+
         subprocess.run(["git", "clone", repo_url, temp_dir], check=True)
-        
+
         installed_files = []
         for root, dirs, files in os.walk(temp_dir):
             for file in files:
@@ -53,7 +57,7 @@ def install_skill_from_github(repo_url: str) -> str:
                     dst = os.path.join(skills_dir, file)
                     shutil.copy(src, dst)
                     installed_files.append(file)
-        
+
         shutil.rmtree(temp_dir)
         return f"Successfully installed skills: {', '.join(installed_files)}"
     except Exception as e:
@@ -61,20 +65,21 @@ def install_skill_from_github(repo_url: str) -> str:
             shutil.rmtree(temp_dir)
         return f"Error installing skill from GitHub: {e}"
 
+
 @skill
 def import_skills_from_directory(path: str = "skills") -> str:
     """
-    Scans a directory for skill.md files and returns their content 
+    Scans a directory for skill.md files and returns their content
     so the agent can decide to implement them.
     """
     root_dir = os.getcwd()
     target_dir = os.path.join(root_dir, path)
-    
+
     if not os.path.exists(target_dir):
         # Try relative to project root if called from elsewhere
         # (Though current working dir should be project root)
         return f"Error: Directory {target_dir} not found."
-        
+
     found_skills = []
     for root, dirs, files in os.walk(target_dir):
         if "skill.md" in files:
@@ -83,29 +88,40 @@ def import_skills_from_directory(path: str = "skills") -> str:
                 content = f.read()
                 rel_path = os.path.relpath(skill_file, target_dir)
                 found_skills.append(f"--- Skill at {rel_path} ---\n{content}")
-    
+
     if not found_skills:
         return "No skill.md files found."
-        
+
     return "\n\n".join(found_skills)
+
 
 @skill
 def list_skills() -> str:
     """Lists all currently installed skills."""
     internal_dir = os.path.dirname(__file__)
     local_dir = os.path.join(os.getcwd(), "skills")
-    
+
     all_skills = set()
     for d in [internal_dir, local_dir]:
         if os.path.exists(d):
             for f in os.listdir(d):
                 if f.endswith(".py") and f != "__init__.py":
                     all_skills.add(f[:-3])
-                    
+
     return f"Installed skills: {', '.join(sorted(list(all_skills)))}"
 
+
 @skill
-def schedule_task(name: str, schedule_kind: str, schedule_value: str, payload_kind: str, content: str = None, skill_name: str = None, args: dict = None, session_id: str = "cli-default") -> str:
+def schedule_task(
+    name: str,
+    schedule_kind: str,
+    schedule_value: str,
+    payload_kind: str,
+    content: str = None,
+    skill_name: str = None,
+    args: dict = None,
+    session_id: str = "cli-default",
+) -> str:
     """
     Schedules a task.
     - schedule_kind: 'at' (isoformat), 'in' (relative, e.g. '1m', '30s'), 'every' (recurring, e.g. '1h'), 'cron' (expression).
@@ -116,35 +132,41 @@ def schedule_task(name: str, schedule_kind: str, schedule_value: str, payload_ki
         job = Job(
             name=name,
             schedule=JobSchedule(kind=schedule_kind, value=schedule_value),
-            payload=JobPayload(kind=payload_kind, content=content, skill_name=skill_name, args=args),
-            session_id=session_id
+            payload=JobPayload(
+                kind=payload_kind, content=content, skill_name=skill_name, args=args
+            ),
+            session_id=session_id,
         )
         # Recalculate next run to ensure it's valid
         cron_manager._calculate_next_run(job)
         if not job.next_run and schedule_kind != "at":
-             return f"Error: Invalid schedule {schedule_kind}: {schedule_value}"
-             
+            return f"Error: Invalid schedule {schedule_kind}: {schedule_value}"
+
         cron_manager.save_job(job)
         return f"Task '{name}' scheduled. Next run: {job.next_run}"
     except Exception as e:
         return f"Error scheduling task: {e}"
+
 
 @skill
 def list_tasks(session_id: str = "cli-default") -> str:
     """Lists all scheduled tasks for a specific session."""
     if not cron_manager.jobs:
         return "No tasks scheduled."
-    
+
     tasks = []
     for name, job in cron_manager.jobs.items():
         if job.session_id == session_id:
             status = "Enabled" if job.enabled else "Disabled"
-            tasks.append(f"- {name}: {job.schedule.kind}({job.schedule.value}) | {job.payload.kind} | Next run: {job.next_run} | {status}")
-    
+            tasks.append(
+                f"- {name}: {job.schedule.kind}({job.schedule.value}) | {job.payload.kind} | Next run: {job.next_run} | {status}"
+            )
+
     if not tasks:
         return f"No tasks scheduled for session '{session_id}'."
-        
+
     return "\n".join(tasks)
+
 
 @skill
 def delete_task(name: str, session_id: str = "cli-default") -> str:
@@ -158,6 +180,7 @@ def delete_task(name: str, session_id: str = "cli-default") -> str:
             return f"Task '{name}' found but belongs to a different session."
     else:
         return f"Task '{name}' not found."
+
 
 @skill
 def search_clawhub(query: str = "") -> str:
@@ -176,27 +199,28 @@ def search_clawhub(query: str = "") -> str:
             response = client.get(url, follow_redirects=True)
             response.raise_for_status()
             data = response.json()
-            
+
             # search API uses 'results', skills API uses 'items'
             items = data.get("results") or data.get("items", [])
-            
+
             if not items:
                 return f"No skills found on ClawHub matching '{query}'."
-            
+
             # Limit to top 10 for context safety
             items = items[:10]
-            
+
             results = [f"ClawHub Search Results for '{query or 'latest'}':"]
             for i in items:
-                slug = i.get('slug')
+                slug = i.get("slug")
                 # Prefer 'summary' which is used by ClawHub for short descriptions
-                desc = i.get('summary') or i.get('description', 'No description.')
-                display_name = i.get('displayName', slug)
+                desc = i.get("summary") or i.get("description", "No description.")
+                display_name = i.get("displayName", slug)
                 results.append(f"- {display_name} ({slug}): {desc}")
-            
+
             return "\n".join(results)
     except Exception as e:
         return f"Error searching ClawHub: {e}"
+
 
 @skill
 def install_skill_from_clawhub(slug: str) -> str:
@@ -208,18 +232,18 @@ def install_skill_from_clawhub(slug: str) -> str:
     url = f"https://auth.clawdhub.com/api/v1/download?slug={slug}"
     # Use consistent local skills directory in CWD
     skills_dir = os.path.join(os.getcwd(), "skills", "clawhub", slug)
-    
+
     try:
         if not os.path.exists(skills_dir):
             os.makedirs(skills_dir)
-            
+
         with httpx.Client() as client:
             response = client.get(url, follow_redirects=True)
             response.raise_for_status()
-            
+
             with zipfile.ZipFile(io.BytesIO(response.content)) as z:
                 z.extractall(skills_dir)
-        
+
         skill_file = os.path.join(skills_dir, "SKILL.md")
         if os.path.exists(skill_file):
             with open(skill_file, "r") as f:
@@ -227,6 +251,90 @@ def install_skill_from_clawhub(slug: str) -> str:
             return f"Successfully installed ClawHub skill '{slug}'.\n\n--- SKILL.md ---\n{content}"
         else:
             return f"Successfully installed ClawHub skill '{slug}' but no SKILL.md was found in the archive."
-            
+
     except Exception as e:
         return f"Error installing skill from ClawHub: {e}"
+
+
+@skill
+def get_chat_history(date: str, session_filter: str = None) -> str:
+    """
+    Retrieves chat history for a specific date.
+    - date: Date in YYYY-MM-DD format (e.g., '2024-01-15') or 'today' or 'yesterday'
+    - session_filter: Optional session ID to filter messages (e.g., 'cli-default')
+    """
+    try:
+        if date.lower() == "today":
+            target_date = datetime.now()
+        elif date.lower() == "yesterday":
+            target_date = datetime.now() - timedelta(days=1)
+        else:
+            target_date = datetime.strptime(date, "%Y-%m-%d")
+
+        chats = chat_logger.get_chats_for_date(target_date)
+
+        if session_filter:
+            lines = chats.split("\n")
+            filtered = []
+            include = False
+            for line in lines:
+                if "Session:" in line:
+                    include = session_filter in line
+                if include:
+                    filtered.append(line)
+            chats = "\n".join(filtered)
+            if not chats:
+                return f"No chat logs found for session '{session_filter}' on {date}."
+
+        return f"Chat History for {target_date.strftime('%Y-%m-%d')}:\n\n{chats}"
+    except ValueError:
+        return "Invalid date format. Use YYYY-MM-DD, 'today', or 'yesterday'."
+    except Exception as e:
+        return f"Error retrieving chat history: {e}"
+
+
+@skill
+def get_chat_history_range(
+    start_date: str, end_date: str = None, session_filter: str = None
+) -> str:
+    """
+    Retrieves chat history for a date range.
+    - start_date: Start date in YYYY-MM-DD format or 'today' or 'yesterday'
+    - end_date: End date in YYYY-MM-DD format (defaults to today)
+    - session_filter: Optional session ID to filter messages
+    """
+    try:
+
+        def parse_date(d: str) -> datetime:
+            if d.lower() == "today":
+                return datetime.now()
+            elif d.lower() == "yesterday":
+                return datetime.now() - timedelta(days=1)
+            else:
+                return datetime.strptime(d, "%Y-%m-%d")
+
+        start = parse_date(start_date)
+        end = parse_date(end_date) if end_date else datetime.now()
+
+        chats = chat_logger.get_chats_for_date_range(start, end)
+
+        if session_filter:
+            lines = chats.split("\n")
+            filtered = []
+            include = False
+            for line in lines:
+                if "Session:" in line:
+                    include = session_filter in line
+                if include:
+                    filtered.append(line)
+            chats = "\n".join(filtered)
+            if not chats:
+                return f"No chat logs found for session '{session_filter}' between {start_date} and {end_date or 'today'}."
+
+        return f"Chat History from {start.strftime('%Y-%m-%d')} to {end.strftime('%Y-%m-%d')}:\n\n{chats}"
+    except ValueError as e:
+        return (
+            f"Invalid date format. Use YYYY-MM-DD, 'today', or 'yesterday'. Error: {e}"
+        )
+    except Exception as e:
+        return f"Error retrieving chat history: {e}"

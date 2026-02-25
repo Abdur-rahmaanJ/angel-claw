@@ -3,7 +3,10 @@ import asyncio
 import httpx
 from typing import Optional, Tuple
 
-async def validate_llm(model: str, api_key: str, api_base: Optional[str] = None) -> Tuple[bool, str]:
+
+async def validate_llm(
+    model: str, api_key: str, api_base: Optional[str] = None
+) -> Tuple[bool, str]:
     """
     Performs a minimal test completion to validate the LLM configuration.
     Returns (success, message).
@@ -16,13 +19,14 @@ async def validate_llm(model: str, api_key: str, api_base: Optional[str] = None)
             messages=[{"role": "user", "content": "hi"}],
             api_key=api_key,
             api_base=api_base,
-            max_tokens=5
+            max_tokens=5,
         )
         if response:
             return True, "Connection successful."
     except Exception as e:
         return False, str(e)
     return False, "Unknown error during LLM validation."
+
 
 async def validate_telegram(token: str) -> Tuple[bool, str]:
     """
@@ -41,11 +45,13 @@ async def validate_telegram(token: str) -> Tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
+
 async def validate_mcp_server(name: str, config: dict) -> Tuple[bool, str]:
     """
     Attempts to connect to an MCP server and list tools to validate it.
     """
     from ..mcp_manager import MCPManager
+
     manager = MCPManager()
     # Temporarily override servers to just this one
     manager.server_configs = {name: config}
@@ -61,12 +67,17 @@ async def validate_mcp_server(name: str, config: dict) -> Tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
+
 def is_config_complete() -> bool:
     """
     Checks if the essential configuration is present in environment variables.
     """
     from ..config import settings
-    # We require at least a MODEL_KEY
-    if not settings.api_key or settings.api_key == "your_api_key_here":
+
+    # We require at least a MODEL_KEY that is not empty or a placeholder
+    if not settings.api_key:
+        return False
+    api_key = settings.api_key.strip()
+    if not api_key or api_key in ("your_api_key_here", "your_api_key", "YOUR_API_KEY"):
         return False
     return True

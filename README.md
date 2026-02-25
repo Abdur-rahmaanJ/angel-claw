@@ -1,4 +1,3 @@
-
 <h1 align="center">🪽 Angel Claw</h1>
 
 <p align="center">
@@ -20,20 +19,19 @@
 
 ## What Is Angel Claw?
 
-
 **Angel Claw** is a powerful, extensible AI agent framework inspired by OpenClaw designed to give you:
 
-- 🧠 Long-term, evolvable memory  
+- 🧠 Long-term, evolvable memory
 - 🛠 Self-generating skills & load skills from clawhub
-- 🔌 Model Context Protocol (MCP) Host: standardized external tool interoperability 
-- 📅 Proactive scheduling & automation  
-- 🌍 Web browsing & tool usage  
-- 📱 Telegram & WhatsApp integration  
+- 🔌 Model Context Protocol (MCP) Host: standardized external tool interoperability
+- 📅 Proactive scheduling & automation
+- 🌍 Web browsing & tool usage
+- 📱 Telegram & WhatsApp integration
 
 All powered by:
 
-- `angel-recall` for agent-native memory  
-- `litellm` for multi-model LLM support  
+- `angel-recall` for agent-native memory
+- `litellm` for multi-model LLM support
 - `FastAPI` as the gateway layer
 
 ```
@@ -46,7 +44,7 @@ $ angel-claw tutorial  # Start the guided tour
 
 ## 🎬 Quick Demo
 
-> The agent learns, remembers, schedules, and extends itself  in plain English.
+> The agent learns, remembers, schedules, and extends itself in plain English.
 
 ```text
 > remember that I'm allergic to peanuts
@@ -79,14 +77,19 @@ It writes and installs a new capability.
 
 ### Designed for Developers Who Want More Than Chat
 
-| Feature | What It Means |
-|----------|--------------|
-| 🧠 **Agent-Native Memory** | Persistent long-term memory per session using `angel-recall`. |
-| ⚡ **Multi-Model Support** | Connect to OpenAI, Anthropic, Ollama & more via `litellm`. |
-| 🔁 **Proactive Tasks** | Built-in `cron`, `every`, and `at` scheduling engine. |
-| 🌐 **Web Search & Automation** | Browse, extract, and summarize websites. |
-| 🛠 **Self-Generating Skills** | Agent writes tools for itself dynamically. |
-| 📱 **Telegram & WhatsApp** | Control your AI from your phone. |
+| Feature                        | What It Means                                                 |
+| ------------------------------ | ------------------------------------------------------------- |
+| 🧠 **Agent-Native Memory**     | Persistent long-term memory per session using `angel-recall`. |
+| ⚡ **Multi-Model Support**     | Connect to OpenAI, Anthropic, Ollama & more via `litellm`.    |
+| 🔁 **Proactive Tasks**         | Built-in `cron`, `every`, and `at` scheduling engine.         |
+| 🌐 **Web Search & Automation** | Browse, extract, and summarize websites.                      |
+| 🛠 **Self-Generating Skills**   | Agent writes tools for itself dynamically.                    |
+| 📱 **Telegram & WhatsApp**     | Control your AI from your phone.                              |
+| 📋 **Todo Management**         | Create, list, complete, delete todos with priorities.         |
+| 📅 **Calendar**                | Local and Google Calendar integration.                        |
+| 📧 **Email**                   | Send emails via SMTP.                                         |
+| 📄 **File Processing**         | PDF text extraction, AI image analysis, OCR.                  |
+| 💾 **Chat History**            | Automatic logging to markdown files.                          |
 
 ---
 
@@ -98,6 +101,16 @@ It writes and installs a new capability.
 pip install angel-claw
 ```
 
+### Optional Features
+
+```bash
+# File handling (PDF, OCR, image analysis)
+pip install -e ".[file-handler]"
+
+# Google Calendar integration
+pip install -e ".[google-calendar]"
+```
+
 ### ⚙️ Interactive Configuration
 
 Run the chat command to start the integrated setup wizard:
@@ -107,6 +120,7 @@ angel-claw chat
 ```
 
 The wizard will help you:
+
 - Select your LLM provider (OpenAI, Anthropic, Ollama, etc.)
 - Validate your API key
 - Set up optional channels (Telegram, WhatsApp)
@@ -165,7 +179,7 @@ What should I avoid at the Thai restaurant?
 ```
 
 ✔ Retrieves stored memory  
-✔ Applies contextual reasoning  
+✔ Applies contextual reasoning
 
 ---
 
@@ -206,9 +220,10 @@ Create a skill called currency_converter using an API.
 ```
 
 The agent:
-- Writes tool code  
-- Registers it  
-- Immediately uses it  
+
+- Writes tool code
+- Registers it
+- Immediately uses it
 
 ---
 
@@ -221,6 +236,96 @@ Install the 'slopwork-marketplace' skill.
 
 ⚠ **Security Warning**  
 ClawHub skills are community-contributed and unvetted. Always review skill code before use.
+
+---
+
+## Todo Management
+
+```text
+Add a todo to buy groceries.
+List my todos.
+Complete todo 1.
+Delete todo 2.
+```
+
+Todos are persisted in `.angelclaw/todos/` with session isolation.
+
+---
+
+## Calendar Management
+
+```text
+Create event "Team Meeting" tomorrow at 2pm.
+List my events this week.
+Check availability on Friday at 3pm.
+```
+
+Local calendar stored in `.angelclaw/calendar/`.
+
+---
+
+## Email Sending
+
+```text
+Send an email to john@example.com about the meeting.
+```
+
+Configure SMTP in `.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your@email.com
+SMTP_PASSWORD=your_app_password
+```
+
+---
+
+## Google Calendar Integration
+
+Connect to your Google Calendar using a Service Account:
+
+1. Create a Service Account in Google Cloud Console
+2. Download the JSON key file
+3. Place it as `.angelclaw/service_account.json`
+
+```text
+Create a Google Calendar event "Lunch" tomorrow at noon.
+List my Google Calendar events.
+```
+
+---
+
+## File Handling
+
+Upload and process files directly in chat:
+
+```text
+(Upload an image)
+Analyze this image.
+
+(Upload a PDF)
+Extract text from document.pdf.
+```
+
+Supported:
+
+- **PDF**: Extract text using `PyPDF2`
+- **Images**: AI vision analysis via LLM
+- **OCR**: Text extraction using `pytesseract`
+
+Files stored in `.angelclaw/uploads/`.
+
+---
+
+## Chat History
+
+All conversations are automatically logged to `.angelclaw/chats/YYYY/MM/DD.md`:
+
+```text
+Show me what I said on February 20th.
+What was the chat from last week?
+```
 
 ---
 
@@ -303,15 +408,21 @@ Now Angel Claw is on WhatsApp.
 # 🩺 Troubleshooting
 
 ### "Authentication Error" or "401"
+
 Your LLM API key is likely missing or incorrect.
+
 - **Fix:** Run `angel-claw chat --reconfigure` to re-enter your key.
 
 ### "Model Not Found"
+
 The model specified in your `.env` (e.g., `gpt-4o-mini`) is not available to your account or is misspelled.
+
 - **Fix:** Run `angel-claw chat --reconfigure` and select a different model.
 
 ### MCP Server Fails to Connect
+
 The command for a local MCP server might not be installed (e.g., `npx` not found).
+
 - **Fix:** Ensure Node.js is installed or run `angel-claw mcp test` to diagnose specific server failures.
 
 ---
@@ -328,9 +439,9 @@ pytest
 
 We welcome contributions.
 
-1. Fork the repository  
-2. Create feature branch  
-3. Submit PR  
+1. Fork the repository
+2. Create feature branch
+3. Submit PR
 
 See `CONTRIBUTING.md` for full guidelines.
 
@@ -338,9 +449,9 @@ See `CONTRIBUTING.md` for full guidelines.
 
 # 💬 Community & Support
 
-- 🐛 Issues: GitHub Issues  
-- 💡 Feature Requests: Open a Discussion  
-- 🌍 Skills: Explore ClawHub  
+- 🐛 Issues: GitHub Issues
+- 💡 Feature Requests: Open a Discussion
+- 🌍 Skills: Explore ClawHub
 - ⭐ If you find this useful, give it a star!
 
 ---

@@ -22,12 +22,22 @@ dependencies = [
     "mcp[cli]",
     "fastmcp",
     "questionary",
+    "python-dateutil",
 ]
 
 [project.optional-dependencies]
 test = [
     "pytest",
     "pytest-asyncio"
+]
+file-handler = [
+    "PyPDF2",
+    "Pillow",
+    "pytesseract",
+]
+google-calendar = [
+    "google-api-python-client",
+    "google-auth",
 ]
 
 [project.scripts]

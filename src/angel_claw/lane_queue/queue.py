@@ -8,43 +8,39 @@ from ..config import settings
 
 logger = logging.getLogger("angel-claw-lane-queue")
 
+MAX_PROCESSED_TASKS = 20000
+CLEANUP_INTERVAL_SECONDS = 3600
+ENQUEUE_TIMEOUT_SECONDS = 5.0
+WORKER_ERROR_RETRY_DELAY = 1
+
 
 class LaneQueue:
     def __init__(self):
-        # Per-lane queues
         self._lanes: defaultdict[str, asyncio.Queue[Task]] = defaultdict(
             lambda: asyncio.Queue(maxsize=settings.lane_queue_max_lane_depth)
         )
-        # Notification queue for workers: contains lane_keys that have work
         self._work_available: asyncio.Queue[str] = asyncio.Queue()
         self._global_semaphore = asyncio.Semaphore(settings.lane_queue_global_max_tasks)
         self._workers: list[asyncio.Task] = []
 
-        # In-memory idempotency set with timestamps for TTL-based eviction
-        # Stores (task_id, timestamp) tuples
-        self._processed_tasks: deque[Tuple[str, float]] = deque(maxlen=20000)
+        self._processed_tasks: deque[Tuple[str, float]] = deque(
+            maxlen=MAX_PROCESSED_TASKS
+        )
         self._processed_ids: Set[str] = set()
-        self._max_tasks = 10000
-        self._cleanup_interval = 3600  # Cleanup every hour
+        self._cleanup_interval = CLEANUP_INTERVAL_SECONDS
         self._last_cleanup = time.time()
 
     async def enqueue(self, task: Task) -> str:
-        """
-        Enqueues a task into its specific lane.
-        Implements backpressure by respecting the maxsize of the lane queue.
-        """
         try:
-            # We use wait_for to avoid blocking indefinitely if a lane is full
-            # This allows the gateway to return a 503/429 instead of hanging
-            await asyncio.wait_for(self._lanes[task.lane_key].put(task), timeout=5.0)
+            await asyncio.wait_for(
+                self._lanes[task.lane_key].put(task), timeout=ENQUEUE_TIMEOUT_SECONDS
+            )
             await self._work_available.put(task.lane_key)
             logger.debug(f"Task {task.task_id} enqueued in lane {task.lane_key}")
             return task.task_id
         except asyncio.TimeoutError:
-            logger.warning(
-                f"Backpressure: Lane {task.lane_key} is full. Dropping task."
-            )
-            raise Exception(f"Lane {task.lane_key} is saturated (backpressure)")
+            logger.warning(f"Backpressure: Lane {task.lane_key} is full.")
+            raise Exception(f"Lane {task.lane_key} is saturated")
 
     def start_workers(self, num_workers: int = settings.lane_queue_num_workers):
         logger.info(f"Starting {num_workers} lane workers...")
@@ -56,7 +52,6 @@ class LaneQueue:
         return task_id in self._processed_ids
 
     def mark_processed(self, task_id: str):
-        # TTL-based cleanup: remove entries older than 1 hour
         current_time = time.time()
         if current_time - self._last_cleanup > self._cleanup_interval:
             self._cleanup_old_entries()
@@ -66,27 +61,22 @@ class LaneQueue:
             self._processed_ids.add(task_id)
 
     def _cleanup_old_entries(self):
-        """Remove entries older than 1 hour to prevent memory bloat."""
-        cutoff_time = time.time() - 3600
-        removed = 0
-
-        # Create new deque with only recent entries
-        new_tasks = deque(maxlen=20000)
+        cutoff = time.time() - CLEANUP_INTERVAL_SECONDS
+        new_tasks = deque(maxlen=MAX_PROCESSED_TASKS)
         new_ids = set()
 
         for task_id, timestamp in self._processed_tasks:
-            if timestamp > cutoff_time:
+            if timestamp > cutoff:
                 new_tasks.append((task_id, timestamp))
                 new_ids.add(task_id)
-            else:
-                removed += 1
 
+        removed = len(self._processed_tasks) - len(new_tasks)
         self._processed_tasks = new_tasks
         self._processed_ids = new_ids
         self._last_cleanup = time.time()
 
         if removed > 0:
-            logger.info(f"Cleaned up {removed} old processed task entries")
+            logger.info(f"Cleaned up {removed} old processed tasks")
 
 
 class LaneWorker:
@@ -101,51 +91,34 @@ class LaneWorker:
         logger.debug(f"Worker {self._worker_id} ready.")
         while True:
             try:
-                # Wait for a notification that some lane has work
                 lane_key = await self._queue._work_available.get()
-
-                # Pull the task from that lane
-                # We use get_nowait because we were notified there is work
                 task = self._queue._lanes[lane_key].get_nowait()
-
-                # Process it
                 await self.process_task(task)
-
-                # Mark as done in the asyncio queue
                 self._queue._lanes[lane_key].task_done()
                 self._queue._work_available.task_done()
             except asyncio.QueueEmpty:
                 continue
             except Exception as e:
-                logger.error(f"Worker {self._worker_id} unexpected error: {e}")
-                await asyncio.sleep(1)
+                logger.error(f"Worker {self._worker_id} error: {e}")
+                await asyncio.sleep(WORKER_ERROR_RETRY_DELAY)
 
     async def process_task(self, task: Task):
-        # 1. Idempotency Check
         if self._queue.is_processed(task.task_id):
-            logger.info(f"Task {task.task_id} already processed. Skipping.")
+            logger.info(f"Task {task.task_id} already processed.")
             return
 
-        # 2. Concurrency Control (Global & Per-Lane)
         async with self._queue._global_semaphore, self._semaphores[task.lane_key]:
-            logger.debug(
-                f"Worker {self._worker_id} executing Task {task.task_id} in lane {task.lane_key}"
-            )
+            logger.debug(f"Worker {self._worker_id} executing Task {task.task_id}")
             try:
-                # 3. Execution with Timeout
                 await asyncio.wait_for(
                     task.execute_func(task.data),
                     timeout=settings.lane_queue_task_timeout_seconds,
                 )
-                # 4. Success - Mark as processed
                 self._queue.mark_processed(task.task_id)
             except asyncio.TimeoutError:
-                logger.error(f"Task {task.task_id} in lane {task.lane_key} TIMED OUT.")
+                logger.error(f"Task {task.task_id} TIMED OUT.")
             except Exception as e:
-                logger.error(
-                    f"Task {task.task_id} in lane {task.lane_key} FAILED: {e}",
-                    exc_info=True,
-                )
+                logger.error(f"Task {task.task_id} FAILED: {e}")
 
 
 lane_queue = LaneQueue()

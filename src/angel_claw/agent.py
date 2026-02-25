@@ -16,7 +16,9 @@ from .memory import memory_manager
 from .config import settings
 from .skills.manager import SkillManager
 from .mcp_manager import mcp_manager
+from .chat_logger import chat_logger
 from typing import List, Optional
+
 
 class Agent:
     def __init__(self, session_id: str, model: str = None, api_base: str = None):
@@ -29,7 +31,7 @@ class Agent:
         self.memos.reader.api_base = self.api_base
         self.soul = self._load_soul()
         self.history: List[dict] = []
-        
+
         # Initialize Skill Manager
         # Load from both the installed package and the current working directory
         internal_skills = os.path.join(os.path.dirname(__file__), "skills")
@@ -66,16 +68,18 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
         # Ensure MCP Manager is connected before chat
         if not mcp_manager.is_connected:
             await mcp_manager.connect()
-            
+
         # 1. Process memory (Retrieval)
         # Use last turn to improve retrieval for short inputs like "yes"
         last_turn = self.history[-1]["content"] if self.history else ""
         retrieval_query = user_input
         if len(user_input.split()) < 3 and last_turn:
             retrieval_query = f"{last_turn} -> {user_input}"
-            
-        memory_context = self.memos.process(f"Retrieve context for: {retrieval_query}", user="alice")
-        
+
+        memory_context = self.memos.process(
+            f"Retrieve context for: {retrieval_query}", user="alice"
+        )
+
         # 2. Build messages
         system_prompt = (
             f"{self.soul}\n\n"
@@ -93,7 +97,7 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
             "5. Example skill code:\n"
             "   @skill\n"
             "   def my_tool(param1: str) -> str:\n"
-            "       \"\"\"Description of the tool.\"\"\"\n"
+            '       """Description of the tool."""\n'
             "       return f'Result: {param1}'\n\n"
             "IMPORTANT for 'schedule_task':\n"
             f"- ALWAYS use the current session ID: '{self.session_id}' unless the user explicitly requests otherwise.\n"
@@ -102,12 +106,12 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
             "- Seconds ('s'), minutes ('m'), hours ('h'), and days ('d') are all supported.\n\n"
             f"Memory Context:\n{memory_context.get('response', 'No relevant memory found.')}"
         )
-        
+
         messages = [{"role": "system", "content": system_prompt}]
         # Include last 4 turns of history for short-term context
         messages.extend(self.history[-4:])
         messages.append({"role": "user", "content": user_input})
-        
+
         # 3. Call LLM with Tool Support
         assistant_content = ""
         while True:
@@ -115,7 +119,7 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
             tools = self.skill_manager.get_tool_definitions()
             mcp_tools = await mcp_manager.get_tool_definitions()
             all_tools = tools + mcp_tools
-            
+
             try:
                 response = await litellm.acompletion(
                     model=self.model,
@@ -123,7 +127,7 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                     api_key=settings.api_key,
                     api_base=self.api_base,
                     tools=all_tools if all_tools else None,
-                    tool_choice="auto" if all_tools else None
+                    tool_choice="auto" if all_tools else None,
                 )
             except Exception as e:
                 # Handle common errors with friendly messages
@@ -135,7 +139,7 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                 elif "model" in error_msg.lower() and "not found" in error_msg.lower():
                     return f"❌ LLM Model Error: Model '{self.model}' not found. Run 'angel-claw chat --reconfigure' to change it."
                 return f"❌ LLM Error: {e}"
-            
+
             message = response.choices[0].message
             # litellm returns a message object that we need to convert to dict for history if it has tool_calls
             msg_dict = {"role": "assistant", "content": message.content}
@@ -146,17 +150,18 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                         "type": tc.type,
                         "function": {
                             "name": tc.function.name,
-                            "arguments": tc.function.arguments
-                        }
-                    } for tc in message.tool_calls
+                            "arguments": tc.function.arguments,
+                        },
+                    }
+                    for tc in message.tool_calls
                 ]
-            
+
             messages.append(msg_dict)
-            
+
             if not message.tool_calls:
                 assistant_content = message.content or ""
                 break
-                
+
             # Handle Tool Calls
             for tool_call in message.tool_calls:
                 function_name = tool_call.function.name
@@ -164,13 +169,13 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                     function_args = json.loads(tool_call.function.arguments)
                 except json.JSONDecodeError:
                     function_args = {}
-                
+
                 if function_name in self.skill_manager.skills:
                     function_to_call = self.skill_manager.skills[function_name]
                     # Automatically inject current session_id into schedule_task to ensure correct routing
                     if function_name == "schedule_task":
                         function_args["session_id"] = self.session_id
-                        
+
                     try:
                         logger.info(f"⚙️ [Skill] {function_name}({function_args})")
                         if inspect.iscoroutinefunction(function_to_call):
@@ -182,31 +187,43 @@ You are Angel Claw, a helpful, intelligent, and empathetic personal AI assistant
                         function_result = f"Error executing {function_name}: {e}"
                 elif function_name in mcp_manager.tool_to_server:
                     logger.info(f"⚙️ [MCP] {function_name}({function_args})")
-                    function_result = await mcp_manager.call_tool(function_name, function_args)
+                    function_result = await mcp_manager.call_tool(
+                        function_name, function_args
+                    )
                 else:
-                    function_result = f"Error: Skill or MCP tool '{function_name}' not found."
-                
-                messages.append({
-                    "tool_call_id": tool_call.id,
-                    "role": "tool",
-                    "name": function_name,
-                    "content": str(function_result),
-                })
-            
+                    function_result = (
+                        f"Error: Skill or MCP tool '{function_name}' not found."
+                    )
+
+                messages.append(
+                    {
+                        "tool_call_id": tool_call.id,
+                        "role": "tool",
+                        "name": function_name,
+                        "content": str(function_result),
+                    }
+                )
+
             # Refresh skills in case a new one was created/installed
             self.skill_manager.load_skills()
-        
+
         # 4. Update short-term history
         self.history.append({"role": "user", "content": user_input})
         self.history.append({"role": "assistant", "content": assistant_content})
-        
+
         # 5. Store interaction in memory
         # Let the memory system parse the user input to see if it's a fact to store
         mem_res = self.memos.process(user_input, user="alice")
-        
+
         # If the memory system didn't identify this as a storage/update operation,
         # we store the full dialogue turn as context for future retrieval.
         if mem_res.get("parsed", {}).get("operation") not in ["store", "update"]:
-             self.memos.process(f"Remember: User said '{user_input}' and Assistant replied '{assistant_content}'", user="alice")
-        
+            self.memos.process(
+                f"Remember: User said '{user_input}' and Assistant replied '{assistant_content}'",
+                user="alice",
+            )
+
+        # Log chat to file
+        chat_logger.log(self.session_id, user_input, assistant_content)
+
         return assistant_content

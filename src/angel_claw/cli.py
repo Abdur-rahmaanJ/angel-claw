@@ -57,10 +57,16 @@ warnings.filterwarnings(
 )
 warnings.filterwarnings("ignore", category=UserWarning, module="click")
 try:
-    from sqlalchemy.exc import LegacyAPIWarning
+    from sqlalchemy.exc import LegacyAPIWarning, SAWarning
     warnings.filterwarnings("ignore", category=LegacyAPIWarning)
+    warnings.filterwarnings("ignore", category=SAWarning)
+    warnings.filterwarnings("ignore", category=DeprecationWarning, module="sqlalchemy")
 except ImportError:
     pass
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+# Suppress Flask/Werkzeug request logging
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
 
 def ensure_env():

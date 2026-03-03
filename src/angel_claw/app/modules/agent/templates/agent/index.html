@@ -194,10 +194,28 @@
             }
         }
 
-        function copyToken() {
-            tokenDisplay.select();
-            document.execCommand('copy');
-            alert('Token copied to clipboard!');
+        async function copyToken() {
+            try {
+                const token = tokenDisplay.value;
+                if (!token || token === "Generating..." || token.startsWith("Error")) return;
+                
+                await navigator.clipboard.writeText(token);
+                
+                // Visual feedback
+                const icon = document.querySelector('.icon.is-right i');
+                icon.classList.remove('fa-copy');
+                icon.classList.add('fa-check', 'has-text-success');
+                
+                setTimeout(() => {
+                    icon.classList.remove('fa-check', 'has-text-success');
+                    icon.classList.add('fa-copy');
+                }, 2000);
+            } catch (err) {
+                console.error('Failed to copy: ', err);
+                // Fallback for older browsers
+                tokenDisplay.select();
+                document.execCommand('copy');
+            }
         }
 
         function appendMessage(role, content) {

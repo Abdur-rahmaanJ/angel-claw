@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, UTC
 from shopyo.api.models import PkModel
 from init import db
 
@@ -10,8 +10,8 @@ class Channel(PkModel):
     channel_identifier = db.Column(db.String(255), nullable=False)
     is_active = db.Column(db.Boolean(), default=True)
     metadata_json = db.Column(db.JSON, nullable=True)
-    paired_at = db.Column(db.DateTime, default=datetime.utcnow)
-    last_seen_at = db.Column(db.DateTime, default=datetime.utcnow)
+    paired_at = db.Column(db.DateTime, default=lambda: datetime.now())
+    last_seen_at = db.Column(db.DateTime, default=lambda: datetime.now())
 
     __table_args__ = (db.UniqueConstraint("channel_type", "channel_identifier", name="uix_channel_type_identifier"),)
 
@@ -24,7 +24,7 @@ class ApiKey(PkModel):
     prefix = db.Column(db.String(10), nullable=False)
     scopes = db.Column(db.Text, nullable=True) # comma-separated or JSON
     is_active = db.Column(db.Boolean(), default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now())
     expires_at = db.Column(db.DateTime, nullable=True)
     last_used_at = db.Column(db.DateTime, nullable=True)
 
@@ -35,4 +35,4 @@ class PairingToken(db.Model):
     user_id = db.Column(db.String(100), nullable=False)
     expires_at = db.Column(db.DateTime, nullable=False)
     consumed = db.Column(db.Boolean(), default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now())

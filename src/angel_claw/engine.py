@@ -4,7 +4,7 @@ import os
 import json
 import inspect
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import List, Optional, Dict, Any
 
 from .models import Message, Role, UserContext, EngineResponse, Todo
@@ -92,7 +92,7 @@ class AngelClawEngine:
                         )
                         db.session.add(channel)
                     else:
-                        channel.last_seen_at = datetime.utcnow()
+                        channel.last_seen_at = datetime.now(UTC)
                         channel.user_id = context.user_id 
                     
                     db.session.commit()
@@ -335,7 +335,7 @@ class AngelClawEngine:
                     db.session.add(channel)
                 else:
                     channel.user_id = context.user_id
-                    channel.last_seen_at = datetime.utcnow()
+                    channel.last_seen_at = datetime.now(UTC)
                 
                 db.session.commit()
         else:
@@ -358,7 +358,7 @@ class AngelClawEngine:
                 pairing_token = PairingToken(
                     token=token,
                     user_id=context.user_id,
-                    expires_at=datetime.utcnow() + timedelta(minutes=10)
+                    expires_at=datetime.now() + timedelta(minutes=10)
                 )
                 db.session.add(pairing_token)
                 db.session.commit()
@@ -381,7 +381,7 @@ class AngelClawEngine:
                     consumed=False
                 ).first()
                 
-                if pairing_token and pairing_token.expires_at > datetime.utcnow():
+                if pairing_token and pairing_token.expires_at > datetime.now():
                     user_id = pairing_token.user_id
                     pairing_token.consumed = True
                     db.session.commit()
@@ -418,7 +418,7 @@ class AngelClawEngine:
                 if api_key:
                     user = User.query.get(api_key.user_id)
                     if user:
-                        api_key.last_used_at = datetime.utcnow()
+                        api_key.last_used_at = datetime.now(UTC)
                         from init import db
                         db.session.commit()
                         

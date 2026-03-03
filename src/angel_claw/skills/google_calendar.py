@@ -1,7 +1,7 @@
 import os
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 from angel_claw.skills.manager import skill
 from angel_claw.config import settings
@@ -144,7 +144,7 @@ def gcal_list_events(days: int = 7) -> str:
     if error:
         return f"Error: {error}"
 
-    now = datetime.utcnow()
+    now = datetime.now(UTC)
     end_time = now + timedelta(days=days)
 
     try:

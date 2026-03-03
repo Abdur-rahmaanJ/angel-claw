@@ -196,9 +196,18 @@ class TelegramBridge:
         import telegram
 
         # Use a longer timeout for slow networks
-        trequest = HTTPXRequest(connect_timeout=20, read_timeout=20)
+        trequest = HTTPXRequest(connect_timeout=30, read_timeout=30)
         self.app = ApplicationBuilder().token(self.token).request(trequest).build()
 
+        async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+            """Log the error and send a telegram message to notify the developer."""
+            # Transient network errors are common, we log them at warning level
+            if isinstance(context.error, (telegram.error.NetworkError, telegram.error.TimedOut)):
+                logger.warning(f"Telegram transient network error: {context.error}")
+            else:
+                logger.error("Exception while handling an update:", exc_info=context.error)
+
+        self.app.add_error_handler(error_handler)
         self.app.add_handler(CommandHandler("start", self.start_cmd))
         self.app.add_handler(CommandHandler("pair", self.pair_cmd))
         self.app.add_handler(

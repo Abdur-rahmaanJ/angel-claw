@@ -14,6 +14,19 @@ import importlib
 import os
 import sys
 import logging
+import warnings
+
+# Silence noisy warnings and logs
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+try:
+    from sqlalchemy.exc import LegacyAPIWarning, SAWarning
+    warnings.filterwarnings("ignore", category=LegacyAPIWarning)
+    warnings.filterwarnings("ignore", category=SAWarning)
+except ImportError:
+    pass
+
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.ERROR)
 
 import click
 import jinja2

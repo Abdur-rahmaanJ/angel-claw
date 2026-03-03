@@ -11,16 +11,16 @@ from telegram.ext import (
     ContextTypes,
 )
 from .config import settings
-from .agent import Agent
+from .engine import AngelClawEngine
 from .cron import cron_manager
-from .models import AgentRequest
-from .lane_queue.process import process_chat_request
+from .models import UserContext
 
 logger = logging.getLogger("angel-claw-telegram")
 
 
 class TelegramBridge:
     def __init__(self, persist_dir: str = None):
+        # We still keep persist_dir and pairings for backward compat or local mode
         self.persist_dir = persist_dir or os.path.join(
             settings.memory_persist_dir, "telegram"
         )
@@ -30,6 +30,7 @@ class TelegramBridge:
         self.pairings = self._load_pairings()
         self.token = settings.telegram_token
         self.app = None
+        self.engine = AngelClawEngine()
         self._shutdown_event = asyncio.Event()
         cron_manager.register_proactive_handler(self.send_proactive)
 
@@ -51,65 +52,154 @@ class TelegramBridge:
 
     async def start_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = str(update.effective_chat.id)
+        # Try finding in database first if in shopyo mode
+        if settings.auth_mode == "shopyo":
+             # This is a bit complex as we need to find user by channel
+             # For now we'll rely on the /pair command to establish the link
+             pass
+
         if chat_id in self.pairings:
             await update.message.reply_text(
-                f"Welcome back! You are paired with session: {self.pairings[chat_id]}"
+                f"Welcome back! You are paired with user: {self.pairings[chat_id]}"
             )
         else:
             await update.message.reply_text(
                 "Welcome to Angel Claw! 🐾\n\n"
-                "To get started, you need to pair this chat with an Angel Claw session.\n"
-                "Use the command: `/pair <your-session-id>`\n\n"
-                "You can find your session ID in your CLI logs or use 'cli-default' for your main session."
+                "To get started, you need to pair this chat with your Angel Claw account.\n"
+                "Use the command: `/pair <your-token>`\n\n"
+                "You can generate a token in the Angel Claw web interface."
             )
 
     async def pair_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = str(update.effective_chat.id)
-        if not context.args:
-            await update.message.reply_text(
-                "Please provide a session ID: `/pair <session-id>`"
-            )
-            return
+        logger.info(f"Received /pair command from {chat_id}")
+        
+        try:
+            if not context.args:
+                await update.message.reply_text(
+                    "Please provide a pairing token: `/pair <token>`"
+                )
+                return
 
-        session_id = context.args[0]
-        self.pairings[chat_id] = session_id
-        self._save_pairings()
-        await update.message.reply_text(
-            f"Successfully paired! I am now your Angel Claw for session: `{session_id}`"
-        )
+            token = context.args[0]
+            # Immediate acknowledgement
+            await update.message.reply_text(f"🔄 Validating token `{token}`...")
+            
+            logger.info(f"Attempting to pair chat {chat_id} with token: {token}")
+            
+            # Validate token via engine
+            user_id = self.engine.validate_pair_token(token)
+            if user_id:
+                logger.info(f"Token valid. Pairing chat {chat_id} with user {user_id}")
+                # Store in database
+                user_context = UserContext(
+                    user_id=user_id,
+                    email="telegram-user@local",
+                    roles=["user"],
+                    channel_type="telegram",
+                    channel_identifier=chat_id
+                )
+                self.engine.pair_channel(user_context, "telegram", chat_id)
+                
+                # Also store in local pairings
+                self.pairings[chat_id] = user_id
+                self._save_pairings()
+                
+                await update.message.reply_text(
+                    "✅ Successfully paired! I am now your Angel Claw.\n"
+                    "You can now send me messages directly."
+                )
+            else:
+                logger.warning(f"Invalid token attempt from {chat_id}: {token}")
+                # Backward compatibility
+                if len(token) > 10: 
+                    session_id = token
+                    self.pairings[chat_id] = session_id
+                    self._save_pairings()
+                    await update.message.reply_text(
+                        f"✅ Legacy paired with session: `{session_id}`"
+                    )
+                else:
+                    await update.message.reply_text(
+                        "❌ Invalid or expired pairing token.\n"
+                        "Please generate a new 8-digit token from your web dashboard."
+                    )
+        except Exception as e:
+            logger.error(f"Error during pairing for chat {chat_id}: {e}", exc_info=True)
+            await update.message.reply_text(f"⚠️ An error occurred during pairing: {str(e)}")
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not update.effective_chat or update.effective_chat.type != "private":
             return
+        
+        if not update.message or not update.message.text:
+            return
+
+        # Explicitly skip commands that might have leaked through filters
+        if update.message.text.startswith('/'):
+            logger.debug(f"Skipping command-like message in handle_message: {update.message.text}")
+            return
+
         chat_id = str(update.effective_chat.id)
-        if chat_id not in self.pairings:
+        logger.info(f"Handling message from {chat_id}: {update.message.text[:50]}...")
+        
+        user_id = self.pairings.get(chat_id)
+        if not user_id:
+             # Try to find in DB
+             if settings.auth_mode == "shopyo":
+                 try:
+                     from modules.agent.models import Channel
+                     from init import db
+                     # Note: this needs app context!
+                     channel = Channel.query.filter_by(
+                         channel_type="telegram",
+                         channel_identifier=chat_id
+                     ).first()
+                     if channel:
+                         user_id = channel.user_id
+                         self.pairings[chat_id] = user_id
+                         self._save_pairings()
+                 except:
+                     pass
+
+        if not user_id:
             await update.message.reply_text(
-                "This chat is not paired. Use `/pair <session-id>` to start."
+                "This chat is not paired. Use `/pair <token>` to start."
             )
             return
 
-        session_id = self.pairings[chat_id]
         user_input = update.message.text
 
         # Show typing indicator
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
         try:
-            request = AgentRequest(
-                session_id=session_id, message=user_input, user_id=f"telegram_{chat_id}"
+            # We use chat_id as session_id (channel_identifier) for telegram
+            user_context = UserContext(
+                user_id=user_id,
+                email=f"telegram_{chat_id}@angelclaw.local",
+                roles=["user"],
+                channel_type="telegram",
+                channel_identifier=chat_id
             )
-            response_content = await process_chat_request(request)
-            await update.message.reply_text(response_content)
+            response = await self.engine.execute(user_context, user_input)
+            await update.message.reply_text(response.content)
         except Exception as e:
             logger.error(f"Error in Telegram chat: {e}")
             await update.message.reply_text(f"⚠️ Error: {e}")
+
 
     async def run(self):
         if not self.token:
             logger.warning("TELEGRAM_TOKEN not set. Telegram bridge will not start.")
             return
 
-        self.app = ApplicationBuilder().token(self.token).build()
+        from telegram.request import HTTPXRequest
+        import telegram
+
+        # Use a longer timeout for slow networks
+        trequest = HTTPXRequest(connect_timeout=20, read_timeout=20)
+        self.app = ApplicationBuilder().token(self.token).request(trequest).build()
 
         self.app.add_handler(CommandHandler("start", self.start_cmd))
         self.app.add_handler(CommandHandler("pair", self.pair_cmd))
@@ -118,9 +208,27 @@ class TelegramBridge:
         )
 
         logger.info("Telegram bridge starting...")
-        await self.app.initialize()
-        await self.app.start()
-        await self.app.updater.start_polling()
+        
+        max_retries = 5
+        retry_delay = 5
+        for attempt in range(max_retries):
+            try:
+                await self.app.initialize()
+                await self.app.start()
+                await self.app.updater.start_polling()
+                logger.info("Telegram bridge started successfully.")
+                break
+            except (telegram.error.TimedOut, telegram.error.NetworkError) as e:
+                if attempt < max_retries - 1:
+                    logger.warning(f"Telegram initialization timed out (attempt {attempt+1}/{max_retries}). Retrying in {retry_delay}s...")
+                    await asyncio.sleep(retry_delay)
+                    retry_delay *= 2
+                else:
+                    logger.error(f"Telegram bridge failed to start after {max_retries} attempts: {e}")
+                    return
+            except Exception as e:
+                logger.error(f"Unexpected error starting Telegram bridge: {e}", exc_info=True)
+                return
 
         # Wait for shutdown signal
         await self._shutdown_event.wait()

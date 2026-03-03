@@ -2,7 +2,10 @@ import os
 import importlib.util
 import inspect
 import hashlib
+import logging
 from typing import List, Dict, Any, Callable, Union
+
+logger = logging.getLogger("angel-claw-skills")
 
 
 class SkillManager:
@@ -74,7 +77,7 @@ class SkillManager:
                 if inspect.isfunction(obj) and getattr(obj, "_is_skill", False):
                     self.skills[name] = obj
         except Exception as e:
-            print(f"Error loading skill {skill_name}: {e}")
+            logger.debug(f"Error loading skill {skill_name}: {e}")
 
     def get_tool_definitions(self) -> List[Dict[str, Any]]:
         """Get tool definitions with caching."""

@@ -12,8 +12,9 @@ from neonize.client import NewClient
 from neonize.events import MessageEv, ConnectedEv, QREv
 from neonize.utils.jid import build_jid, Jid2String
 from .config import settings
-from .agent import Agent
+from .engine import AngelClawEngine
 from .cron import cron_manager
+from .models import UserContext
 
 # Set neonize logging to warning to avoid too much noise
 logging.getLogger("neonize").setLevel(logging.CRITICAL)
@@ -39,6 +40,7 @@ class WhatsAppBridge:
         self.sender_thread = None
         self.out_queue = queue.Queue()
         self.process_loop = None
+        self.engine = AngelClawEngine()
 
         # Register for proactive reminders
         cron_manager.register_proactive_handler(self.send_proactive)
@@ -284,17 +286,50 @@ class WhatsAppBridge:
         parts = text.split()
         cmd = parts[0].lower()
         if cmd == "/pair" and len(parts) > 1:
-            session_id = parts[1]
-            self.pairings[sender_id] = session_id
-            self._save_pairings()
-            self.out_queue.put(
-                (sender_jid, f"Bot: ✅ Paired with session: `{session_id}`")
-            )
+            token = parts[1]
+            
+            # Validate token via engine
+            try:
+                user_id = self.engine.validate_pair_token(token)
+                if user_id:
+                    # Store in database
+                    user_context = UserContext(
+                        user_id=user_id,
+                        email="whatsapp-user@local", # Placeholder
+                        roles=["user"],
+                        channel_type="whatsapp",
+                        channel_identifier=sender_id
+                    )
+                    self.engine.pair_channel(user_context, "whatsapp", sender_id)
+                    
+                    # Also store in local pairings
+                    self.pairings[sender_id] = user_id
+                    self._save_pairings()
+                    
+                    self.out_queue.put(
+                        (sender_jid, f"Bot: ✅ Successfully paired! I am now your Angel Claw.")
+                    )
+                else:
+                    # Backward compatibility: legacy session_id pairing
+                    if len(token) < 20:
+                        session_id = token
+                        self.pairings[sender_id] = session_id
+                        self._save_pairings()
+                        self.out_queue.put(
+                            (sender_jid, f"Bot: ✅ Legacy paired with session: `{session_id}`")
+                        )
+                    else:
+                        self.out_queue.put(
+                            (sender_jid, "Bot: ❌ Invalid or expired pairing token.")
+                        )
+            except Exception as e:
+                logger.error(f"Error during WhatsApp pairing: {e}")
+                self.out_queue.put((sender_jid, f"Bot: ⚠️ Error during pairing: {e}"))
         elif cmd == "/start":
             self.out_queue.put(
                 (
                     sender_jid,
-                    "Bot: 👋 Welcome to Angel Claw!\nUse `/pair <session-id>` to connect your session.",
+                    "Bot: 👋 Welcome to Angel Claw!\nUse `/pair <token>` to connect your account.",
                 )
             )
 
@@ -302,30 +337,35 @@ class WhatsAppBridge:
         self, client: NewClient, sender_jid: Any, sender_id: str, text: str
     ):
         # sender_id is already a clean string from Jid2String
-        session_id = self.pairings.get(sender_id)
+        user_id = self.pairings.get(sender_id)
 
         # Fallback for old pairings that only stored the phone number
-        if not session_id and "@" in sender_id:
+        if not user_id and "@" in sender_id:
             phone_number = sender_id.split("@")[0]
-            session_id = self.pairings.get(phone_number)
+            user_id = self.pairings.get(phone_number)
 
-        if not session_id:
+        if not user_id:
             logger.warning(f"Unpaired message from {sender_id}")
             self.out_queue.put(
                 (
                     sender_jid,
-                    "Bot: ⚠️ Chat not paired. Use `/pair <session-id>` to start.",
+                    "Bot: ⚠️ Chat not paired. Use `/pair <token>` to start.",
                 )
             )
             return
 
-        session_id = str(session_id)  # Ensure it's a string
-        logger.info(f"Processing message for session {session_id} from {sender_id}")
+        logger.info(f"Processing message for user {user_id} from {sender_id}")
         try:
-            agent = Agent(session_id)
-            response = await agent.chat(text)
+            user_context = UserContext(
+                user_id=str(user_id),
+                email=f"whatsapp_{sender_id}@angelclaw.local",
+                roles=["user"],
+                channel_type="whatsapp",
+                channel_identifier=sender_id
+            )
+            response = await self.engine.execute(user_context, text)
             logger.info(f"Sending response to {sender_id}")
-            self.out_queue.put((sender_jid, f"Bot: {response}"))
+            self.out_queue.put((sender_jid, f"Bot: {response.content}"))
         except Exception as e:
             logger.error(f"Error in WhatsApp chat: {e}", exc_info=True)
             self.out_queue.put((sender_jid, f"Bot: ⚠️ Error processing your request."))

@@ -1,6 +1,6 @@
 from fastapi import FastAPI, HTTPException
-from .models import AgentRequest, AgentResponse
-from .agent import Agent
+from .models import AgentRequest, AgentResponse, UserContext
+from .engine import AngelClawEngine
 from .cron import cron_manager
 from .telegram_bridge import telegram_bridge
 from .whatsapp_bridge import whatsapp_bridge
@@ -69,15 +69,22 @@ async def handle_webhook(payload: Dict[str, Any], request: Request):
     api_base = payload.get("api_base")
 
     try:
-        agent = Agent(session_id, api_base=api_base)
+        engine = AngelClawEngine()
+        context = UserContext(
+            user_id=user_id,
+            email=f"{user_id}@angelclaw.local",
+            roles=["user"],
+            channel_type="webhook",
+            channel_identifier=session_id
+        )
         # We wrap the webhook message with context
         context_message = f"[Webhook Trigger]: {message}"
-        response = await agent.chat(context_message)
+        response = await engine.execute(context, context_message)
 
         # Send the agent's reaction back via the proactive message mechanism
-        await cron_manager._send_proactive_message(response, user_id, session_id)
+        await cron_manager._send_proactive_message(response.content, user_id, session_id)
 
-        return {"status": "success", "agent_response": response}
+        return {"status": "success", "agent_response": response.content}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

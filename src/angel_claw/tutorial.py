@@ -2,7 +2,6 @@ import asyncio
 import sys
 import uuid
 import questionary
-from .agent import Agent
 from .config import settings
 from .lane_queue.process import process_chat_request
 from .lane_queue.queue import lane_queue

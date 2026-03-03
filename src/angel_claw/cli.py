@@ -32,9 +32,9 @@ class CLIProgressFormatter(logging.Formatter):
 
 # Suppress all library logging for CLI mode to keep it clean
 logging.getLogger().setLevel(logging.ERROR)
-logging.getLogger("angel-claw-cron").setLevel(logging.ERROR)
-logging.getLogger("angel-claw-telegram").setLevel(logging.ERROR)
-logging.getLogger("angel-claw-whatsapp").setLevel(logging.ERROR)
+logging.getLogger("angel-claw-cron").setLevel(logging.INFO)
+logging.getLogger("angel-claw-telegram").setLevel(logging.INFO)
+logging.getLogger("angel-claw-whatsapp").setLevel(logging.INFO)
 
 # Setup Agent logging for visibility in CLI
 agent_logger = logging.getLogger("angel-claw-agent")
@@ -192,6 +192,13 @@ def start_web_server():
     """Initializes and starts the Shopyo web application."""
     ensure_env()
     app_dir = importlib.resources.files("angel_claw").joinpath("app")
+    
+    # Crucial: Add app_dir to sys.path so AngelClawEngine can find 'app' and 'init'
+    # when running in the same process (background bridges thread)
+    app_path_str = str(app_dir)
+    if app_path_str not in sys.path:
+        sys.path.insert(0, app_path_str)
+    
     # Shopyo creates the DB in the instance folder
     db_path = os.path.join(str(app_dir), "instance", "shopyo.db")
     
@@ -208,6 +215,12 @@ def start_web_server():
     # Start background bridges in a separate thread
     import threading
     def run_bridges():
+        # Ensure path is correct in this thread too
+        app_dir = importlib.resources.files("angel_claw").joinpath("app")
+        app_path_str = str(app_dir)
+        if app_path_str not in sys.path:
+            sys.path.insert(0, app_path_str)
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
@@ -219,7 +232,10 @@ def start_web_server():
             asyncio.create_task(cron_manager.run())
 
         loop.run_until_complete(start_all())
-        loop.run_forever()
+        try:
+            loop.run_forever()
+        except Exception as e:
+            logger.error(f"Fatal error in bridge thread: {e}", exc_info=True)
 
     print("⚙️  Starting background bridges...", end="\r", flush=True)
     bridge_thread = threading.Thread(target=run_bridges, daemon=True)

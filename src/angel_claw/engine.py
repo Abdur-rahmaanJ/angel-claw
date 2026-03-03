@@ -21,6 +21,7 @@ logger = logging.getLogger("angel-claw-engine")
 
 # Silence litellm logging
 litellm.suppress_debug_info = True
+litellm.add_disable_loading_cost_map = True
 logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
 logging.getLogger("litellm").setLevel(logging.CRITICAL)
 
@@ -33,6 +34,9 @@ class AngelClawEngine:
         self.soul = self._load_soul()
         # In-memory history for now, should eventually be persisted in DB or user-specific files
         self._histories: Dict[str, List[Message]] = {}
+        self._cached_app = None
+        import threading
+        self._app_lock = threading.Lock()
 
     def _load_soul(self) -> str:
         try:
@@ -49,14 +53,16 @@ class AngelClawEngine:
     
     def _app_context(self):
         if settings.auth_mode == "shopyo":
-            try:
-                from app import create_app
-                # We reuse existing app if possible or create one
-                # Note: creating app multiple times is not ideal but for CLI tools it works
-                app = create_app("production") # or development
-                return app.app_context()
-            except ImportError:
-                return None
+            with self._app_lock:
+                if self._cached_app is None:
+                    try:
+                        from app import create_app
+                        # We cache the app to avoid expensive re-initialization
+                        self._cached_app = create_app("production") 
+                    except ImportError as e:
+                        logger.error(f"Engine could not import 'app': {e}. Ensure sys.path is correct.")
+                        return None
+                return self._cached_app.app_context()
         return None
 
     def user_root(self, user_id: str) -> Path:

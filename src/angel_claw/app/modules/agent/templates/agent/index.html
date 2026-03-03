@@ -68,6 +68,11 @@
             <div class="navbar-menu">
                 <div class="navbar-end">
                     <div class="navbar-item">
+                        <button class="button is-light is-rounded" onclick="showPairingModal()">
+                            <i class="fas fa-link mr-2"></i> Pair Channel
+                        </button>
+                    </div>
+                    <div class="navbar-item">
                         <span class="tag is-primary is-light">
                             <i class="fas fa-user mr-2"></i> {{ current_user.email }}
                         </span>
@@ -107,12 +112,93 @@
         </div>
     </div>
 
+    <div id="pairing-modal" class="modal">
+        <div class="modal-background" onclick="closePairingModal()"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Pair a Channel</p>
+                <button class="delete" aria-label="close" onclick="closePairingModal()"></button>
+            </header>
+            <section class="modal-card-body">
+                <p class="mb-4">Link your Telegram or WhatsApp to this Angel Claw account using a secure, time-limited token.</p>
+                
+                <div class="field">
+                    <label class="label">Your Pairing Token</label>
+                    <div class="control has-icons-right">
+                        <input id="pairing-token-display" class="input is-medium" type="text" placeholder="Generating..." readonly>
+                        <span class="icon is-right is-clickable" onclick="copyToken()">
+                            <i class="fas fa-copy"></i>
+                        </span>
+                    </div>
+                    <p class="help is-info">Expires in 10 minutes.</p>
+                </div>
+
+                <hr>
+
+                <h4 class="title is-5">How to pair:</h4>
+                <div class="content">
+                    <ol>
+                        <li>Open your <strong>Telegram</strong> or <strong>WhatsApp</strong> bot.</li>
+                        <li>Send the command: <code id="pairing-command-example">/pair YOUR_TOKEN</code></li>
+                        <li>Your session will be linked instantly!</li>
+                    </ol>
+                </div>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-primary" onclick="generateNewToken()">New Token</button>
+                <button class="button" onclick="closePairingModal()">Close</button>
+            </footer>
+        </div>
+    </div>
+
     <script>
         const chatForm = document.getElementById('chat-form');
         const userInput = document.getElementById('user-input');
         const chatMessages = document.getElementById('chat-messages');
         const typingIndicator = document.getElementById('typing');
         const sendBtn = document.getElementById('send-btn');
+        const pairingModal = document.getElementById('pairing-modal');
+        const tokenDisplay = document.getElementById('pairing-token-display');
+        const commandExample = document.getElementById('pairing-command-example');
+
+        async function showPairingModal() {
+            pairingModal.classList.add('is-active');
+            if (!tokenDisplay.value) {
+                await generateNewToken();
+            }
+        }
+
+        function closePairingModal() {
+            pairingModal.classList.remove('is-active');
+        }
+
+        async function generateNewToken() {
+            tokenDisplay.value = "Generating...";
+            try {
+                const csrfToken = document.getElementById('csrf_token').value;
+                const response = await fetch('/pair-token', {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRFToken': csrfToken
+                    }
+                });
+                const data = await response.json();
+                if (data.token) {
+                    tokenDisplay.value = data.token;
+                    commandExample.innerText = `/pair ${data.token}`;
+                } else {
+                    tokenDisplay.value = "Error generating token";
+                }
+            } catch (error) {
+                tokenDisplay.value = "Failed to connect to server";
+            }
+        }
+
+        function copyToken() {
+            tokenDisplay.select();
+            document.execCommand('copy');
+            alert('Token copied to clipboard!');
+        }
 
         function appendMessage(role, content) {
             const div = document.createElement('div');

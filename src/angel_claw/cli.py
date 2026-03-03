@@ -205,6 +205,27 @@ def start_web_server():
     run_shopyo_command(["shopyo-seed"], quiet=True)
     print("⚙️  Syncing users and roles... Done.")
     
+    # Start background bridges in a separate thread
+    import threading
+    def run_bridges():
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        
+        async def start_all():
+            # These must be called INSIDE the running loop
+            lane_queue.start_workers()
+            asyncio.create_task(telegram_bridge.run())
+            asyncio.create_task(whatsapp_bridge.run())
+            asyncio.create_task(cron_manager.run())
+
+        loop.run_until_complete(start_all())
+        loop.run_forever()
+
+    print("⚙️  Starting background bridges...", end="\r", flush=True)
+    bridge_thread = threading.Thread(target=run_bridges, daemon=True)
+    bridge_thread.start()
+    print("⚙️  Starting background bridges... Done.")
+
     print("\n🚀 Angel Claw Web Dashboard")
     print(f"🔗 URL: http://127.0.0.1:5000")
     print(f"👤 Admin: admin@admin.com / admin\n")

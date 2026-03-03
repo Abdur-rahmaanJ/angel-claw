@@ -85,4 +85,31 @@ def create_api_key():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@blueprint.route("/me")
+@login_required
+def me():
+    from modules.agent.models import Channel, ApiKey
+    user_id = str(current_user.id)
+    channels = Channel.query.filter_by(user_id=user_id).all()
+    api_keys = ApiKey.query.filter_by(user_id=user_id).all()
+    
+    return jsonify({
+        "user_id": user_id,
+        "email": current_user.email,
+        "channels": [
+            {
+                "type": c.channel_type,
+                "identifier": c.channel_identifier,
+                "last_seen": c.last_seen_at.isoformat() if c.last_seen_at else None
+            } for c in channels
+        ],
+        "api_keys": [
+            {
+                "name": k.name,
+                "prefix": k.prefix,
+                "created_at": k.created_at.isoformat() if k.created_at else None
+            } for k in api_keys
+        ]
+    })
+
 

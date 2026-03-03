@@ -47,37 +47,51 @@ class AngelClawEngine:
             self._histories[key] = []
         return self._histories[key]
     
+    def _app_context(self):
+        if settings.auth_mode == "shopyo":
+            try:
+                from app import create_app
+                # We reuse existing app if possible or create one
+                # Note: creating app multiple times is not ideal but for CLI tools it works
+                app = create_app("production") # or development
+                return app.app_context()
+            except ImportError:
+                return None
+        return None
+
     def user_root(self, user_id: str) -> Path:
         return get_user_root(user_id)
 
     def _ensure_channel(self, context: UserContext):
         if settings.auth_mode == "shopyo":
-            try:
-                # Use absolute imports for Shopyo environment
-                from modules.agent.models import Channel
-                from init import db
-                
-                channel = Channel.query.filter_by(
-                    channel_type=context.channel_type,
-                    channel_identifier=context.channel_identifier
-                ).first()
-                
-                if not channel:
-                    channel = Channel(
-                        user_id=context.user_id,
+            ctx = self._app_context()
+            if not ctx: return
+            
+            with ctx:
+                try:
+                    # Use absolute imports for Shopyo environment
+                    from modules.agent.models import Channel
+                    from init import db
+                    
+                    channel = Channel.query.filter_by(
                         channel_type=context.channel_type,
                         channel_identifier=context.channel_identifier
-                    )
-                    db.session.add(channel)
-                else:
-                    channel.last_seen_at = datetime.utcnow()
-                    channel.user_id = context.user_id 
-                
-                db.session.commit()
-            except ImportError:
-                logger.warning("Could not import Shopyo models, skipping channel sync")
-            except Exception as e:
-                logger.error(f"Error ensuring channel: {e}")
+                    ).first()
+                    
+                    if not channel:
+                        channel = Channel(
+                            user_id=context.user_id,
+                            channel_type=context.channel_type,
+                            channel_identifier=context.channel_identifier
+                        )
+                        db.session.add(channel)
+                    else:
+                        channel.last_seen_at = datetime.utcnow()
+                        channel.user_id = context.user_id 
+                    
+                    db.session.commit()
+                except Exception as e:
+                    logger.error(f"Error ensuring channel: {e}")
 
     async def execute(self, context: UserContext, message: str) -> EngineResponse:
         # Ensure channel record exists
@@ -248,140 +262,167 @@ class AngelClawEngine:
 
     def create_api_key(self, context: UserContext, name: str) -> str:
         if settings.auth_mode == "shopyo":
-            import secrets
-            import hashlib
-            from modules.agent.models import ApiKey
-            from init import db
+            ctx = self._app_context()
+            if not ctx: raise RuntimeError("Could not load app context")
             
-            # Generate key: ac_v1_{prefix}_{random}
-            prefix = secrets.token_hex(4) # 8 chars
-            random_part = secrets.token_urlsafe(32)
-            raw_key = f"ac_v1_{prefix}_{random_part}"
-            
-            key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-            
-            api_key = ApiKey(
-                user_id=context.user_id,
-                name=name,
-                key_hash=key_hash,
-                prefix=prefix
-            )
-            db.session.add(api_key)
-            db.session.commit()
-            return raw_key
+            with ctx:
+                import secrets
+                import hashlib
+                from modules.agent.models import ApiKey
+                from init import db
+                
+                # Generate key: ac_v1_{prefix}_{random}
+                prefix = secrets.token_hex(4) # 8 chars
+                random_part = secrets.token_urlsafe(32)
+                raw_key = f"ac_v1_{prefix}_{random_part}"
+                
+                key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+                
+                api_key = ApiKey(
+                    user_id=context.user_id,
+                    name=name,
+                    key_hash=key_hash,
+                    prefix=prefix
+                )
+                db.session.add(api_key)
+                db.session.commit()
+                return raw_key
         else:
             raise NotImplementedError("API Key creation only supported in Shopyo mode for now")
 
     def revoke_api_key(self, context: UserContext, key_id: str) -> None:
         if settings.auth_mode == "shopyo":
-            from modules.agent.models import ApiKey
-            from init import db
+            ctx = self._app_context()
+            if not ctx: return
             
-            api_key = ApiKey.query.filter_by(id=key_id, user_id=context.user_id).first()
-            if api_key:
-                api_key.is_active = False
-                db.session.commit()
+            with ctx:
+                from modules.agent.models import ApiKey
+                from init import db
+                
+                api_key = ApiKey.query.filter_by(id=key_id, user_id=context.user_id).first()
+                if api_key:
+                    api_key.is_active = False
+                    db.session.commit()
         else:
             raise NotImplementedError("API Key revocation only supported in Shopyo mode for now")
 
     def pair_channel(self, context: UserContext, channel_type: str, identifier: str):
         if settings.auth_mode == "shopyo":
-            from modules.agent.models import Channel
-            from init import db
+            ctx = self._app_context()
+            if not ctx: return
             
-            channel = Channel.query.filter_by(
-                channel_type=channel_type,
-                channel_identifier=identifier
-            ).first()
-            
-            if not channel:
-                channel = Channel(
-                    user_id=context.user_id,
+            with ctx:
+                from modules.agent.models import Channel
+                from init import db
+                
+                channel = Channel.query.filter_by(
                     channel_type=channel_type,
                     channel_identifier=identifier
-                )
-                db.session.add(channel)
-            else:
-                channel.user_id = context.user_id
-                channel.last_seen_at = datetime.utcnow()
-            
-            db.session.commit()
+                ).first()
+                
+                if not channel:
+                    channel = Channel(
+                        user_id=context.user_id,
+                        channel_type=channel_type,
+                        channel_identifier=identifier
+                    )
+                    db.session.add(channel)
+                else:
+                    channel.user_id = context.user_id
+                    channel.last_seen_at = datetime.utcnow()
+                
+                db.session.commit()
         else:
             raise NotImplementedError("Channel pairing only supported in Shopyo mode for now")
 
     def generate_pair_token(self, context: UserContext) -> str:
         if settings.auth_mode == "shopyo":
-            import secrets
-            from datetime import timedelta
-            from modules.agent.models import PairingToken
-            from init import db
+            ctx = self._app_context()
+            if not ctx: raise RuntimeError("Could not load app context")
             
-            token = secrets.token_urlsafe(16)
-            pairing_token = PairingToken(
-                token=token,
-                user_id=context.user_id,
-                expires_at=datetime.utcnow() + timedelta(minutes=10)
-            )
-            db.session.add(pairing_token)
-            db.session.commit()
-            return token
+            with ctx:
+                import secrets
+                from datetime import timedelta
+                from modules.agent.models import PairingToken
+                from init import db
+                
+                # Generate 8-digit numeric token
+                token = "".join([str(secrets.randbelow(10)) for _ in range(8)])
+                
+                pairing_token = PairingToken(
+                    token=token,
+                    user_id=context.user_id,
+                    expires_at=datetime.utcnow() + timedelta(minutes=10)
+                )
+                db.session.add(pairing_token)
+                db.session.commit()
+                return token
         else:
             raise NotImplementedError("Pairing token generation only supported in Shopyo mode for now")
 
     def validate_pair_token(self, token: str) -> Optional[str]:
         """Validates a pairing token and returns the user_id if valid."""
         if settings.auth_mode == "shopyo":
-            from modules.agent.models import PairingToken
-            from init import db
+            ctx = self._app_context()
+            if not ctx: return None
             
-            pairing_token = PairingToken.query.filter_by(
-                token=token,
-                consumed=False
-            ).first()
-            
-            if pairing_token and pairing_token.expires_at > datetime.utcnow():
-                pairing_token.consumed = True
-                db.session.commit()
-                return pairing_token.user_id
-            return None
+            with ctx:
+                from modules.agent.models import PairingToken
+                from init import db
+                
+                pairing_token = PairingToken.query.filter_by(
+                    token=token,
+                    consumed=False
+                ).first()
+                
+                if pairing_token and pairing_token.expires_at > datetime.utcnow():
+                    user_id = pairing_token.user_id
+                    pairing_token.consumed = True
+                    db.session.commit()
+                    return user_id
+                return None
         else:
             raise NotImplementedError("Pairing token validation only supported in Shopyo mode for now")
 
 
     def validate_api_key(self, raw_key: str) -> Optional[UserContext]:
         if settings.auth_mode == "shopyo":
-            import hashlib
-            from modules.agent.models import ApiKey
-            from shopyo_auth.models import User
+            ctx = self._app_context()
+            if not ctx: return None
             
-            # Extract prefix: ac_v1_{prefix}_{random}
-            parts = raw_key.split("_")
-            if len(parts) < 4:
+            with ctx:
+                import hashlib
+                from modules.agent.models import ApiKey
+                from shopyo_auth.models import User
+                
+                # Extract prefix: ac_v1_{prefix}_{random}
+                parts = raw_key.split("_")
+                if len(parts) < 4:
+                    return None
+                prefix = parts[2]
+                
+                key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
+                
+                api_key = ApiKey.query.filter_by(
+                    prefix=prefix,
+                    key_hash=key_hash,
+                    is_active=True
+                ).first()
+                
+                if api_key:
+                    user = User.query.get(api_key.user_id)
+                    if user:
+                        api_key.last_used_at = datetime.utcnow()
+                        from init import db
+                        db.session.commit()
+                        
+                        return UserContext(
+                            user_id=str(user.id),
+                            email=user.email,
+                            roles=[r.name for r in user.roles] if hasattr(user, "roles") else [],
+                            channel_type="api",
+                            channel_identifier="api-key"
+                        )
                 return None
-            prefix = parts[2]
-            
-            key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-            
-            api_key = ApiKey.query.filter_by(
-                prefix=prefix,
-                key_hash=key_hash,
-                is_active=True
-            ).first()
-            
-            if api_key:
-                user = User.query.get(api_key.user_id)
-                if user:
-                    api_key.last_used_at = datetime.utcnow()
-                    from init import db
-                    db.session.commit()
-                    
-                    return UserContext(
-                        user_id=str(user.id),
-                        email=user.email,
-                        roles=[r.name for r in user.roles] if hasattr(user, "roles") else [],
-                        channel_type="api",
-                        channel_identifier="api-key"
-                    )
-            return None
         else:
             raise NotImplementedError("API Key validation only supported in Shopyo mode for now")

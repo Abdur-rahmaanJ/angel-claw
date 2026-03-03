@@ -55,6 +55,12 @@ warnings.filterwarnings(
     category=RuntimeWarning,
     message="coroutine 'Logging.async_success_handler' was never awaited",
 )
+warnings.filterwarnings("ignore", category=UserWarning, module="click")
+try:
+    from sqlalchemy.exc import LegacyAPIWarning
+    warnings.filterwarnings("ignore", category=LegacyAPIWarning)
+except ImportError:
+    pass
 
 
 def ensure_env():
@@ -159,35 +165,50 @@ async def interactive_chat(model: str = None, api_base: str = None):
     await mcp_manager.disconnect()
 
 
-def run_shopyo_command(cmd_list):
+def run_shopyo_command(cmd_list, quiet=False):
     """Runs a shopyo command via manage.py in the app directory."""
     app_dir = importlib.resources.files("angel_claw").joinpath("app")
     manage_py = os.path.join(str(app_dir), "manage.py")
+    db_path = os.path.join(str(app_dir), "instance", "shopyo.db")
     
     # We must be in the app directory for shopyo to find modules
     env = os.environ.copy()
     # Ensure the package root is in PYTHONPATH so engine/models can be imported
     package_root = os.path.abspath(os.path.join(str(app_dir), "..", ".."))
     env["PYTHONPATH"] = f"{package_root}:{env.get('PYTHONPATH', '')}"
+    env["SHOPYO_QUIET"] = "True"
     
-    subprocess.run([sys.executable, manage_py] + cmd_list, cwd=str(app_dir), env=env)
+    # Force Shopyo to use the specific absolute DB path
+    env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.abspath(db_path)}"
+    
+    # Suppress output if quiet
+    stdout = subprocess.DEVNULL if quiet else None
+    stderr = subprocess.DEVNULL if quiet else None
+    
+    subprocess.run([sys.executable, manage_py] + cmd_list, cwd=str(app_dir), env=env, stdout=stdout, stderr=stderr)
 
 
 def start_web_server():
     """Initializes and starts the Shopyo web application."""
     ensure_env()
     app_dir = importlib.resources.files("angel_claw").joinpath("app")
-    db_path = os.path.join(str(app_dir), "shopyo.db")
+    # Shopyo creates the DB in the instance folder
+    db_path = os.path.join(str(app_dir), "instance", "shopyo.db")
     
     if not os.path.exists(db_path):
-        print("Initializing database...")
-        run_shopyo_command(["initialise"])
+        print("⚙️  Initializing database...", end="\r", flush=True)
+        run_shopyo_command(["initialise"], quiet=True)
+        print("⚙️  Initializing database... Done.")
     
     # Always run seed to ensure admin user and roles exist with latest config
-    print("Seeding database with default users and roles...")
-    run_shopyo_command(["shopyo-seed"])
+    print("⚙️  Syncing users and roles...", end="\r", flush=True)
+    run_shopyo_command(["shopyo-seed"], quiet=True)
+    print("⚙️  Syncing users and roles... Done.")
     
-    print("Starting Angel Claw Web Server...")
+    print("\n🚀 Angel Claw Web Dashboard")
+    print(f"🔗 URL: http://127.0.0.1:5000")
+    print(f"👤 Admin: admin@admin.com / admin\n")
+    
     run_shopyo_command(["run"])
 
 

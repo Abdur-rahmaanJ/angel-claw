@@ -13,6 +13,7 @@ Hope it helps! We welcome all questions and even requests for walkthroughs
 import importlib
 import os
 import sys
+import logging
 
 import click
 import jinja2
@@ -25,6 +26,7 @@ from shopyo.api.assets import register_devstatic
 from shopyo.api.debug import is_yo_debug
 from shopyo.api.file import trycopy
 
+logger = logging.getLogger("angel-claw-app")
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, base_path)
@@ -113,7 +115,6 @@ def _register_module(
     """
 
     try:
-        print(f"DEBUG: Registering module {module_name}")
         view_mod = importlib.import_module(f"{module_name}.view")
         # Try 'blueprint' attribute first
         bp = getattr(view_mod, "blueprint", None)
@@ -124,15 +125,11 @@ def _register_module(
             bp = getattr(view_mod, f"{short_name}_blueprint", None)
 
         if bp:
-            print(f"DEBUG: Found blueprint in {module_name}: {bp.name}")
             app.register_blueprint(bp)
-        else:
-            print(f"DEBUG: NO blueprint found in {module_name}")
     except (ImportError, AttributeError) as e:
-        print(f"DEBUG: Error registering {module_name}: {e}")
         if isinstance(e, AttributeError):
             if is_yo_debug():
-                print(f"[ ] Blueprint skipped for {module_name}: {e}")
+                logger.debug(f"[ ] Blueprint skipped for {module_name}: {e}")
         else:
             raise e
 
@@ -142,7 +139,7 @@ def _register_module(
             global_template_variables.update(global_mod.available_everywhere)
     except (ImportError, AttributeError) as e:
         if is_yo_debug():
-            print(f"[ ] Template var skipped for {module_name}: {e}")
+            logger.debug(f"[ ] Template var skipped for {module_name}: {e}")
 
     try:
         global_mod = importlib.import_module(f"{module_name}.global")
@@ -150,7 +147,7 @@ def _register_module(
             global_configs.update(global_mod.configs[config_name])
     except (ImportError, AttributeError) as e:
         if is_yo_debug():
-            print(f"[ ] Config skipped for {module_name}: {e}")
+            logger.debug(f"[ ] Config skipped for {module_name}: {e}")
 
 
 def load_plugins(app, global_template_variables, global_configs, config_name):
@@ -255,6 +252,10 @@ def custom_commands(db, app):
     @with_appcontext
     def shopyo_upload():
         from shopyo_auth.models import User, Role
+        import modules.agent.models
+        
+        # Ensure all tables exist (important if initialise was skipped or failed)
+        db.create_all()
         
         # 1. Standard Shopyo Upload (initializes modules)
         for ext in app.extensions:
@@ -263,7 +264,7 @@ def custom_commands(db, app):
                     e = app.extensions[ext]
                     e.upload()
                     db.session.commit()
-                    click.echo("Uploaded for " + ext)
+                    logger.debug("Uploaded for " + ext)
                 except AttributeError:
                     pass
         
@@ -293,7 +294,7 @@ def custom_commands(db, app):
             user.is_email_confirmed = True
             db.session.add(user)
             db.session.commit()
-            click.echo(f"Created seed admin: {admin_email}")
+            logger.debug(f"Created seed admin: {admin_email}")
         
         if admin_role not in user.roles:
             user.roles.append(admin_role)
@@ -301,6 +302,6 @@ def custom_commands(db, app):
             user.roles.append(user_role)
             
         db.session.commit()
-        click.echo("Roles assigned to seed admin.")
+        logger.debug("Roles assigned to seed admin.")
 
     app.cli.add_command(shopyo_upload)

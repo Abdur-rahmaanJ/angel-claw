@@ -31,9 +31,9 @@
 
 ```bash
 $ pip install angel-claw
-$ angel-claw serve    # Start the Web Dashboard
-$ angel-claw bridges  # Start background bridges (Production)
-$ angel-claw chat     # Interactive CLI Chat
+$ angel-claw serve    # DEV: Starts Web + Bridges in one process (simplest)
+$ angel-claw bridges  # PROD: Starts ONLY Bridges (run exactly ONE instance)
+$ angel-claw chat     # CLI: Interactive chat mode
 ```
 
 ---
@@ -86,11 +86,18 @@ Access at `http://localhost:5000`. Default admin: `admin@admin.com` / `admin`.
 
 Angel Claw is designed for robust production deployment by separating the Web UI from background tasks.
 
-### Dedicated Bridge Worker
-To prevent Telegram/WhatsApp session conflicts when using multiple web workers (Gunicorn), run the bridges in their own process:
+### 1. Web UI (Gunicorn)
+In production, run the web interface using a WSGI server like Gunicorn. This process **does not** handle bridges.
+```bash
+gunicorn -w 4 "angel_claw.app.app:create_app('production')"
+```
+
+### 2. Bridge Worker (Single Instance)
+You **must** start exactly one instance of the bridge worker to handle Telegram, WhatsApp, and Cron tasks for all users:
 ```bash
 angel-claw bridges
 ```
+*Note: `angel-claw serve` is only for development as it bundles both together.*
 
 ### 📦 Package-First Persistence
 All data is stored outside the package directory for safe updates:

@@ -1,3 +1,4 @@
+from pathlib import Path
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field
 from typing import Optional
@@ -22,9 +23,36 @@ class Settings(BaseSettings):
     # Auth Settings
     auth_mode: str = Field("shopyo", validation_alias="ANGEL_CLAW_AUTH_MODE")
 
-    # Memory Settings (Angel Recall)
-    memory_persist_dir: str = "./vaults"
+    # Data & Persistence Settings
     user_data_root: str = Field("~/.angelclaw", validation_alias="USER_DATA_ROOT")
+    
+    @property
+    def data_dir(self) -> Path:
+        p = Path(self.user_data_root).expanduser()
+        p.mkdir(parents=True, exist_ok=True)
+        return p
+
+    @property
+    def db_path(self) -> str:
+        return str(self.data_dir / "angelclaw.db")
+
+    @property
+    def memory_persist_dir(self) -> str:
+        p = self.data_dir / "vaults"
+        p.mkdir(parents=True, exist_ok=True)
+        return str(p)
+
+    @property
+    def telegram_persist_dir(self) -> str:
+        p = self.data_dir / "bridges" / "telegram"
+        p.mkdir(parents=True, exist_ok=True)
+        return str(p)
+
+    @property
+    def whatsapp_persist_dir(self) -> str:
+        p = self.data_dir / "bridges" / "whatsapp"
+        p.mkdir(parents=True, exist_ok=True)
+        return str(p)
 
     # Proactive Messaging Settings
     proactive_webhook_url: Optional[str] = Field(

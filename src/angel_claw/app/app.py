@@ -25,7 +25,7 @@ try:
 except ImportError:
     pass
 
-logging.getLogger("werkzeug").setLevel(logging.ERROR)
+logging.getLogger("werkzeug").setLevel(logging.INFO)
 logging.getLogger("sqlalchemy.engine").setLevel(logging.ERROR)
 
 import click

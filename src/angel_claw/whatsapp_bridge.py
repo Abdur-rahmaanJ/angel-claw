@@ -25,9 +25,8 @@ logger = logging.getLogger("angel-claw-whatsapp")
 
 class WhatsAppBridge:
     def __init__(self, persist_dir: str = None):
-        self.persist_dir = persist_dir or os.path.join(
-            settings.memory_persist_dir, "whatsapp"
-        )
+        # Use standardized path for package deployment
+        self.persist_dir = persist_dir or settings.whatsapp_persist_dir
         if not os.path.exists(self.persist_dir):
             os.makedirs(self.persist_dir)
 

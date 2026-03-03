@@ -68,6 +68,20 @@
             <div class="navbar-menu">
                 <div class="navbar-end">
                     <div class="navbar-item">
+                        <div class="field is-grouped">
+                            <p class="control">
+                                <span class="tag is-rounded {% if 'telegram' in channels %}is-success{% else %}is-light{% endif %}" title="Telegram {% if 'telegram' in channels %}Connected{% else %}Not Connected{% endif %}">
+                                    <i class="fab fa-telegram mr-1"></i> Telegram
+                                </span>
+                            </p>
+                            <p class="control">
+                                <span class="tag is-rounded {% if 'whatsapp' in channels %}is-success{% else %}is-light{% endif %}" title="WhatsApp {% if 'whatsapp' in channels %}Connected{% else %}Not Connected{% endif %}">
+                                    <i class="fab fa-whatsapp mr-1"></i> WhatsApp
+                                </span>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="navbar-item">
                         <button class="button is-light is-rounded" onclick="showPairingModal()">
                             <i class="fas fa-link mr-2"></i> Pair Channel
                         </button>

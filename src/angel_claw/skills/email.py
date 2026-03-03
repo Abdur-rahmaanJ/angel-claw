@@ -30,7 +30,10 @@ def send_email(
     html: bool = False,
 ) -> str:
     """
-    Sends an email via SMTP.
+    Sends an external email via SMTP (Gmail, Outlook, etc.).
+    WARNING: Do NOT use this for "internal messages" or "messaging [user]".
+    For those, use the 'send_internal_message' skill instead.
+    
     - to: Recipient email address (comma-separated for multiple)
     - subject: Email subject line
     - body: Email body content

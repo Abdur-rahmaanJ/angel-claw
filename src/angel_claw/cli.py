@@ -8,6 +8,9 @@ import shutil
 import subprocess
 import importlib.resources
 import questionary
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 from .config import settings
 from .gateway import start as start_gateway
 from .cron import cron_manager
@@ -197,6 +200,7 @@ def run_shopyo_command(cmd_list, quiet=False):
 def start_web_server():
     """Initializes and starts the Shopyo web application."""
     ensure_env()
+    
     app_dir = importlib.resources.files("angel_claw").joinpath("app")
     
     # Crucial: Add app_dir to sys.path so AngelClawEngine can find 'app' and 'init'
@@ -221,6 +225,11 @@ def start_web_server():
     # Start background bridges in a separate thread
     import threading
     def run_bridges():
+        # Silence all bridge logging for clean serve mode
+        logging.getLogger("angel-claw-cron").setLevel(logging.ERROR)
+        logging.getLogger("angel-claw-telegram").setLevel(logging.ERROR)
+        logging.getLogger("angel-claw-whatsapp").setLevel(logging.ERROR)
+
         # Ensure path is correct in this thread too
         app_dir = importlib.resources.files("angel_claw").joinpath("app")
         app_path_str = str(app_dir)
@@ -243,16 +252,37 @@ def start_web_server():
         except Exception as e:
             logger.error(f"Fatal error in bridge thread: {e}", exc_info=True)
 
-    print("⚙️  Starting background bridges...", end="\r", flush=True)
     bridge_thread = threading.Thread(target=run_bridges, daemon=True)
     bridge_thread.start()
-    print("⚙️  Starting background bridges... Done.")
 
-    print("\n🚀 Angel Claw Web Dashboard")
-    print(f"🔗 URL: http://127.0.0.1:5000")
-    print(f"👤 Admin: admin@admin.com / admin\n")
+    console = Console()
     
-    run_shopyo_command(["run"])
+    table = Table.grid(padding=(0, 1))
+    table.add_column(style="cyan")
+    table.add_column(style="white")
+    
+    table.add_row("🔗  URL:", "http://127.0.0.1:5000")
+    table.add_row("👤  User:", "admin@admin.com")
+    table.add_row("🔑  Pass:", "admin")
+    table.add_row("", "")
+    table.add_row("🤖  Bridges:", "[green]active in background[/green]")
+    table.add_row("⏹️   Stop:", "[bold red]Ctrl+C[/bold red]")
+    
+    dashboard = Panel(
+        table,
+        title="[bold green]🪽 Angel Claw[/bold green]",
+        subtitle="[dim]Powered by Shopyo[/dim]",
+        expand=False,
+        border_style="bright_blue",
+        padding=(1, 4)
+    )
+    
+    console.print("\n")
+    console.print(dashboard)
+    console.print("\n")
+    
+    # Force quiet on shopyo run
+    run_shopyo_command(["run"], quiet=False)
 
 
 def main():
@@ -288,6 +318,12 @@ def main():
         # Force enable for this command
         whatsapp_bridge.enabled = True
         asyncio.run(whatsapp_bridge.run())
+    elif len(sys.argv) > 1 and sys.argv[1] == "confirm-user":
+        if len(sys.argv) > 2:
+            email = sys.argv[2]
+            run_shopyo_command(["shopyo-confirm-user", email])
+        else:
+            print("Usage: angel-claw confirm-user <email>")
     elif len(sys.argv) > 1 and sys.argv[1] == "mcp":
         if len(sys.argv) > 2 and sys.argv[2] == "list":
 

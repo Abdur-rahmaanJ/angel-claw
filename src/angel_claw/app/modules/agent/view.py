@@ -95,7 +95,7 @@ def create_api_key():
 @blueprint.route("/me")
 @login_required
 def me():
-    from modules.agent.models import Channel, ApiKey
+    from modules.agent.models import Channel, ApiKey, InternalMessage
     user_id = str(current_user.id)
     channels = Channel.query.filter_by(user_id=user_id).all()
     api_keys = ApiKey.query.filter_by(user_id=user_id).all()

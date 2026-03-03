@@ -39,11 +39,18 @@ class AngelClawEngine:
         self._app_lock = threading.Lock()
 
     def _load_soul(self) -> str:
-        try:
-            with open("SOUL.md", "r") as f:
-                return f.read()
-        except FileNotFoundError:
-            return "# Angel Claw Soul\nDefault soul content..."
+        # Search for SOUL.md in current dir, then in src parent
+        search_paths = [
+            Path("SOUL.md"),
+            Path(__file__).parent.parent.parent / "SOUL.md"
+        ]
+        
+        for path in search_paths:
+            if path.exists():
+                with open(path, "r") as f:
+                    return f.read()
+                    
+        return "# Angel Claw Soul\nDefault soul content..."
 
     def _get_user_history(self, user_id: str, session_id: str) -> List[Message]:
         key = f"{user_id}:{session_id}"
@@ -206,10 +213,18 @@ class AngelClawEngine:
 
 
                     try:
-                        if inspect.iscoroutinefunction(function_to_call):
-                            function_result = await function_to_call(**function_args)
+                        ctx = self._app_context()
+                        if ctx:
+                            with ctx:
+                                if inspect.iscoroutinefunction(function_to_call):
+                                    function_result = await function_to_call(**function_args)
+                                else:
+                                    function_result = function_to_call(**function_args)
                         else:
-                            function_result = function_to_call(**function_args)
+                            if inspect.iscoroutinefunction(function_to_call):
+                                function_result = await function_to_call(**function_args)
+                            else:
+                                function_result = function_to_call(**function_args)
                     except Exception as e:
                         function_result = f"Error executing {function_name}: {e}"
                 elif function_name in mcp_manager.tool_to_server:

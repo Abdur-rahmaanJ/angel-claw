@@ -36,3 +36,13 @@ class PairingToken(db.Model):
     expires_at = db.Column(db.DateTime, nullable=False)
     consumed = db.Column(db.Boolean(), default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now())
+
+class InternalMessage(PkModel):
+    __tablename__ = "internal_messages"
+    
+    sender_id = db.Column(db.String(100), nullable=False)
+    recipient_id = db.Column(db.String(100), nullable=False)
+    recipient_email = db.Column(db.String(120), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    is_read = db.Column(db.Boolean(), default=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now())

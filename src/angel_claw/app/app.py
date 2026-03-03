@@ -14,6 +14,19 @@ import importlib
 import os
 import sys
 import logging
+import warnings
+
+# Silence noisy warnings and logs
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+try:
+    from sqlalchemy.exc import LegacyAPIWarning, SAWarning
+    warnings.filterwarnings("ignore", category=LegacyAPIWarning)
+    warnings.filterwarnings("ignore", category=SAWarning)
+except ImportError:
+    pass
+
+logging.getLogger("werkzeug").setLevel(logging.ERROR)
+logging.getLogger("sqlalchemy.engine").setLevel(logging.ERROR)
 
 import click
 import jinja2
@@ -304,4 +317,22 @@ def custom_commands(db, app):
         db.session.commit()
         logger.debug("Roles assigned to seed admin.")
 
+    @click.command("shopyo-confirm-user")
+    @click.argument("email")
+    @with_appcontext
+    def shopyo_confirm_user(email):
+        from shopyo_auth.models import User
+        import datetime
+        
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            click.echo(f"User with email {email} not found.")
+            return
+            
+        user.is_email_confirmed = True
+        user.email_confirm_date = datetime.datetime.now()
+        db.session.commit()
+        click.echo(f"User {email} confirmed successfully.")
+
     app.cli.add_command(shopyo_upload)
+    app.cli.add_command(shopyo_confirm_user)

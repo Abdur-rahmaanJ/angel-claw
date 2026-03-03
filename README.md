@@ -27,11 +27,13 @@
 - 📅 **Proactive Automation**: Built-in scheduling (cron, at, every) for autonomous actions.
 - 📱 **Omni-Channel**: Consistent experience across Web, CLI, Telegram, and WhatsApp.
 - 🔐 **Enterprise Ready**: Secure API keys, pairing tokens, and Shopyo-based user management.
+- 💬 **Peer-to-Peer Messaging**: Users can send internal notes and messages to each other via the AI agent.
 
 ```bash
 $ pip install angel-claw
-$ angel-claw serve  # Start the Web Dashboard
-$ angel-claw chat   # Interactive CLI Chat
+$ angel-claw serve    # Start the Web Dashboard
+$ angel-claw bridges  # Start background bridges (Production)
+$ angel-claw chat     # Interactive CLI Chat
 ```
 
 ---
@@ -44,8 +46,10 @@ $ angel-claw chat   # Interactive CLI Chat
 | 🧠 **Isolated Memory**         | User data stored securely in `~/.angelclaw/users/{user_id}`. |
 | ⚡ **Multi-Model**             | OpenAI, Anthropic, Ollama & more via `litellm`.             |
 | 🔁 **Proactive Tasks**         | Autonomous execution of scheduled jobs.                     |
-| 🌐 **Web Dashboard**           | Modern UI for chat, pairing, and API key management.        |
-| 🛠 **Dynamic Skills**          | Agent writes its own Python tools on the fly.               |
+| ✅ **Todo Management**         | Native task tracking with priorities and due dates.        |
+| 📅 **Calendar Sync**           | Manage events and sync with Google Calendar.                |
+| 🌐 **Web Dashboard**           | Modern UI with 🪽 branding and connection indicators.       |
+| ✉️  **Internal Notes**         | Send peer-to-peer messages: "Send a note to alice@dev.com telling check fridge". |
 | 📱 **Secure Pairing**          | Link Telegram/WhatsApp using time-limited secure tokens.    |
 | 🔑 **Developer APIs**          | Create and manage scoped API keys for external integration. |
 
@@ -78,35 +82,57 @@ Access at `http://localhost:5000`. Default admin: `admin@admin.com` / `admin`.
 
 ---
 
-# 🧠 Core Architecture
+# 🏗️ Production Architecture
 
-### Identity & Context
-Angel Claw uses a canonical `UserContext` to ensure every interaction is correctly attributed and isolated. Whether coming from a Web UI, a Telegram bot, or an API call, the engine knows exactly who the user is and what they should have access to.
+Angel Claw is designed for robust production deployment by separating the Web UI from background tasks.
 
-### Storage Isolation
-All user-specific data (memos, todos, calendar, chats) is stored under:
-`~/.angelclaw/users/{user_id}/`
+### Dedicated Bridge Worker
+To prevent Telegram/WhatsApp session conflicts when using multiple web workers (Gunicorn), run the bridges in their own process:
+```bash
+angel-claw bridges
+```
 
-### Authentication Modes
-- **Shopyo (Default)**: Full web-based user management, pairing, and API keys.
-- **Internal**: Lightweight mode for single-user CLI/Local usage.
+### 📦 Package-First Persistence
+All data is stored outside the package directory for safe updates:
+*   **DB**: `~/.angelclaw/angelclaw.db`
+*   **Bridges**: `~/.angelclaw/bridges/`
+*   **Vaults**: `~/.angelclaw/vaults/`
+
+See [DEPLOY.md](./DEPLOY.md) for full Nginx, Gunicorn, and Systemd templates.
 
 ---
 
-# 🔌 Model Context Protocol (MCP)
+# 💬 Internal Messaging
 
-Angel Claw is a full **MCP Host**. Add your servers to `.env`:
+Angel Claw supports secure, internal communication between users. The agent handles delivery and notification.
 
-```env
-MCP_SERVERS='{"everything": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-everything"]}}'
-```
+**Commands:**
+*   "Send an internal note to bob@example.com telling him the meeting is at 5"
+*   "Do I have any unread messages?"
+*   "Tell alice@dev.com that I finished the report"
 
-- `angel-claw mcp list`: View all discovered tools.
-- `angel-claw mcp test`: Diagnose server connections.
+---
+
+# 🛠️ Built-in Skills
+
+Angel Claw comes with high-quality native skills that integrate deeply with its memory.
+
+### ✅ Todo Management
+Keep track of your life without leaving the chat.
+*   "Add a high priority todo: Buy milk by Friday"
+*   "Show my pending todos"
+*   "Mark todo 1 as complete"
+
+### 📅 Calendar Integration
+Manage your schedule and sync with external providers.
+*   "Schedule a meeting with Sarah tomorrow at 2pm"
+*   "What's on my calendar for next week?"
+*   "Sync my events with Google Calendar"
 
 ---
 
 # 📱 Multi-Channel Bridges
+...
 
 Control your AI from anywhere.
 

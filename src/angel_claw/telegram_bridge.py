@@ -20,10 +20,8 @@ logger = logging.getLogger("angel-claw-telegram")
 
 class TelegramBridge:
     def __init__(self, persist_dir: str = None):
-        # We still keep persist_dir and pairings for backward compat or local mode
-        self.persist_dir = persist_dir or os.path.join(
-            settings.memory_persist_dir, "telegram"
-        )
+        # Use standardized path for package deployment
+        self.persist_dir = persist_dir or settings.telegram_persist_dir
         if not os.path.exists(self.persist_dir):
             os.makedirs(self.persist_dir)
         self.pairings_file = os.path.join(self.persist_dir, "pairings.json")

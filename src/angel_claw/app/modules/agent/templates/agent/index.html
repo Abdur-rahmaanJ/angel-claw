@@ -115,10 +115,10 @@
             <form id="chat-form" class="field has-addons">
                 <input type="hidden" name="csrf_token" id="csrf_token" value="{{ csrf_token() }}">
                 <div class="control is-expanded">
-                    <input class="input is-medium is-rounded" type="text" id="user-input" placeholder="Type your message here..." autocomplete="off">
+                    <input class="input is-medium" type="text" id="user-input" placeholder="Type your message here..." autocomplete="off" style="border-top-left-radius: 25px; border-bottom-left-radius: 25px; border-right: none;">
                 </div>
                 <div class="control">
-                    <button class="button is-primary is-medium is-rounded px-5" type="submit" id="send-btn">
+                    <button class="button is-primary is-medium px-5" type="submit" id="send-btn" style="border-top-right-radius: 25px; border-bottom-right-radius: 25px;">
                         <i class="fas fa-paper-plane"></i>
                     </button>
                 </div>

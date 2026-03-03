@@ -178,7 +178,6 @@ def run_shopyo_command(cmd_list, quiet=False):
     """Runs a shopyo command via manage.py in the app directory."""
     app_dir = importlib.resources.files("angel_claw").joinpath("app")
     manage_py = os.path.join(str(app_dir), "manage.py")
-    db_path = os.path.join(str(app_dir), "instance", "shopyo.db")
     
     # We must be in the app directory for shopyo to find modules
     env = os.environ.copy()
@@ -187,8 +186,8 @@ def run_shopyo_command(cmd_list, quiet=False):
     env["PYTHONPATH"] = f"{package_root}:{env.get('PYTHONPATH', '')}"
     env["SHOPYO_QUIET"] = "True"
     
-    # Force Shopyo to use the specific absolute DB path
-    env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.abspath(db_path)}"
+    # Force Shopyo to use our standardized user data DB path
+    env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.abspath(settings.db_path)}"
     
     # Suppress output if quiet
     stdout = subprocess.DEVNULL if quiet else None
@@ -209,10 +208,8 @@ def start_web_server():
     if app_path_str not in sys.path:
         sys.path.insert(0, app_path_str)
     
-    # Shopyo creates the DB in the instance folder
-    db_path = os.path.join(str(app_dir), "instance", "shopyo.db")
-    
-    if not os.path.exists(db_path):
+    # Check if DB exists in standardized path
+    if not os.path.exists(settings.db_path):
         print("⚙️  Initializing database...", end="\r", flush=True)
         run_shopyo_command(["initialise"], quiet=True)
         print("⚙️  Initializing database... Done.")
@@ -324,6 +321,27 @@ def main():
             run_shopyo_command(["shopyo-confirm-user", email])
         else:
             print("Usage: angel-claw confirm-user <email>")
+    elif len(sys.argv) > 1 and sys.argv[1] == "bridges":
+        ensure_env()
+        print("🪽  Angel Claw Bridge Worker starting...")
+        print("🤖 Telegram, WhatsApp, and Cron bridges active.")
+        print("⏹️   Stop with Ctrl+C\n")
+
+        async def run_all_bridges():
+            lane_queue.start_workers()
+            await asyncio.gather(
+                telegram_bridge.run(),
+                whatsapp_bridge.run(),
+                cron_manager.run()
+            )
+
+        try:
+            asyncio.run(run_all_bridges())
+        except KeyboardInterrupt:
+            pass
+    elif len(sys.argv) > 1 and sys.argv[1] == "locate-static":
+        app_static = importlib.resources.files("angel_claw").joinpath("app", "static")
+        print(os.path.abspath(str(app_static)))
     elif len(sys.argv) > 1 and sys.argv[1] == "mcp":
         if len(sys.argv) > 2 and sys.argv[2] == "list":
 

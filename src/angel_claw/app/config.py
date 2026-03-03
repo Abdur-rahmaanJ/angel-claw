@@ -41,6 +41,10 @@ class BaseConfig:
         "CURRENCY": "USD",
     }
 
+    SHOPYO_APPADMIN_URL = '/appadmin'
+    SHOPYO_AUTH_URL = '/auth'
+    SHOPYO_DASHBOARD_URL = '/dashboard'
+
 
 class ProductionConfig(BaseConfig):
     """Configurations for production"""

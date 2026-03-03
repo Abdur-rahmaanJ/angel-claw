@@ -32,8 +32,15 @@ def index():
     context = mhelp.context()
     user_context = _build_context()
     history = engine.get_history(user_context)
+    
+    from modules.agent.models import Channel
+    user_id = str(current_user.id)
+    channels = Channel.query.filter_by(user_id=user_id, is_active=True).all()
+    channel_types = [c.channel_type for c in channels]
+
     context.update({
-        "history": history
+        "history": history,
+        "channels": channel_types
     })
     return render_template(
         "{}/index.html".format(mhelp.info["module_name"]), **context

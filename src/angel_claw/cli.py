@@ -5,9 +5,9 @@ import logging
 import warnings
 import os
 import shutil
+import subprocess
 import importlib.resources
 import questionary
-from .agent import Agent
 from .config import settings
 from .gateway import start as start_gateway
 from .cron import cron_manager
@@ -159,6 +159,38 @@ async def interactive_chat(model: str = None, api_base: str = None):
     await mcp_manager.disconnect()
 
 
+def run_shopyo_command(cmd_list):
+    """Runs a shopyo command via manage.py in the app directory."""
+    app_dir = importlib.resources.files("angel_claw").joinpath("app")
+    manage_py = os.path.join(str(app_dir), "manage.py")
+    
+    # We must be in the app directory for shopyo to find modules
+    env = os.environ.copy()
+    # Ensure the package root is in PYTHONPATH so engine/models can be imported
+    package_root = os.path.abspath(os.path.join(str(app_dir), "..", ".."))
+    env["PYTHONPATH"] = f"{package_root}:{env.get('PYTHONPATH', '')}"
+    
+    subprocess.run([sys.executable, manage_py] + cmd_list, cwd=str(app_dir), env=env)
+
+
+def start_web_server():
+    """Initializes and starts the Shopyo web application."""
+    ensure_env()
+    app_dir = importlib.resources.files("angel_claw").joinpath("app")
+    db_path = os.path.join(str(app_dir), "shopyo.db")
+    
+    if not os.path.exists(db_path):
+        print("Initializing database...")
+        run_shopyo_command(["initialise"])
+    
+    # Always run seed to ensure admin user and roles exist with latest config
+    print("Seeding database with default users and roles...")
+    run_shopyo_command(["shopyo-seed"])
+    
+    print("Starting Angel Claw Web Server...")
+    run_shopyo_command(["run"])
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":
         if "--reconfigure" in sys.argv:
@@ -175,6 +207,8 @@ def main():
                 api_base_override = sys.argv[i + 1]
 
         asyncio.run(interactive_chat(model=model_override, api_base=api_base_override))
+    elif len(sys.argv) > 1 and sys.argv[1] == "serve":
+        start_web_server()
     elif len(sys.argv) > 1 and sys.argv[1] == "tutorial":
         ensure_env()
         # Tutorial implementation will go here

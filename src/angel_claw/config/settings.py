@@ -19,8 +19,12 @@ class Settings(BaseSettings):
     api_key: Optional[str] = Field(None, validation_alias="MODEL_KEY")
     api_base: Optional[str] = Field(None, validation_alias="MODEL_BASE_URL")
 
+    # Auth Settings
+    auth_mode: str = Field("shopyo", validation_alias="ANGEL_CLAW_AUTH_MODE")
+
     # Memory Settings (Angel Recall)
     memory_persist_dir: str = "./vaults"
+    user_data_root: str = Field("~/.angelclaw", validation_alias="USER_DATA_ROOT")
 
     # Proactive Messaging Settings
     proactive_webhook_url: Optional[str] = Field(

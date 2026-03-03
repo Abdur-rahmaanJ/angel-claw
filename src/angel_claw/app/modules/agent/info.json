@@ -1,0 +1,12 @@
+{
+    "author": {
+        "mail": "",
+        "name": "",
+        "website": ""
+    },
+    "display_string": "Agent",
+    "fa-icon": "fa fa-store",
+    "module_name": "agent",
+    "type": "show",
+    "url_prefix": "/"
+}

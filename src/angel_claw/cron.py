@@ -130,26 +130,43 @@ class CronManager:
                     job.payload.content, job.user_id, job.session_id
                 )
             elif job.payload.kind == "prompt":
-                from .agent import Agent
+                from .engine import AngelClawEngine
+                from .models import UserContext
 
-                agent = Agent(job.session_id)
-                response = await agent.chat(job.payload.content)
+                engine = AngelClawEngine()
+                context = UserContext(
+                    user_id=job.user_id,
+                    email=f"{job.user_id}@angelclaw.local",
+                    roles=["user"],
+                    channel_type="cron",
+                    channel_identifier=job.session_id
+                )
+                response = await engine.execute(context, job.payload.content)
                 await self._send_proactive_message(
-                    response, job.user_id, job.session_id
+                    response.content, job.user_id, job.session_id
                 )
             elif job.payload.kind == "skill":
-                from .agent import Agent
+                from .engine import AngelClawEngine
+                from .models import UserContext
+                import inspect
 
-                agent = Agent(job.session_id)
+                engine = AngelClawEngine()
                 # Skill execution logic
-                if job.payload.skill_name in agent.skill_manager.skills:
-                    func = agent.skill_manager.skills[job.payload.skill_name]
-                    import inspect
+                if job.payload.skill_name in engine.skill_manager.skills:
+                    func = engine.skill_manager.skills[job.payload.skill_name]
+                    
+                    args = job.payload.args or {}
+                    sig = inspect.signature(func)
+                    if "session_id" in sig.parameters and "session_id" not in args:
+                        args["session_id"] = job.session_id
+                    if "user_id" in sig.parameters and "user_id" not in args:
+                        args["user_id"] = job.user_id
 
                     if inspect.iscoroutinefunction(func):
-                        res = await func(**(job.payload.args or {}))
+                        res = await func(**args)
                     else:
-                        res = func(**(job.payload.args or {}))
+                        res = func(**args)
+
                     # Optionally notify user of result?
                     # await self._send_proactive_message(f"Skill {job.payload.skill_name} executed: {res}", job.user_id)
                 else:

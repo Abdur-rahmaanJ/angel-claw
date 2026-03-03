@@ -4,25 +4,33 @@ import uuid
 from typing import Dict, Any, Optional
 from .queue import lane_queue
 from .task import Task
-from ..agent import Agent
-from ..models import AgentRequest
+from ..engine import AngelClawEngine
+from ..models import AgentRequest, UserContext
 
 logger = logging.getLogger("angel-claw-lane-queue-process")
 
 results: Dict[str, Any] = {}
 events: Dict[str, asyncio.Event] = {}
 
+engine = AngelClawEngine()
 
 async def agent_chat_wrapper(request: AgentRequest):
     try:
-        agent = Agent(
-            request.session_id, model=request.model, api_base=request.api_base
+        # Create a UserContext from the request
+        # For now, we assume the request.user_id is the canonical user_id
+        context = UserContext(
+            user_id=request.user_id,
+            email=f"{request.user_id}@angelclaw.local", # Placeholder
+            roles=["user"],
+            channel_type="cli", # Default for now
+            channel_identifier=request.session_id
         )
-        response_content = await agent.chat(request.message)
-        return response_content
+        response = await engine.execute(context, request.message)
+        return response.content
     except Exception as e:
         logger.error(f"Error in agent_chat_wrapper: {e}")
         return f"Error: {str(e)}"
+
 
 
 async def process_chat_request(request: AgentRequest) -> str:

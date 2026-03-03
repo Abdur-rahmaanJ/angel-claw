@@ -23,6 +23,15 @@ dependencies = [
     "fastmcp",
     "questionary",
     "python-dateutil",
+    "shopyo>=4.15.0",
+    "shopyo-base>=1.4.0",
+    "shopyo-auth>=1.5.0",
+    "shopyo-appadmin>=1.4.0",
+    "shopyo-dashboard>=1.4.0",
+    "shopyo-page>=1.3.0",
+    "shopyo-i18n>=1.2.0",
+    "shopyo-settings>=1.3.0",
+    "shopyo-theme>=1.3.0",
 ]
 
 [project.optional-dependencies]

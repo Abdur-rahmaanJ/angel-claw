@@ -44,6 +44,7 @@ class BaseConfig:
     SHOPYO_APPADMIN_URL = '/appadmin'
     SHOPYO_AUTH_URL = '/auth'
     SHOPYO_DASHBOARD_URL = '/dashboard'
+    EMAIL_CONFIRMATION_DISABLED = True
 
 
 class ProductionConfig(BaseConfig):

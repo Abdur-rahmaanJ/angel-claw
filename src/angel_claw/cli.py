@@ -288,6 +288,12 @@ def main():
         # Force enable for this command
         whatsapp_bridge.enabled = True
         asyncio.run(whatsapp_bridge.run())
+    elif len(sys.argv) > 1 and sys.argv[1] == "confirm-user":
+        if len(sys.argv) > 2:
+            email = sys.argv[2]
+            run_shopyo_command(["shopyo-confirm-user", email])
+        else:
+            print("Usage: angel-claw confirm-user <email>")
     elif len(sys.argv) > 1 and sys.argv[1] == "mcp":
         if len(sys.argv) > 2 and sys.argv[2] == "list":
 

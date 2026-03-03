@@ -8,6 +8,9 @@ import shutil
 import subprocess
 import importlib.resources
 import questionary
+from rich.console import Console
+from rich.panel import Panel
+from rich.table import Table
 from .config import settings
 from .gateway import start as start_gateway
 from .cron import cron_manager
@@ -197,6 +200,7 @@ def run_shopyo_command(cmd_list, quiet=False):
 def start_web_server():
     """Initializes and starts the Shopyo web application."""
     ensure_env()
+    
     app_dir = importlib.resources.files("angel_claw").joinpath("app")
     
     # Crucial: Add app_dir to sys.path so AngelClawEngine can find 'app' and 'init'
@@ -251,20 +255,31 @@ def start_web_server():
     bridge_thread = threading.Thread(target=run_bridges, daemon=True)
     bridge_thread.start()
 
-    print("\n")
-    print("  ┌──────────────────────────────────────────┐")
-    print("  │            🚀 ANGEL CLAW 🚀              │")
-    print("  ├──────────────────────────────────────────┤")
-    print("  │                                          │")
-    print("  │  🔗  URL:   http://127.0.0.1:5000         │")
-    print("  │  👤  User:  admin@admin.com              │")
-    print("  │  🔑  Pass:  admin                        │")
-    print("  │                                          │")
-    print("  │  🤖  Bridges active in background        │")
-    print("  │  Press Ctrl+C to stop the system         │")
-    print("  │                                          │")
-    print("  └──────────────────────────────────────────┘")
-    print("\n")
+    console = Console()
+    
+    table = Table.grid(padding=(0, 1))
+    table.add_column(style="cyan")
+    table.add_column(style="white")
+    
+    table.add_row("🔗  URL:", "http://127.0.0.1:5000")
+    table.add_row("👤  User:", "admin@admin.com")
+    table.add_row("🔑  Pass:", "admin")
+    table.add_row("", "")
+    table.add_row("🤖  Bridges:", "[green]active in background[/green]")
+    table.add_row("⏹️   Stop:", "[bold red]Ctrl+C[/bold red]")
+    
+    dashboard = Panel(
+        table,
+        title="[bold green]🪽 Angel Claw[/bold green]",
+        subtitle="[dim]Powered by Shopyo[/dim]",
+        expand=False,
+        border_style="bright_blue",
+        padding=(1, 4)
+    )
+    
+    console.print("\n")
+    console.print(dashboard)
+    console.print("\n")
     
     # Force quiet on shopyo run
     run_shopyo_command(["run"], quiet=False)

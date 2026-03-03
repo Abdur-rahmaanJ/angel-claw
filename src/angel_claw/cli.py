@@ -211,7 +211,8 @@ def start_web_server():
     # Check if DB exists in standardized path
     if not os.path.exists(settings.db_path):
         print("⚙️  Initializing database...", end="\r", flush=True)
-        run_shopyo_command(["initialise"], quiet=True)
+        # Use --no-clear-migration to preserve our hand-crafted migrations
+        run_shopyo_command(["initialise", "--no-clear-migration"], quiet=True)
         print("⚙️  Initializing database... Done.")
     
     # Always run seed to ensure admin user and roles exist with latest config

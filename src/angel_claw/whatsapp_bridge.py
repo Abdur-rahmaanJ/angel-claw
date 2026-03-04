@@ -328,12 +328,20 @@ class WhatsAppBridge:
                     # Backward compatibility: legacy session_id pairing
                     if len(token) < 20:
                         session_id = token
+                        
+                        # Store in database for UI status
+                        user_context = UserContext(
+                            user_id=session_id, # In legacy, token was user_id
+                            email="whatsapp-user@local",
+                            roles=["user"],
+                            channel_type="whatsapp",
+                            channel_identifier=sender_id,
+                        )
+                        self.engine.pair_channel(user_context, "whatsapp", sender_id)
+
                         self._set_pairing(sender_id, session_id)
                         self.out_queue.put(
-                            (
-                                sender_jid,
-                                f"Bot: ✅ Legacy paired with session: `{session_id}`",
-                            )
+                            (sender_jid, f"Bot: ✅ Legacy paired with session: `{session_id}`")
                         )
                     else:
                         self.out_queue.put(

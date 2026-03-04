@@ -121,6 +121,17 @@ class TelegramBridge:
                 # Backward compatibility
                 if len(token) > 10:
                     session_id = token
+                    
+                    # Store in database for UI status
+                    user_context = UserContext(
+                        user_id=session_id, # In legacy, token was user_id
+                        email="telegram-user@local",
+                        roles=["user"],
+                        channel_type="telegram",
+                        channel_identifier=chat_id,
+                    )
+                    self.engine.pair_channel(user_context, "telegram", chat_id)
+
                     async with self._pairings_lock:
                         self.pairings[chat_id] = session_id
                     await self._save_pairings()

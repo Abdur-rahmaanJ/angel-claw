@@ -128,11 +128,13 @@ class AngelClawEngine:
                             user_id=context.user_id,
                             channel_type=context.channel_type,
                             channel_identifier=context.channel_identifier,
+                            is_active=True,
                         )
                         db.session.add(channel)
                     else:
                         channel.last_seen_at = datetime.now(UTC)
                         channel.user_id = context.user_id
+                        channel.is_active = True
 
                     db.session.commit()
                 except Exception as e:
@@ -391,11 +393,13 @@ class AngelClawEngine:
                         user_id=context.user_id,
                         channel_type=channel_type,
                         channel_identifier=identifier,
+                        is_active=True,
                     )
                     db.session.add(channel)
                 else:
                     channel.user_id = context.user_id
                     channel.last_seen_at = datetime.now(UTC)
+                    channel.is_active = True
 
                 db.session.commit()
         else:

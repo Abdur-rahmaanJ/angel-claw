@@ -60,12 +60,20 @@ class AngelClawEngine:
     
     def _app_context(self):
         if settings.auth_mode == "shopyo":
+            try:
+                from flask import has_app_context, current_app
+                if has_app_context():
+                    return current_app.app_context()
+            except ImportError:
+                pass
+
             with self._app_lock:
                 if self._cached_app is None:
                     try:
                         from app import create_app
-                        # We cache the app to avoid expensive re-initialization
-                        self._cached_app = create_app("production") 
+                        # Fallback to current config if possible, else production
+                        config_name = os.environ.get("FLASK_ENV", "production")
+                        self._cached_app = create_app(config_name) 
                     except ImportError as e:
                         logger.error(f"Engine could not import 'app': {e}. Ensure sys.path is correct.")
                         return None

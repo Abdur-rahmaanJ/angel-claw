@@ -201,7 +201,7 @@
                     tokenDisplay.value = data.token;
                     commandExample.innerText = `/pair ${data.token}`;
                 } else {
-                    tokenDisplay.value = "Error generating token";
+                    tokenDisplay.value = `Error: ${data.error || 'Unknown error'}`;
                 }
             } catch (error) {
                 tokenDisplay.value = "Failed to connect to server";

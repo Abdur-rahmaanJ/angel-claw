@@ -82,8 +82,8 @@ def create_app(config_name="development"):
     from shopyo_auth import ShopyoAuth
     from shopyo_appadmin import ShopyoAppAdmin
     from shopyo_dashboard import ShopyoDashboard
-    from shopyo_page import ShopyoPage
-    from shopyo_i18n import Shopyoi18n
+    # from shopyo_page import ShopyoPage
+    # from shopyo_i18n import Shopyoi18n
     from shopyo_settings import ShopyoSettings
     from shopyo_theme import ShopyoTheme
 
@@ -91,8 +91,8 @@ def create_app(config_name="development"):
     sh_auth = ShopyoAuth()
     sh_appadmin = ShopyoAppAdmin()
     sh_dashboard = ShopyoDashboard()
-    sh_page = ShopyoPage()
-    sh_i18n = Shopyoi18n()
+    # sh_page = ShopyoPage()
+    # sh_i18n = Shopyoi18n()
     sh_settings = ShopyoSettings()
     sh_theme = ShopyoTheme()
 
@@ -100,8 +100,8 @@ def create_app(config_name="development"):
     sh_auth.init_app(app)
     sh_appadmin.init_app(app)
     sh_dashboard.init_app(app)
-    sh_page.init_app(app)
-    sh_i18n.init_app(app)
+    # sh_page.init_app(app)
+    # sh_i18n.init_app(app)
     sh_settings.init_app(app)
     sh_theme.init_app(app)
 
@@ -114,6 +114,10 @@ def create_app(config_name="development"):
     from init import db
 
     custom_commands(db, app)
+    @app.route("/")
+    def home_redirect():
+        return redirect(url_for("agent.index"))
+
     return app
 
 

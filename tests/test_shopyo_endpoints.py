@@ -44,7 +44,7 @@ def auth_user(app):
 
 def test_root_access(client, auth_user, app):
     # Login
-    client.post("/shopyo-auth/login", data={
+    client.post("/auth/login", data={
         "email": "test@example.com",
         "password": "password"
     }, follow_redirects=True)
@@ -74,11 +74,10 @@ def test_chat_endpoint(client, auth_user, app):
         mock_execute.return_value = EngineResponse(content="Hello from mock!", tool_calls=[])
         
         # Manually login user using the real login endpoint
-        login_response = client.post("/shopyo-auth/login", data={
+        login_response = client.post("/auth/login", data={
             "email": "test@example.com",
             "password": "password"
-        }, follow_redirects=True)
-        
+        }, follow_redirects=True)        
         # Check if login was successful by seeing if we can access the index
         index_response = client.get("/")
         assert index_response.status_code == 200
@@ -95,7 +94,7 @@ def test_chat_endpoint(client, auth_user, app):
 
 def test_pair_token_endpoint(client, auth_user, app):
     # Login
-    client.post("/shopyo-auth/login", data={
+    client.post("/auth/login", data={
         "email": "test@example.com",
         "password": "password"
     }, follow_redirects=True)
@@ -106,11 +105,11 @@ def test_pair_token_endpoint(client, auth_user, app):
     assert response.status_code == 200
     data = response.get_json()
     assert "token" in data
-    assert len(data["token"]) > 10
+    assert len(data["token"]) == 8
 
 def test_api_key_endpoint(client, auth_user, app):
     # Login
-    client.post("/shopyo-auth/login", data={
+    client.post("/auth/login", data={
         "email": "test@example.com",
         "password": "password"
     }, follow_redirects=True)

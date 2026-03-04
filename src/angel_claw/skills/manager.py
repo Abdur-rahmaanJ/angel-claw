@@ -94,6 +94,8 @@ class SkillManager:
             sig = inspect.signature(func)
             params = {"type": "object", "properties": {}, "required": []}
             for p_name, p in sig.parameters.items():
+                if p_name in ["session_id", "user_id"]:
+                    continue
                 p_type = "string"
                 if p.annotation == int:
                     p_type = "integer"

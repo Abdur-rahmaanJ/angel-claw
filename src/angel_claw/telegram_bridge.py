@@ -26,6 +26,7 @@ class TelegramBridge:
             os.makedirs(self.persist_dir)
         self.pairings_file = os.path.join(self.persist_dir, "pairings.json")
         self.pairings = self._load_pairings()
+        self._pairings_lock = asyncio.Lock()
         self.token = settings.telegram_token
         self.app = None
         self.engine = AngelClawEngine()
@@ -41,24 +42,28 @@ class TelegramBridge:
                 logger.error(f"Error loading Telegram pairings: {e}")
         return {}
 
-    def _save_pairings(self):
-        try:
-            with open(self.pairings_file, "w") as f:
-                json.dump(self.pairings, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving Telegram pairings: {e}")
+    async def _save_pairings(self):
+        async with self._pairings_lock:
+            try:
+                with open(self.pairings_file, "w") as f:
+                    json.dump(self.pairings, f, indent=2)
+            except Exception as e:
+                logger.error(f"Error saving Telegram pairings: {e}")
 
     async def start_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = str(update.effective_chat.id)
         # Try finding in database first if in shopyo mode
         if settings.auth_mode == "shopyo":
-             # This is a bit complex as we need to find user by channel
-             # For now we'll rely on the /pair command to establish the link
-             pass
+            # This is a bit complex as we need to find user by channel
+            # For now we'll rely on the /pair command to establish the link
+            pass
 
-        if chat_id in self.pairings:
+        async with self._pairings_lock:
+            paired_user = self.pairings.get(chat_id)
+
+        if paired_user:
             await update.message.reply_text(
-                f"Welcome back! You are paired with user: {self.pairings[chat_id]}"
+                f"Welcome back! You are paired with user: {paired_user}"
             )
         else:
             await update.message.reply_text(
@@ -71,7 +76,7 @@ class TelegramBridge:
     async def pair_cmd(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         chat_id = str(update.effective_chat.id)
         logger.info(f"Received /pair command from {chat_id}")
-        
+
         try:
             if not context.args:
                 await update.message.reply_text(
@@ -81,12 +86,15 @@ class TelegramBridge:
 
             token = context.args[0]
             # Immediate acknowledgement
+            logger.info(f"Sending acknowledgement to {chat_id}")
             await update.message.reply_text(f"🔄 Validating token `{token}`...")
-            
+
             logger.info(f"Attempting to pair chat {chat_id} with token: {token}")
-            
+
             # Validate token via engine
+            logger.info("Calling engine.validate_pair_token")
             user_id = self.engine.validate_pair_token(token)
+            logger.info(f"engine.validate_pair_token returned user_id: {user_id}")
             if user_id:
                 logger.info(f"Token valid. Pairing chat {chat_id} with user {user_id}")
                 # Store in database
@@ -95,14 +103,15 @@ class TelegramBridge:
                     email="telegram-user@local",
                     roles=["user"],
                     channel_type="telegram",
-                    channel_identifier=chat_id
+                    channel_identifier=chat_id,
                 )
                 self.engine.pair_channel(user_context, "telegram", chat_id)
-                
+
                 # Also store in local pairings
-                self.pairings[chat_id] = user_id
-                self._save_pairings()
-                
+                async with self._pairings_lock:
+                    self.pairings[chat_id] = user_id
+                await self._save_pairings()
+
                 await update.message.reply_text(
                     "✅ Successfully paired! I am now your Angel Claw.\n"
                     "You can now send me messages directly."
@@ -110,10 +119,22 @@ class TelegramBridge:
             else:
                 logger.warning(f"Invalid token attempt from {chat_id}: {token}")
                 # Backward compatibility
-                if len(token) > 10: 
+                if len(token) > 10:
                     session_id = token
-                    self.pairings[chat_id] = session_id
-                    self._save_pairings()
+                    
+                    # Store in database for UI status
+                    user_context = UserContext(
+                        user_id=session_id, # In legacy, token was user_id
+                        email="telegram-user@local",
+                        roles=["user"],
+                        channel_type="telegram",
+                        channel_identifier=chat_id,
+                    )
+                    self.engine.pair_channel(user_context, "telegram", chat_id)
+
+                    async with self._pairings_lock:
+                        self.pairings[chat_id] = session_id
+                    await self._save_pairings()
                     await update.message.reply_text(
                         f"✅ Legacy paired with session: `{session_id}`"
                     )
@@ -124,41 +145,48 @@ class TelegramBridge:
                     )
         except Exception as e:
             logger.error(f"Error during pairing for chat {chat_id}: {e}", exc_info=True)
-            await update.message.reply_text(f"⚠️ An error occurred during pairing: {str(e)}")
+            await update.message.reply_text(
+                f"⚠️ An error occurred during pairing: {str(e)}"
+            )
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not update.effective_chat or update.effective_chat.type != "private":
             return
-        
+
         if not update.message or not update.message.text:
             return
 
         # Explicitly skip commands that might have leaked through filters
-        if update.message.text.startswith('/'):
-            logger.debug(f"Skipping command-like message in handle_message: {update.message.text}")
+        if update.message.text.startswith("/"):
+            logger.debug(
+                f"Skipping command-like message in handle_message: {update.message.text}"
+            )
             return
 
         chat_id = str(update.effective_chat.id)
         logger.info(f"Handling message from {chat_id}: {update.message.text[:50]}...")
-        
-        user_id = self.pairings.get(chat_id)
+
+        async with self._pairings_lock:
+            user_id = self.pairings.get(chat_id)
+
         if not user_id:
-             # Try to find in DB
-             if settings.auth_mode == "shopyo":
-                 try:
-                     from modules.agent.models import Channel
-                     from init import db
-                     # Note: this needs app context!
-                     channel = Channel.query.filter_by(
-                         channel_type="telegram",
-                         channel_identifier=chat_id
-                     ).first()
-                     if channel:
-                         user_id = channel.user_id
-                         self.pairings[chat_id] = user_id
-                         self._save_pairings()
-                 except:
-                     pass
+            # Try to find in DB
+            if settings.auth_mode == "shopyo":
+                try:
+                    from modules.agent.models import Channel
+                    from init import db
+
+                    # Note: this needs app context!
+                    channel = Channel.query.filter_by(
+                        channel_type="telegram", channel_identifier=chat_id
+                    ).first()
+                    if channel:
+                        user_id = channel.user_id
+                        async with self._pairings_lock:
+                            self.pairings[chat_id] = user_id
+                        await self._save_pairings()
+                except:
+                    pass
 
         if not user_id:
             await update.message.reply_text(
@@ -178,14 +206,13 @@ class TelegramBridge:
                 email=f"telegram_{chat_id}@angelclaw.local",
                 roles=["user"],
                 channel_type="telegram",
-                channel_identifier=chat_id
+                channel_identifier=chat_id,
             )
             response = await self.engine.execute(user_context, user_input)
             await update.message.reply_text(response.content)
         except Exception as e:
             logger.error(f"Error in Telegram chat: {e}")
             await update.message.reply_text(f"⚠️ Error: {e}")
-
 
     async def run(self):
         if not self.token:
@@ -195,17 +222,33 @@ class TelegramBridge:
         from telegram.request import HTTPXRequest
         import telegram
 
-        # Use a longer timeout for slow networks
-        trequest = HTTPXRequest(connect_timeout=30, read_timeout=30)
-        self.app = ApplicationBuilder().token(self.token).request(trequest).build()
+        # Use a more robust request configuration for flaky networks
+        trequest = HTTPXRequest(
+            connect_timeout=30, 
+            read_timeout=30,
+            write_timeout=30,
+            pool_timeout=30
+        )
+        self.app = (
+            ApplicationBuilder()
+            .token(self.token)
+            .request(trequest)
+            .build()
+        )
 
-        async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+        async def error_handler(
+            update: object, context: ContextTypes.DEFAULT_TYPE
+        ) -> None:
             """Log the error and send a telegram message to notify the developer."""
             # Transient network errors are common, we log them at warning level
-            if isinstance(context.error, (telegram.error.NetworkError, telegram.error.TimedOut)):
+            if isinstance(
+                context.error, (telegram.error.NetworkError, telegram.error.TimedOut)
+            ):
                 logger.warning(f"Telegram transient network error: {context.error}")
             else:
-                logger.error("Exception while handling an update:", exc_info=context.error)
+                logger.error(
+                    "Exception while handling an update:", exc_info=context.error
+                )
 
         self.app.add_error_handler(error_handler)
         self.app.add_handler(CommandHandler("start", self.start_cmd))
@@ -215,26 +258,32 @@ class TelegramBridge:
         )
 
         logger.info("Telegram bridge starting...")
-        
+
         max_retries = 5
         retry_delay = 5
         for attempt in range(max_retries):
             try:
                 await self.app.initialize()
                 await self.app.start()
-                await self.app.updater.start_polling()
+                await self.app.updater.start_polling(bootstrap_retries=-1)
                 logger.info("Telegram bridge started successfully.")
                 break
             except (telegram.error.TimedOut, telegram.error.NetworkError) as e:
                 if attempt < max_retries - 1:
-                    logger.warning(f"Telegram initialization timed out (attempt {attempt+1}/{max_retries}). Retrying in {retry_delay}s...")
+                    logger.warning(
+                        f"Telegram initialization timed out (attempt {attempt + 1}/{max_retries}). Retrying in {retry_delay}s..."
+                    )
                     await asyncio.sleep(retry_delay)
                     retry_delay *= 2
                 else:
-                    logger.error(f"Telegram bridge failed to start after {max_retries} attempts: {e}")
+                    logger.error(
+                        f"Telegram bridge failed to start after {max_retries} attempts: {e}"
+                    )
                     return
             except Exception as e:
-                logger.error(f"Unexpected error starting Telegram bridge: {e}", exc_info=True)
+                logger.error(
+                    f"Unexpected error starting Telegram bridge: {e}", exc_info=True
+                )
                 return
 
         # Wait for shutdown signal
@@ -244,16 +293,27 @@ class TelegramBridge:
         if not self.app:
             return
 
-        # Find all chat_ids paired with this session_id
-        for chat_id, paired_sid in self.pairings.items():
-            if paired_sid == session_id:
-                try:
-                    await self.app.bot.send_message(chat_id=chat_id, text=message)
-                    logger.info(f"Sent proactive message to Telegram chat {chat_id}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to send proactive message to Telegram chat {chat_id}: {e}"
-                    )
+        # In Telegram bridge, session_id is the chat_id
+        try:
+            await self.app.bot.send_message(chat_id=session_id, text=message)
+            logger.info(f"Sent proactive message to Telegram chat {session_id}")
+        except Exception as e:
+            # Fallback: search pairings if session_id wasn't the chat_id
+            found = False
+            async with self._pairings_lock:
+                pairings_items = list(self.pairings.items())
+
+            for chat_id, p_user_id in pairings_items:
+                if chat_id == session_id or p_user_id == user_id:
+                     try:
+                         await self.app.bot.send_message(chat_id=chat_id, text=message)
+                         logger.info(f"Sent proactive message to Telegram chat {chat_id} (fallback)")
+                         found = True
+                     except:
+                         pass
+            
+            if not found:
+                logger.error(f"Failed to send proactive message to Telegram session {session_id}: {e}")
 
     async def close(self):
         """Gracefully shutdown the Telegram bridge."""

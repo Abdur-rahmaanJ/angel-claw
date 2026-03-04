@@ -34,7 +34,7 @@ class Job(BaseModel):
     schedule: JobSchedule
     payload: JobPayload
     session_id: str = "default"
-    user_id: str = "alice"
+    user_id: str = "cli"
     last_run: Optional[datetime] = None
     next_run: Optional[datetime] = None
     enabled: bool = True
@@ -48,6 +48,7 @@ class CronManager:
         if not os.path.exists(self.persist_dir):
             os.makedirs(self.persist_dir)
         self.jobs: Dict[str, Job] = {}
+        self._jobs_lock = asyncio.Lock()
         self.load_jobs()
         self.proactive_handlers: List[Callable] = []
 
@@ -67,18 +68,33 @@ class CronManager:
                 except Exception as e:
                     logger.error(f"Error loading job {filename}: {e}")
 
+    async def save_job_async(self, job: Job):
+        async with self._jobs_lock:
+            self.jobs[job.name] = job
+        file_path = os.path.join(self.persist_dir, f"{job.name}.json")
+        with open(file_path, "w") as f:
+            f.write(job.model_dump_json(indent=2))
+
     def save_job(self, job: Job):
         self.jobs[job.name] = job
         file_path = os.path.join(self.persist_dir, f"{job.name}.json")
         with open(file_path, "w") as f:
             f.write(job.model_dump_json(indent=2))
 
+    async def delete_job_async(self, name: str):
+        async with self._jobs_lock:
+            if name in self.jobs:
+                del self.jobs[name]
+        file_path = os.path.join(self.persist_dir, f"{name}.json")
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
     def delete_job(self, name: str):
         if name in self.jobs:
             del self.jobs[name]
-            file_path = os.path.join(self.persist_dir, f"{name}.json")
-            if os.path.exists(file_path):
-                os.remove(file_path)
+        file_path = os.path.join(self.persist_dir, f"{name}.json")
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
     def _calculate_next_run(self, job: Job):
         now = datetime.now()
@@ -99,8 +115,11 @@ class CronManager:
                 delta = deltas[unit](amount)
 
                 if job.schedule.kind == "in":
-                    job.next_run = (now + delta) if not job.last_run else None
                     if not job.last_run:
+                        job.next_run = now + delta
+                        job.enabled = True
+                    else:
+                        job.next_run = None
                         job.enabled = False
                 else:
                     job.next_run = (
@@ -139,7 +158,7 @@ class CronManager:
                     email=f"{job.user_id}@angelclaw.local",
                     roles=["user"],
                     channel_type="cron",
-                    channel_identifier=job.session_id
+                    channel_identifier=job.session_id,
                 )
                 response = await engine.execute(context, job.payload.content)
                 await self._send_proactive_message(
@@ -154,7 +173,7 @@ class CronManager:
                 # Skill execution logic
                 if job.payload.skill_name in engine.skill_manager.skills:
                     func = engine.skill_manager.skills[job.payload.skill_name]
-                    
+
                     args = job.payload.args or {}
                     sig = inspect.signature(func)
                     if "session_id" in sig.parameters and "session_id" not in args:
@@ -183,11 +202,19 @@ class CronManager:
         else:
             self._calculate_next_run(job)
 
-        self.save_job(job)
+        await self.save_job_async(job)
 
     async def _send_proactive_message(
         self, message: str, user_id: str, session_id: str = "default"
     ):
+        # Normalize session_id: if it looks like an email from our bridges, extract the ID
+        # e.g. "telegram_8694052043@angelclaw.local" -> "8694052043"
+        clean_sid = session_id
+        if "@" in session_id:
+            user_part = session_id.split("@")[0]
+            if "_" in user_part:
+                clean_sid = user_part.split("_")[-1]
+
         # Call registered handlers (e.g., Telegram, WhatsApp)
         import inspect
 
@@ -198,10 +225,10 @@ class CronManager:
                     continue
 
                 if inspect.iscoroutinefunction(handler):
-                    await handler(message, user_id, session_id)
+                    await handler(message, user_id, clean_sid)
                 else:
                     # Check if it returns a coroutine (some bound methods behave this way)
-                    res = handler(message, user_id, session_id)
+                    res = handler(message, user_id, clean_sid)
                     if inspect.isawaitable(res):
                         await res
             except Exception as e:
@@ -216,7 +243,7 @@ class CronManager:
                         settings.proactive_webhook_url,
                         json={
                             "user_id": user_id,
-                            "session_id": session_id,
+                            "session_id": clean_sid,
                             "message": message,
                             "source": "angel-claw-cron",
                         },
@@ -225,18 +252,20 @@ class CronManager:
                 logger.error(f"Error sending proactive message to webhook: {e}")
 
         # Always log to console for CLI visibility if debug is on
-        logger.info(f"PROACTIVE MESSAGE to {user_id} ({session_id}): {message}")
+        logger.info(f"PROACTIVE MESSAGE to {user_id} ({clean_sid}): {message}")
         if settings.debug:
-            print(f"\n[PROACTIVE] {user_id} ({session_id}): {message}", flush=True)
+            print(f"\n[PROACTIVE] {user_id} ({clean_sid}): {message}", flush=True)
 
     async def run(self):
         logger.info("Cron worker started.")
         while True:
             now = datetime.now()
             jobs_to_run = []
-            for job in list(self.jobs.values()):
-                if job.enabled and job.next_run and job.next_run <= now:
-                    jobs_to_run.append(job)
+
+            async with self._jobs_lock:
+                for job in list(self.jobs.values()):
+                    if job.enabled and job.next_run and job.next_run <= now:
+                        jobs_to_run.append(job)
 
             for job in jobs_to_run:
                 await self._execute_job(job)

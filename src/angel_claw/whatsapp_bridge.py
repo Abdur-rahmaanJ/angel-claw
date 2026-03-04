@@ -33,6 +33,7 @@ class WhatsAppBridge:
         self.pairings_file = os.path.join(self.persist_dir, "pairings.json")
         self.db_file = os.path.join(self.persist_dir, "session.db")
         self.pairings = self._load_pairings()
+        self._pairings_lock = threading.Lock()
         self.enabled = settings.whatsapp_enabled
         self.client = None
         self.main_thread = None
@@ -59,18 +60,31 @@ class WhatsAppBridge:
             try:
                 with open(self.pairings_file, "r") as f:
                     data = json.load(f)
-                    # Clean up: remove multiline keys (from old protobuf str() bugs)
                     return {k: v for k, v in data.items() if "\n" not in k}
             except Exception as e:
                 logger.error(f"Error loading WhatsApp pairings: {e}")
         return {}
 
     def _save_pairings(self):
-        try:
-            with open(self.pairings_file, "w") as f:
-                json.dump(self.pairings, f, indent=2)
-        except Exception as e:
-            logger.error(f"Error saving WhatsApp pairings: {e}")
+        with self._pairings_lock:
+            try:
+                with open(self.pairings_file, "w") as f:
+                    json.dump(self.pairings, f, indent=2)
+            except Exception as e:
+                logger.error(f"Error saving WhatsApp pairings: {e}")
+
+    def _get_pairing(self, sender_id: str) -> Optional[str]:
+        with self._pairings_lock:
+            return self.pairings.get(sender_id)
+
+    def _set_pairing(self, sender_id: str, user_id: str):
+        with self._pairings_lock:
+            self.pairings[sender_id] = user_id
+            self._save_pairings()
+
+    def _get_all_pairings(self) -> Dict[str, str]:
+        with self._pairings_lock:
+            return dict(self.pairings)
 
     async def run(self):
         if not self.enabled:
@@ -286,7 +300,7 @@ class WhatsAppBridge:
         cmd = parts[0].lower()
         if cmd == "/pair" and len(parts) > 1:
             token = parts[1]
-            
+
             # Validate token via engine
             try:
                 user_id = self.engine.validate_pair_token(token)
@@ -294,26 +308,38 @@ class WhatsAppBridge:
                     # Store in database
                     user_context = UserContext(
                         user_id=user_id,
-                        email="whatsapp-user@local", # Placeholder
+                        email="whatsapp-user@local",  # Placeholder
                         roles=["user"],
                         channel_type="whatsapp",
-                        channel_identifier=sender_id
+                        channel_identifier=sender_id,
                     )
                     self.engine.pair_channel(user_context, "whatsapp", sender_id)
-                    
+
                     # Also store in local pairings
-                    self.pairings[sender_id] = user_id
-                    self._save_pairings()
-                    
+                    self._set_pairing(sender_id, user_id)
+
                     self.out_queue.put(
-                        (sender_jid, f"Bot: ✅ Successfully paired! I am now your Angel Claw.")
+                        (
+                            sender_jid,
+                            f"Bot: ✅ Successfully paired! I am now your Angel Claw.",
+                        )
                     )
                 else:
                     # Backward compatibility: legacy session_id pairing
                     if len(token) < 20:
                         session_id = token
-                        self.pairings[sender_id] = session_id
-                        self._save_pairings()
+                        
+                        # Store in database for UI status
+                        user_context = UserContext(
+                            user_id=session_id, # In legacy, token was user_id
+                            email="whatsapp-user@local",
+                            roles=["user"],
+                            channel_type="whatsapp",
+                            channel_identifier=sender_id,
+                        )
+                        self.engine.pair_channel(user_context, "whatsapp", sender_id)
+
+                        self._set_pairing(sender_id, session_id)
                         self.out_queue.put(
                             (sender_jid, f"Bot: ✅ Legacy paired with session: `{session_id}`")
                         )
@@ -336,12 +362,12 @@ class WhatsAppBridge:
         self, client: NewClient, sender_jid: Any, sender_id: str, text: str
     ):
         # sender_id is already a clean string from Jid2String
-        user_id = self.pairings.get(sender_id)
+        user_id = self._get_pairing(sender_id)
 
         # Fallback for old pairings that only stored the phone number
         if not user_id and "@" in sender_id:
             phone_number = sender_id.split("@")[0]
-            user_id = self.pairings.get(phone_number)
+            user_id = self._get_pairing(phone_number)
 
         if not user_id:
             logger.warning(f"Unpaired message from {sender_id}")
@@ -360,7 +386,7 @@ class WhatsAppBridge:
                 email=f"whatsapp_{sender_id}@angelclaw.local",
                 roles=["user"],
                 channel_type="whatsapp",
-                channel_identifier=sender_id
+                channel_identifier=sender_id,
             )
             response = await self.engine.execute(user_context, text)
             logger.info(f"Sending response to {sender_id}")
@@ -370,19 +396,22 @@ class WhatsAppBridge:
             self.out_queue.put((sender_jid, f"Bot: ⚠️ Error processing your request."))
 
     def send_proactive(self, message: str, user_id: str, session_id: str):
+        pairings = self._get_all_pairings()
+
         if settings.debug:
             print(
-                f"\n[DEBUG WhatsApp] send_proactive: checking session '{session_id}' against {len(self.pairings)} pairings.",
+                f"\n[DEBUG WhatsApp] send_proactive: checking session '{session_id}' against {len(pairings)} pairings.",
                 flush=True,
             )
 
         logger.info(f"WhatsApp send_proactive triggered for session: {session_id}")
-        logger.debug(f"Current pairings: {self.pairings}")
+        logger.debug(f"Current pairings: {pairings}")
 
         # We collect target JIDs first to avoid duplicates if possible
         target_jids = []
-        for sender_id_str, paired_sid in self.pairings.items():
-            if paired_sid == session_id:
+        for sender_id_str, paired_val in pairings.items():
+            # Match if sender_id is the session_id OR if the paired user matches
+            if sender_id_str == session_id or paired_val == user_id:
                 # Extra safety: skip multiline keys if they somehow made it in
                 if "\n" in str(sender_id_str):
                     continue

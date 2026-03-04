@@ -222,9 +222,19 @@ class TelegramBridge:
         from telegram.request import HTTPXRequest
         import telegram
 
-        # Use a longer timeout for slow networks
-        trequest = HTTPXRequest(connect_timeout=30, read_timeout=30)
-        self.app = ApplicationBuilder().token(self.token).request(trequest).build()
+        # Use a more robust request configuration for flaky networks
+        trequest = HTTPXRequest(
+            connect_timeout=30, 
+            read_timeout=30,
+            write_timeout=30,
+            pool_timeout=30
+        )
+        self.app = (
+            ApplicationBuilder()
+            .token(self.token)
+            .request(trequest)
+            .build()
+        )
 
         async def error_handler(
             update: object, context: ContextTypes.DEFAULT_TYPE
@@ -255,7 +265,7 @@ class TelegramBridge:
             try:
                 await self.app.initialize()
                 await self.app.start()
-                await self.app.updater.start_polling()
+                await self.app.updater.start_polling(bootstrap_retries=-1)
                 logger.info("Telegram bridge started successfully.")
                 break
             except (telegram.error.TimedOut, telegram.error.NetworkError) as e:

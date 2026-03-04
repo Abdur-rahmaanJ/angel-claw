@@ -41,6 +41,7 @@ logging.getLogger().setLevel(logging.ERROR)
 logging.getLogger("angel-claw-cron").setLevel(logging.INFO)
 logging.getLogger("angel-claw-telegram").setLevel(logging.INFO)
 logging.getLogger("angel-claw-whatsapp").setLevel(logging.INFO)
+logging.getLogger("telegram.ext.Updater").setLevel(logging.CRITICAL)
 
 # Setup Agent logging for visibility in CLI
 agent_logger = logging.getLogger("angel-claw-agent")

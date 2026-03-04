@@ -143,6 +143,7 @@ def schedule_task(
     skill_name: str = None,
     args: dict = None,
     session_id: str = "cli-default",
+    user_id: str = "cli",
 ) -> str:
     """
     Schedules a task.
@@ -158,6 +159,7 @@ def schedule_task(
                 kind=payload_kind, content=content, skill_name=skill_name, args=args
             ),
             session_id=session_id,
+            user_id=user_id,
         )
         # Recalculate next run to ensure it's valid
         cron_manager._calculate_next_run(job)

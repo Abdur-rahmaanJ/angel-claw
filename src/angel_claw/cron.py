@@ -34,7 +34,7 @@ class Job(BaseModel):
     schedule: JobSchedule
     payload: JobPayload
     session_id: str = "default"
-    user_id: str = "alice"
+    user_id: str = "cli"
     last_run: Optional[datetime] = None
     next_run: Optional[datetime] = None
     enabled: bool = True
@@ -115,8 +115,11 @@ class CronManager:
                 delta = deltas[unit](amount)
 
                 if job.schedule.kind == "in":
-                    job.next_run = (now + delta) if not job.last_run else None
                     if not job.last_run:
+                        job.next_run = now + delta
+                        job.enabled = True
+                    else:
+                        job.next_run = None
                         job.enabled = False
                 else:
                     job.next_run = (
@@ -204,6 +207,14 @@ class CronManager:
     async def _send_proactive_message(
         self, message: str, user_id: str, session_id: str = "default"
     ):
+        # Normalize session_id: if it looks like an email from our bridges, extract the ID
+        # e.g. "telegram_8694052043@angelclaw.local" -> "8694052043"
+        clean_sid = session_id
+        if "@" in session_id:
+            user_part = session_id.split("@")[0]
+            if "_" in user_part:
+                clean_sid = user_part.split("_")[-1]
+
         # Call registered handlers (e.g., Telegram, WhatsApp)
         import inspect
 
@@ -214,10 +225,10 @@ class CronManager:
                     continue
 
                 if inspect.iscoroutinefunction(handler):
-                    await handler(message, user_id, session_id)
+                    await handler(message, user_id, clean_sid)
                 else:
                     # Check if it returns a coroutine (some bound methods behave this way)
-                    res = handler(message, user_id, session_id)
+                    res = handler(message, user_id, clean_sid)
                     if inspect.isawaitable(res):
                         await res
             except Exception as e:
@@ -232,7 +243,7 @@ class CronManager:
                         settings.proactive_webhook_url,
                         json={
                             "user_id": user_id,
-                            "session_id": session_id,
+                            "session_id": clean_sid,
                             "message": message,
                             "source": "angel-claw-cron",
                         },
@@ -241,9 +252,9 @@ class CronManager:
                 logger.error(f"Error sending proactive message to webhook: {e}")
 
         # Always log to console for CLI visibility if debug is on
-        logger.info(f"PROACTIVE MESSAGE to {user_id} ({session_id}): {message}")
+        logger.info(f"PROACTIVE MESSAGE to {user_id} ({clean_sid}): {message}")
         if settings.debug:
-            print(f"\n[PROACTIVE] {user_id} ({session_id}): {message}", flush=True)
+            print(f"\n[PROACTIVE] {user_id} ({clean_sid}): {message}", flush=True)
 
     async def run(self):
         logger.info("Cron worker started.")

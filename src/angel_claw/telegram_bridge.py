@@ -283,19 +283,27 @@ class TelegramBridge:
         if not self.app:
             return
 
-        # Find all chat_ids paired with this session_id
-        async with self._pairings_lock:
-            pairings_items = list(self.pairings.items())
+        # In Telegram bridge, session_id is the chat_id
+        try:
+            await self.app.bot.send_message(chat_id=session_id, text=message)
+            logger.info(f"Sent proactive message to Telegram chat {session_id}")
+        except Exception as e:
+            # Fallback: search pairings if session_id wasn't the chat_id
+            found = False
+            async with self._pairings_lock:
+                pairings_items = list(self.pairings.items())
 
-        for chat_id, paired_sid in pairings_items:
-            if paired_sid == session_id:
-                try:
-                    await self.app.bot.send_message(chat_id=chat_id, text=message)
-                    logger.info(f"Sent proactive message to Telegram chat {chat_id}")
-                except Exception as e:
-                    logger.error(
-                        f"Failed to send proactive message to Telegram chat {chat_id}: {e}"
-                    )
+            for chat_id, p_user_id in pairings_items:
+                if chat_id == session_id or p_user_id == user_id:
+                     try:
+                         await self.app.bot.send_message(chat_id=chat_id, text=message)
+                         logger.info(f"Sent proactive message to Telegram chat {chat_id} (fallback)")
+                         found = True
+                     except:
+                         pass
+            
+            if not found:
+                logger.error(f"Failed to send proactive message to Telegram session {session_id}: {e}")
 
     async def close(self):
         """Gracefully shutdown the Telegram bridge."""

@@ -409,8 +409,9 @@ class WhatsAppBridge:
 
         # We collect target JIDs first to avoid duplicates if possible
         target_jids = []
-        for sender_id_str, paired_sid in pairings.items():
-            if paired_sid == session_id:
+        for sender_id_str, paired_val in pairings.items():
+            # Match if sender_id is the session_id OR if the paired user matches
+            if sender_id_str == session_id or paired_val == user_id:
                 # Extra safety: skip multiline keys if they somehow made it in
                 if "\n" in str(sender_id_str):
                     continue

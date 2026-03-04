@@ -325,7 +325,7 @@ def custom_commands(db, app):
     @click.argument("email")
     @with_appcontext
     def shopyo_confirm_user(email):
-        from shopyo_auth.models import User
+        from shopyo_auth.models import User, Role
         import datetime
         
         user = User.query.filter_by(email=email).first()
@@ -335,8 +335,45 @@ def custom_commands(db, app):
             
         user.is_email_confirmed = True
         user.email_confirm_date = datetime.datetime.now()
+        
+        user_role = Role.query.filter_by(name="user").first()
+        if user_role and user_role not in user.roles:
+            user.roles.append(user_role)
+            
         db.session.commit()
-        click.echo(f"User {email} confirmed successfully.")
+        click.echo(f"User {email} confirmed and assigned 'user' role.")
+
+    @click.command("shopyo-promote-user")
+    @click.argument("email")
+    @with_appcontext
+    def shopyo_promote_user(email):
+        from shopyo_auth.models import User, Role
+        
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            click.echo(f"User with email {email} not found.")
+            return
+            
+        user.is_admin = True
+        
+        admin_role = Role.query.filter_by(name="admin").first()
+        if admin_role and admin_role not in user.roles:
+            user.roles.append(admin_role)
+            
+        db.session.commit()
+        click.echo(f"User {email} promoted to admin.")
+
+    @click.command("shopyo-list-users")
+    @with_appcontext
+    def shopyo_list_users():
+        from shopyo_auth.models import User
+        users = User.query.all()
+        click.echo(f"{'ID':<4} {'Email':<30} {'Confirmed':<10} {'Admin':<6}")
+        click.echo("-" * 55)
+        for user in users:
+            click.echo(f"{user.id:<4} {user.email:<30} {str(user.is_email_confirmed):<10} {str(user.is_admin):<6}")
 
     app.cli.add_command(shopyo_upload)
     app.cli.add_command(shopyo_confirm_user)
+    app.cli.add_command(shopyo_promote_user)
+    app.cli.add_command(shopyo_list_users)

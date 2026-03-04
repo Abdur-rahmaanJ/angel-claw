@@ -347,6 +347,14 @@ def main():
             run_shopyo_command(["shopyo-confirm-user", email])
         else:
             print("Usage: angel-claw confirm-user <email>")
+    elif len(sys.argv) > 1 and sys.argv[1] == "promote-user":
+        if len(sys.argv) > 2:
+            email = sys.argv[2]
+            run_shopyo_command(["shopyo-promote-user", email])
+        else:
+            print("Usage: angel-claw promote-user <email>")
+    elif len(sys.argv) > 1 and sys.argv[1] == "list-users":
+        run_shopyo_command(["shopyo-list-users"])
     elif len(sys.argv) > 1 and sys.argv[1] == "bridges":
         ensure_env()
         print("🪽  Angel Claw Bridge Worker starting...")

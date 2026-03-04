@@ -24,6 +24,9 @@ from .config.validator import is_config_complete
 from .config.wizard import run_wizard
 
 
+logger = logging.getLogger("angel-claw-cli")
+
+
 # Custom formatter for clean CLI progress output
 class CLIProgressFormatter(logging.Formatter):
     def format(self, record):
@@ -196,37 +199,38 @@ def run_shopyo_command(cmd_list, quiet=False):
     subprocess.run([sys.executable, manage_py] + cmd_list, cwd=str(app_dir), env=env, stdout=stdout, stderr=stderr)
 
 
-def start_web_server():
+def start_web_server(port=5000):
     """Initializes and starts the Shopyo web application."""
     ensure_env()
-    
+
     app_dir = importlib.resources.files("angel_claw").joinpath("app")
-    
+
     # Crucial: Add app_dir to sys.path so AngelClawEngine can find 'app' and 'init'
     # when running in the same process (background bridges thread)
     app_path_str = str(app_dir)
     if app_path_str not in sys.path:
         sys.path.insert(0, app_path_str)
-    
+
     # Check if DB exists in standardized path
     if not os.path.exists(settings.db_path):
         print("⚙️  Initializing database...", end="\r", flush=True)
         # Use --no-clear-migration to preserve our hand-crafted migrations
         run_shopyo_command(["initialise", "--no-clear-migration"], quiet=True)
         print("⚙️  Initializing database... Done.")
-    
-    # Always run seed to ensure admin user and roles exist with latest config
-    print("⚙️  Syncing users and roles...", end="\r", flush=True)
-    run_shopyo_command(["shopyo-seed"], quiet=True)
+
     print("⚙️  Syncing users and roles... Done.")
-    
+
+    config_name = os.environ.get("FLASK_ENV", "development")
+    from app import create_app
+    app = create_app(config_name)
+
     # Start background bridges in a separate thread
     import threading
-    def run_bridges():
+    def run_bridges(shared_app):
         # Silence all bridge logging for clean serve mode
-        logging.getLogger("angel-claw-cron").setLevel(logging.ERROR)
-        logging.getLogger("angel-claw-telegram").setLevel(logging.ERROR)
-        logging.getLogger("angel-claw-whatsapp").setLevel(logging.ERROR)
+        logging.getLogger("angel-claw-cron").setLevel(logging.INFO)
+        logging.getLogger("angel-claw-telegram").setLevel(logging.INFO)
+        logging.getLogger("angel-claw-whatsapp").setLevel(logging.INFO)
 
         # Ensure path is correct in this thread too
         app_dir = importlib.resources.files("angel_claw").joinpath("app")
@@ -236,13 +240,28 @@ def start_web_server():
 
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-        
+
         async def start_all():
-            # These must be called INSIDE the running loop
-            lane_queue.start_workers()
-            asyncio.create_task(telegram_bridge.run())
-            asyncio.create_task(whatsapp_bridge.run())
-            asyncio.create_task(cron_manager.run())
+            from .telegram_bridge import telegram_bridge
+            from .whatsapp_bridge import whatsapp_bridge
+            from .cron import cron_manager
+
+            # Inject shared app into engine for all bridges
+            telegram_bridge.engine.set_app(shared_app)
+            whatsapp_bridge.engine.set_app(shared_app)
+
+            try:
+                # These must be called INSIDE the running loop
+                logger.info("Bridge thread: starting workers and bridges")
+                lane_queue.start_workers()
+                asyncio.create_task(telegram_bridge.run())
+                asyncio.create_task(whatsapp_bridge.run())
+                asyncio.create_task(cron_manager.run())
+                logger.info("Bridge thread: tasks created")
+            except Exception as e:
+                logger.error(f"Error starting bridges: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
 
         loop.run_until_complete(start_all())
         try:
@@ -250,22 +269,22 @@ def start_web_server():
         except Exception as e:
             logger.error(f"Fatal error in bridge thread: {e}", exc_info=True)
 
-    bridge_thread = threading.Thread(target=run_bridges, daemon=True)
+    bridge_thread = threading.Thread(target=run_bridges, args=(app,), daemon=True)
     bridge_thread.start()
 
     console = Console()
-    
+
     table = Table.grid(padding=(0, 1))
     table.add_column(style="cyan")
     table.add_column(style="white")
-    
-    table.add_row("🔗  URL:", "http://127.0.0.1:5000")
+
+    table.add_row("🔗  URL:", f"http://127.0.0.1:{port}")
     table.add_row("👤  User:", "admin@admin.com")
     table.add_row("🔑  Pass:", "admin")
     table.add_row("", "")
     table.add_row("🤖  Bridges:", "[green]active in background[/green]")
     table.add_row("⏹️   Stop:", "[bold red]Ctrl+C[/bold red]")
-    
+
     dashboard = Panel(
         table,
         title="[bold green]🪽 Angel Claw[/bold green]",
@@ -274,15 +293,13 @@ def start_web_server():
         border_style="bright_blue",
         padding=(1, 4)
     )
-    
+
     console.print("\n")
     console.print(dashboard)
     console.print("\n")
-    
-    # Force quiet on shopyo run
-    run_shopyo_command(["run"], quiet=False)
 
-
+    # Start the Flask development server directly
+    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":
         if "--reconfigure" in sys.argv:
@@ -300,7 +317,15 @@ def main():
 
         asyncio.run(interactive_chat(model=model_override, api_base=api_base_override))
     elif len(sys.argv) > 1 and sys.argv[1] == "serve":
-        start_web_server()
+        port = 5000
+        for i, arg in enumerate(sys.argv):
+            if (arg == "--port" or arg == "-p") and i + 1 < len(sys.argv):
+                try:
+                    port = int(sys.argv[i + 1])
+                except ValueError:
+                    print(f"Error: Invalid port number '{sys.argv[i + 1]}'")
+                    sys.exit(1)
+        start_web_server(port=port)
     elif len(sys.argv) > 1 and sys.argv[1] == "tutorial":
         ensure_env()
         # Tutorial implementation will go here
@@ -329,6 +354,10 @@ def main():
         print("⏹️   Stop with Ctrl+C\n")
 
         async def run_all_bridges():
+            from .telegram_bridge import telegram_bridge
+            from .whatsapp_bridge import whatsapp_bridge
+            from .cron import cron_manager
+            
             lane_queue.start_workers()
             await asyncio.gather(
                 telegram_bridge.run(),

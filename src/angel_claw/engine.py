@@ -3,6 +3,7 @@ import logging
 import os
 import json
 import inspect
+import asyncio
 from pathlib import Path
 from datetime import datetime, UTC
 from typing import List, Optional, Dict, Any
@@ -25,59 +26,81 @@ litellm.add_disable_loading_cost_map = True
 logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
 logging.getLogger("litellm").setLevel(logging.CRITICAL)
 
+
 class AngelClawEngine:
     def __init__(self):
-        # Global skill manager (can be shared or instantiated per user if isolation requires custom skills)
         internal_skills = os.path.join(os.path.dirname(__file__), "skills")
         local_skills = os.path.join(os.getcwd(), "skills")
         self.skill_manager = SkillManager([internal_skills, local_skills])
         self.soul = self._load_soul()
-        # In-memory history for now, should eventually be persisted in DB or user-specific files
         self._histories: Dict[str, List[Message]] = {}
+        self._histories_lock = asyncio.Lock()
         self._cached_app = None
         import threading
+
         self._app_lock = threading.Lock()
 
     def _load_soul(self) -> str:
         # Search for SOUL.md in current dir, then in src parent
         search_paths = [
             Path("SOUL.md"),
-            Path(__file__).parent.parent.parent / "SOUL.md"
+            Path(__file__).parent.parent.parent / "SOUL.md",
         ]
-        
+
         for path in search_paths:
             if path.exists():
                 with open(path, "r") as f:
                     return f.read()
-                    
+
         return "# Angel Claw Soul\nDefault soul content..."
 
     def _get_user_history(self, user_id: str, session_id: str) -> List[Message]:
         key = f"{user_id}:{session_id}"
-        if key not in self._histories:
-            self._histories[key] = []
-        return self._histories[key]
-    
+        return self._histories.setdefault(key, [])
+
+    async def _get_user_history_async(
+        self, user_id: str, session_id: str
+    ) -> List[Message]:
+        key = f"{user_id}:{session_id}"
+        async with self._histories_lock:
+            return self._histories.setdefault(key, [])
+
+    def set_app(self, app):
+        with self._app_lock:
+            self._cached_app = app
+
     def _app_context(self):
         if settings.auth_mode == "shopyo":
             try:
                 from flask import has_app_context, current_app
+
                 if has_app_context():
+                    # If we are in a flask request, use that context
                     return current_app.app_context()
             except ImportError:
                 pass
 
             with self._app_lock:
-                if self._cached_app is None:
-                    try:
-                        from app import create_app
-                        # Fallback to current config if possible, else production
-                        config_name = os.environ.get("FLASK_ENV", "production")
-                        self._cached_app = create_app(config_name) 
-                    except ImportError as e:
-                        logger.error(f"Engine could not import 'app': {e}. Ensure sys.path is correct.")
-                        return None
-                return self._cached_app.app_context()
+                if self._cached_app:
+                    return self._cached_app.app_context()
+
+                logger.info(
+                    "Engine: No app context available and no cached app. Creating one."
+                )
+                try:
+                    from app import create_app
+
+                    config_name = os.environ.get("FLASK_ENV", "production")
+                    self._cached_app = create_app(config_name)
+                    with self._cached_app.app_context():
+                        from init import db
+                        import modules.agent.models
+
+                        db.create_all()
+                    return self._cached_app.app_context()
+                except Exception as e:
+                    logger.error(f"Engine: Failed to create fallback app context: {e}")
+                    return None
         return None
 
     def user_root(self, user_id: str) -> Path:
@@ -86,47 +109,47 @@ class AngelClawEngine:
     def _ensure_channel(self, context: UserContext):
         if settings.auth_mode == "shopyo":
             ctx = self._app_context()
-            if not ctx: return
-            
+            if not ctx:
+                return
+
             with ctx:
                 try:
                     # Use absolute imports for Shopyo environment
                     from modules.agent.models import Channel
                     from init import db
-                    
+
                     channel = Channel.query.filter_by(
                         channel_type=context.channel_type,
-                        channel_identifier=context.channel_identifier
+                        channel_identifier=context.channel_identifier,
                     ).first()
-                    
+
                     if not channel:
                         channel = Channel(
                             user_id=context.user_id,
                             channel_type=context.channel_type,
-                            channel_identifier=context.channel_identifier
+                            channel_identifier=context.channel_identifier,
                         )
                         db.session.add(channel)
                     else:
                         channel.last_seen_at = datetime.now(UTC)
-                        channel.user_id = context.user_id 
-                    
+                        channel.user_id = context.user_id
+
                     db.session.commit()
                 except Exception as e:
                     logger.error(f"Error ensuring channel: {e}")
 
     async def execute(self, context: UserContext, message: str) -> EngineResponse:
-        # Ensure channel record exists
         self._ensure_channel(context)
-        
-        # Ensure MCP Manager is connected
+
         if not mcp_manager.is_connected:
             await mcp_manager.connect()
 
-        session_id = context.channel_identifier # For web, this could be session_id
+        session_id = context.channel_identifier
         user_id = context.user_id
-        
+
         memos = memory_manager.get_memos(user_id, session_id)
-        history = self._get_user_history(user_id, session_id)
+        async with self._histories_lock:
+            history = self._histories.setdefault(f"{user_id}:{session_id}", [])
 
         # 1. Retrieval
         last_turn = history[-1].content if history else ""
@@ -135,7 +158,7 @@ class AngelClawEngine:
             retrieval_query = f"{last_turn} -> {message}"
 
         recent_history = history[-4:] if len(history) >= 4 else history
-        
+
         memory_context = memos.process(
             f"Retrieve context for: {retrieval_query}", user=context.email
         )
@@ -160,7 +183,7 @@ class AngelClawEngine:
         # 3. Call LLM
         assistant_content = ""
         tool_calls_list = []
-        
+
         while True:
             tools = self.skill_manager.get_tool_definitions()
             mcp_tools = await mcp_manager.get_tool_definitions()
@@ -177,7 +200,7 @@ class AngelClawEngine:
 
             response_message = response.choices[0].message
             msg_dict = {"role": "assistant", "content": response_message.content}
-            
+
             if response_message.tool_calls:
                 msg_dict["tool_calls"] = [
                     {
@@ -212,25 +235,28 @@ class AngelClawEngine:
                     # We pass session_id as channel_identifier for now to maintain compat with existing skills
                     sig = inspect.signature(function_to_call)
                     if "session_id" in sig.parameters:
-                         if "session_id" not in function_args:
-                             function_args["session_id"] = session_id
-                    
-                    if "user_id" in sig.parameters:
-                         if "user_id" not in function_args:
-                             function_args["user_id"] = user_id
+                        if "session_id" not in function_args:
+                            function_args["session_id"] = session_id
 
+                    if "user_id" in sig.parameters:
+                        if "user_id" not in function_args:
+                            function_args["user_id"] = user_id
 
                     try:
                         ctx = self._app_context()
                         if ctx:
                             with ctx:
                                 if inspect.iscoroutinefunction(function_to_call):
-                                    function_result = await function_to_call(**function_args)
+                                    function_result = await function_to_call(
+                                        **function_args
+                                    )
                                 else:
                                     function_result = function_to_call(**function_args)
                         else:
                             if inspect.iscoroutinefunction(function_to_call):
-                                function_result = await function_to_call(**function_args)
+                                function_result = await function_to_call(
+                                    **function_args
+                                )
                             else:
                                 function_result = function_to_call(**function_args)
                     except Exception as e:
@@ -252,8 +278,9 @@ class AngelClawEngine:
                 )
 
         # 4. Update history
-        history.append(Message(role=Role.USER, content=message))
-        history.append(Message(role=Role.ASSISTANT, content=assistant_content))
+        async with self._histories_lock:
+            history.append(Message(role=Role.USER, content=message))
+            history.append(Message(role=Role.ASSISTANT, content=assistant_content))
 
         # 5. Store in memory
         mem_res = memos.process(message, user=context.email)
@@ -266,192 +293,224 @@ class AngelClawEngine:
         # Log chat
         chat_logger.log(f"{user_id}:{session_id}", message, assistant_content)
 
-        return EngineResponse(content=assistant_content, tool_calls=tool_calls_list if tool_calls_list else None)
+        return EngineResponse(
+            content=assistant_content,
+            tool_calls=tool_calls_list if tool_calls_list else None,
+        )
 
     def get_history(self, context: UserContext) -> List[Message]:
         return self._get_user_history(context.user_id, context.channel_identifier)
 
     def list_todos(self, context: UserContext) -> List[Todo]:
-        # Currently using _load_todos which expects session_id. 
+        # Currently using _load_todos which expects session_id.
         # Using channel_identifier as session_id for now, but passing user_id for isolation.
         todos_data = _load_todos(context.channel_identifier, user_id=context.user_id)
 
         todos = []
         for t in todos_data:
-            todos.append(Todo(
-                id=str(t.get("id")),
-                content=t.get("content"),
-                completed=t.get("completed", False),
-                priority=t.get("priority", "medium"),
-                due_date=t.get("due_date"),
-                created_at=t.get("created_at"),
-                completed_at=t.get("completed_at")
-            ))
+            todos.append(
+                Todo(
+                    id=str(t.get("id")),
+                    content=t.get("content"),
+                    completed=t.get("completed", False),
+                    priority=t.get("priority", "medium"),
+                    due_date=t.get("due_date"),
+                    created_at=t.get("created_at"),
+                    completed_at=t.get("completed_at"),
+                )
+            )
         return todos
 
     def create_api_key(self, context: UserContext, name: str) -> str:
         if settings.auth_mode == "shopyo":
             ctx = self._app_context()
-            if not ctx: raise RuntimeError("Could not load app context")
-            
+            if not ctx:
+                raise RuntimeError("Could not load app context")
+
             with ctx:
                 import secrets
                 import hashlib
                 from modules.agent.models import ApiKey
                 from init import db
-                
+
                 # Generate key: ac_v1_{prefix}_{random}
-                prefix = secrets.token_hex(4) # 8 chars
+                prefix = secrets.token_hex(4)  # 8 chars
                 random_part = secrets.token_urlsafe(32)
                 raw_key = f"ac_v1_{prefix}_{random_part}"
-                
+
                 key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-                
+
                 api_key = ApiKey(
-                    user_id=context.user_id,
-                    name=name,
-                    key_hash=key_hash,
-                    prefix=prefix
+                    user_id=context.user_id, name=name, key_hash=key_hash, prefix=prefix
                 )
                 db.session.add(api_key)
                 db.session.commit()
                 return raw_key
         else:
-            raise NotImplementedError("API Key creation only supported in Shopyo mode for now")
+            raise NotImplementedError(
+                "API Key creation only supported in Shopyo mode for now"
+            )
 
     def revoke_api_key(self, context: UserContext, key_id: str) -> None:
         if settings.auth_mode == "shopyo":
             ctx = self._app_context()
-            if not ctx: return
-            
+            if not ctx:
+                return
+
             with ctx:
                 from modules.agent.models import ApiKey
                 from init import db
-                
-                api_key = ApiKey.query.filter_by(id=key_id, user_id=context.user_id).first()
+
+                api_key = ApiKey.query.filter_by(
+                    id=key_id, user_id=context.user_id
+                ).first()
                 if api_key:
                     api_key.is_active = False
                     db.session.commit()
         else:
-            raise NotImplementedError("API Key revocation only supported in Shopyo mode for now")
+            raise NotImplementedError(
+                "API Key revocation only supported in Shopyo mode for now"
+            )
 
     def pair_channel(self, context: UserContext, channel_type: str, identifier: str):
         if settings.auth_mode == "shopyo":
             ctx = self._app_context()
-            if not ctx: return
-            
+            if not ctx:
+                return
+
             with ctx:
                 from modules.agent.models import Channel
                 from init import db
-                
+
                 channel = Channel.query.filter_by(
-                    channel_type=channel_type,
-                    channel_identifier=identifier
+                    channel_type=channel_type, channel_identifier=identifier
                 ).first()
-                
+
                 if not channel:
                     channel = Channel(
                         user_id=context.user_id,
                         channel_type=channel_type,
-                        channel_identifier=identifier
+                        channel_identifier=identifier,
                     )
                     db.session.add(channel)
                 else:
                     channel.user_id = context.user_id
                     channel.last_seen_at = datetime.now(UTC)
-                
+
                 db.session.commit()
         else:
-            raise NotImplementedError("Channel pairing only supported in Shopyo mode for now")
+            raise NotImplementedError(
+                "Channel pairing only supported in Shopyo mode for now"
+            )
 
     def generate_pair_token(self, context: UserContext) -> str:
         if settings.auth_mode == "shopyo":
             ctx = self._app_context()
-            if not ctx: raise RuntimeError("Could not load app context")
-            
+            if not ctx:
+                raise RuntimeError("Could not load app context")
+
             with ctx:
                 import secrets
                 from datetime import timedelta
                 from modules.agent.models import PairingToken
                 from init import db
-                
+
                 # Generate 8-digit numeric token
                 token = "".join([str(secrets.randbelow(10)) for _ in range(8)])
-                
+
                 pairing_token = PairingToken(
                     token=token,
                     user_id=context.user_id,
-                    expires_at=datetime.now() + timedelta(minutes=10)
+                    expires_at=datetime.now() + timedelta(minutes=10),
                 )
                 db.session.add(pairing_token)
                 db.session.commit()
                 return token
         else:
-            raise NotImplementedError("Pairing token generation only supported in Shopyo mode for now")
+            raise NotImplementedError(
+                "Pairing token generation only supported in Shopyo mode for now"
+            )
 
     def validate_pair_token(self, token: str) -> Optional[str]:
         """Validates a pairing token and returns the user_id if valid."""
+        logger.info(f"Engine: Validating token {token}")
         if settings.auth_mode == "shopyo":
             ctx = self._app_context()
-            if not ctx: return None
-            
+            if not ctx:
+                logger.error("Engine: Could not get app context for token validation")
+                return None
+
             with ctx:
                 from modules.agent.models import PairingToken
                 from init import db
-                
+
+                logger.info(f"Engine: Searching for token {token} in DB")
                 pairing_token = PairingToken.query.filter_by(
-                    token=token,
-                    consumed=False
+                    token=token, consumed=False
                 ).first()
-                
-                if pairing_token and pairing_token.expires_at > datetime.now():
-                    user_id = pairing_token.user_id
-                    pairing_token.consumed = True
-                    db.session.commit()
-                    return user_id
+
+                if pairing_token:
+                    logger.info(
+                        f"Engine: Found token. Expires at: {pairing_token.expires_at}"
+                    )
+                    if pairing_token.expires_at > datetime.now():
+                        user_id = pairing_token.user_id
+                        pairing_token.consumed = True
+                        db.session.commit()
+                        logger.info(f"Engine: Token valid for user {user_id}")
+                        return user_id
+                    else:
+                        logger.warning("Engine: Token expired")
+                else:
+                    logger.warning("Engine: Token not found or already consumed")
                 return None
         else:
-            raise NotImplementedError("Pairing token validation only supported in Shopyo mode for now")
-
+            raise NotImplementedError(
+                "Pairing token validation only supported in Shopyo mode for now"
+            )
 
     def validate_api_key(self, raw_key: str) -> Optional[UserContext]:
         if settings.auth_mode == "shopyo":
             ctx = self._app_context()
-            if not ctx: return None
-            
+            if not ctx:
+                return None
+
             with ctx:
                 import hashlib
                 from modules.agent.models import ApiKey
                 from shopyo_auth.models import User
-                
+
                 # Extract prefix: ac_v1_{prefix}_{random}
                 parts = raw_key.split("_")
                 if len(parts) < 4:
                     return None
                 prefix = parts[2]
-                
+
                 key_hash = hashlib.sha256(raw_key.encode()).hexdigest()
-                
+
                 api_key = ApiKey.query.filter_by(
-                    prefix=prefix,
-                    key_hash=key_hash,
-                    is_active=True
+                    prefix=prefix, key_hash=key_hash, is_active=True
                 ).first()
-                
+
                 if api_key:
                     user = User.query.get(api_key.user_id)
                     if user:
                         api_key.last_used_at = datetime.now(UTC)
                         from init import db
+
                         db.session.commit()
-                        
+
                         return UserContext(
                             user_id=str(user.id),
                             email=user.email,
-                            roles=[r.name for r in user.roles] if hasattr(user, "roles") else [],
+                            roles=[r.name for r in user.roles]
+                            if hasattr(user, "roles")
+                            else [],
                             channel_type="api",
-                            channel_identifier="api-key"
+                            channel_identifier="api-key",
                         )
                 return None
         else:
-            raise NotImplementedError("API Key validation only supported in Shopyo mode for now")
+            raise NotImplementedError(
+                "API Key validation only supported in Shopyo mode for now"
+            )

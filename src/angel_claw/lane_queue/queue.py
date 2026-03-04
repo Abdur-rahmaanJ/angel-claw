@@ -27,6 +27,7 @@ class LaneQueue:
             maxlen=MAX_PROCESSED_TASKS
         )
         self._processed_ids: Set[str] = set()
+        self._processed_lock = asyncio.Lock()
         self._cleanup_interval = CLEANUP_INTERVAL_SECONDS
         self._last_cleanup = time.time()
 
@@ -51,6 +52,10 @@ class LaneQueue:
     def is_processed(self, task_id: str) -> bool:
         return task_id in self._processed_ids
 
+    async def is_processed_async(self, task_id: str) -> bool:
+        async with self._processed_lock:
+            return task_id in self._processed_ids
+
     def mark_processed(self, task_id: str):
         current_time = time.time()
         if current_time - self._last_cleanup > self._cleanup_interval:
@@ -59,6 +64,16 @@ class LaneQueue:
         if task_id not in self._processed_ids:
             self._processed_tasks.append((task_id, current_time))
             self._processed_ids.add(task_id)
+
+    async def mark_processed_async(self, task_id: str):
+        async with self._processed_lock:
+            current_time = time.time()
+            if current_time - self._last_cleanup > self._cleanup_interval:
+                self._cleanup_old_entries()
+
+            if task_id not in self._processed_ids:
+                self._processed_tasks.append((task_id, current_time))
+                self._processed_ids.add(task_id)
 
     def _cleanup_old_entries(self):
         cutoff = time.time() - CLEANUP_INTERVAL_SECONDS
@@ -103,7 +118,7 @@ class LaneWorker:
                 await asyncio.sleep(WORKER_ERROR_RETRY_DELAY)
 
     async def process_task(self, task: Task):
-        if self._queue.is_processed(task.task_id):
+        if await self._queue.is_processed_async(task.task_id):
             logger.info(f"Task {task.task_id} already processed.")
             return
 
@@ -114,7 +129,7 @@ class LaneWorker:
                     task.execute_func(task.data),
                     timeout=settings.lane_queue_task_timeout_seconds,
                 )
-                self._queue.mark_processed(task.task_id)
+                await self._queue.mark_processed_async(task.task_id)
             except asyncio.TimeoutError:
                 logger.error(f"Task {task.task_id} TIMED OUT.")
             except Exception as e:

@@ -200,9 +200,13 @@ class MCPManager:
             return f"Error: MCP Server for tool '{tool_name}' not found."
 
         session = self.sessions[server_name]
-        semaphore = self.semaphores.get(
-            server_name, asyncio.Semaphore(settings.mcp_max_concurrency)
-        )
+
+        # Get existing semaphore or create one with default limit if not found
+        if server_name not in self.semaphores:
+            self.semaphores[server_name] = asyncio.Semaphore(
+                settings.mcp_max_concurrency
+            )
+        semaphore = self.semaphores[server_name]
 
         try:
             async with semaphore:

@@ -4,7 +4,7 @@ from angel_claw.skills.manager import skill
 from angel_claw.config import settings
 
 @skill
-def send_internal_message(
+async def send_internal_message(
     to_user: str, 
     content: str, 
     user_id: str
@@ -43,6 +43,16 @@ def send_internal_message(
             )
             db.session.add(new_msg)
             db.session.commit()
+            
+            # Send proactive notification to the recipient via bridges
+            try:
+                from angel_claw.cron import cron_manager
+                sender_name = sender.email
+                notification = f"📬 [Internal Message] From: {sender_name}\n\n{content}"
+                await cron_manager._send_proactive_message(notification, str(recipient.id))
+            except Exception as e:
+                # Log but don't fail the primary delivery
+                pass
             
             return f"✅ Internal message delivered to {to_user}."
         except Exception as e:

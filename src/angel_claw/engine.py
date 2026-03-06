@@ -207,10 +207,23 @@ class AngelClawEngine:
         # Audit: Resource Exhaustion Defense - Enforce Turn Limits
         turns = 0
         MAX_TURNS = 10
+        MAX_TOOLS_PER_TURN = 20
+
+        # Audit: Recursive Workflow Defense - Depth Tracking
+        # We can pass depth in the message or context. 
+        # For simplicity, we detect [RECURSION_DEPTH: X] in the message
+        import re
+        depth_match = re.search(r"\[RECURSION_DEPTH: (\d+)\]", message)
+        current_depth = int(depth_match.group(1)) if depth_match else 0
+        MAX_RECURSION_DEPTH = 3
+
+        if current_depth > MAX_RECURSION_DEPTH:
+            logger.warning(f"Max recursion depth reached ({MAX_RECURSION_DEPTH}) for user {user_id}")
+            return EngineResponse(content="[SYSTEM: Maximum recursive workflow depth reached. Execution halted to prevent infinite loops.]")
 
         while turns < MAX_TURNS:
             turns += 1
-            
+
             # Use isolated and unified tools from runtime
             all_tools = await runtime.get_tool_definitions()
 
@@ -227,6 +240,11 @@ class AngelClawEngine:
             msg_dict = {"role": "assistant", "content": response_message.content}
 
             if response_message.tool_calls:
+                # Audit: Tool Spam Defense
+                if len(response_message.tool_calls) > MAX_TOOLS_PER_TURN:
+                    logger.warning(f"Tool spam detected: {len(response_message.tool_calls)} calls in one turn. Truncating.")
+                    response_message.tool_calls = response_message.tool_calls[:MAX_TOOLS_PER_TURN]
+
                 msg_dict["tool_calls"] = [
                     {
                         "id": tc.id,
@@ -254,11 +272,16 @@ class AngelClawEngine:
                 except json.JSONDecodeError:
                     function_args = {}
 
+                # Audit: Recursive Workflow Defense - Inject depth into internal messages
+                if function_name == "send_internal_message":
+                    # Append depth marker to the content so the recipient's agent can track it
+                    original_content = function_args.get("content", "")
+                    function_args["content"] = f"{original_content}\n\n[RECURSION_DEPTH: {current_depth + 1}]"
+
                 # Use the unified runtime caller which handles sandboxing and context injection
                 function_result = await runtime.call_tool(
                     function_name, function_args, session_id
                 )
-
                 messages.append(
                     {
                         "tool_call_id": tool_call.id,

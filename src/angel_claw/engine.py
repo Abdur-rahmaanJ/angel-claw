@@ -33,8 +33,6 @@ class AngelClawEngine:
         self._cached_app = None
         import threading
         self._app_lock = threading.Lock()
-        # Start the runtime manager cleanup task
-        asyncio.create_task(runtime_manager.start_cleanup_task())
 
     def _get_user_history(self, user_id: str, session_id: str) -> List[Message]:
         # This is now a sync bridge, but it will be slightly less efficient.
@@ -147,6 +145,9 @@ class AngelClawEngine:
 
     async def execute(self, context: UserContext, message: str) -> EngineResponse:
         self._ensure_channel(context)
+        
+        # Ensure cleanup task is running
+        await runtime_manager.start_cleanup_task()
 
         if not mcp_manager.is_connected:
             await mcp_manager.connect()

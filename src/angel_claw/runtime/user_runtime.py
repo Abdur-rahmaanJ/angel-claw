@@ -1,0 +1,62 @@
+import logging
+import asyncio
+from pathlib import Path
+from typing import List, Optional, Dict, Any
+
+from ..models import Message, UserContext, EngineResponse
+from ..memory import memory_manager
+from .persistence import PersistentHistory, UserVault
+from .registry import TieredSkillRegistry
+
+logger = logging.getLogger("angel-claw-runtime")
+
+class UserRuntime:
+    """Isolated runtime for a single user."""
+    def __init__(self, context: UserContext):
+        self.context = context
+        self.history = PersistentHistory(context)
+        self.vault = UserVault(context)
+        self.skills = TieredSkillRegistry(context)
+        
+        # Soul Hierarchy: User SOUL.md > Global SOUL.md
+        self.soul = self._load_soul()
+        
+        # Last active timestamp for LRU
+        from datetime import datetime, UTC
+        self.last_active = datetime.now(UTC)
+
+    def _load_soul(self) -> str:
+        from ..utils import get_user_root
+        user_root = get_user_root(self.context.user_id)
+        user_soul = user_root / "SOUL.md"
+        
+        if user_soul.exists():
+            with open(user_soul, "r") as f:
+                return f.read()
+        
+        # Fallback to global SOUL.md
+        search_paths = [
+            Path("SOUL.md"),
+            Path(__file__).parent.parent.parent.parent / "SOUL.md",
+        ]
+
+        for path in search_paths:
+            if path.exists():
+                with open(path, "r") as f:
+                    return f.read()
+
+        return "# Angel Claw Soul\nDefault soul content..."
+
+    def mark_active(self):
+        from datetime import datetime, UTC
+        self.last_active = datetime.now(UTC)
+
+    def get_memos(self, session_id: str):
+        # Delegate to memory manager but with user isolation
+        return memory_manager.get_memos(self.context.user_id, session_id)
+
+    async def chat_history(self, session_id: str) -> List[Message]:
+        return self.history.get_history(session_id)
+
+    def add_message(self, session_id: str, message: Message):
+        self.history.add_message(session_id, message)

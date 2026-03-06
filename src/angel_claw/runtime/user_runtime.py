@@ -70,6 +70,12 @@ class UserRuntime:
         from datetime import datetime, UTC
         self.last_active = datetime.now(UTC)
 
+    async def get_tool_definitions(self) -> List[Dict[str, Any]]:
+        return await self.skills.get_tool_definitions()
+
+    async def call_tool(self, name: str, arguments: Dict[str, Any], session_id: str) -> str:
+        return await self.skills.call_tool(name, arguments, session_id)
+
     def get_memos(self, session_id: str):
         # Delegate to memory manager but with user isolation
         return memory_manager.get_memos(self.context.user_id, session_id)

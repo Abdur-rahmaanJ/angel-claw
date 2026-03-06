@@ -1,4 +1,5 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request, Response, Depends, Security
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from .models import AgentRequest, AgentResponse, UserContext
 from .engine import AngelClawEngine
 from .cron import cron_manager
@@ -8,10 +9,22 @@ from .mcp_manager import mcp_manager
 from .lane_queue.queue import lane_queue
 from .lane_queue.process import process_chat_request
 from typing import Dict, Any, Optional
-from fastapi import Request, Response
 from contextlib import asynccontextmanager
 import uvicorn
 import asyncio
+from .config import settings
+
+security = HTTPBearer()
+engine = AngelClawEngine()
+
+async def get_current_user(auth: HTTPAuthorizationCredentials = Security(security)) -> UserContext:
+    if not auth:
+        raise HTTPException(status_code=401, detail="Missing authorization header")
+        
+    context = engine.validate_api_key(auth.credentials)
+    if not context:
+        raise HTTPException(status_code=401, detail="Invalid or inactive API key")
+    return context
 
 
 @asynccontextmanager
@@ -31,13 +44,15 @@ app = FastAPI(title="Angel Claw Gateway", lifespan=lifespan)
 
 
 @app.post("/chat", response_model=AgentResponse)
-async def chat(request: AgentRequest):
+async def chat(request: AgentRequest, context: UserContext = Depends(get_current_user)):
     try:
-        response_content = await process_chat_request(request)
+        response_content = await process_chat_request(request, context)
         if response_content.startswith("Error:"):
             raise HTTPException(status_code=500, detail=response_content)
 
         return AgentResponse(response=response_content, session_id=request.session_id)
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -69,7 +84,6 @@ async def handle_webhook(payload: Dict[str, Any], request: Request):
     api_base = payload.get("api_base")
 
     try:
-        engine = AngelClawEngine()
         context = UserContext(
             user_id=user_id,
             email=f"{user_id}@angelclaw.local",

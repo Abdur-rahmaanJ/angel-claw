@@ -18,6 +18,7 @@ from .skills.todo import _load_todos
 
 from .utils import get_user_root
 from .runtime.manager import runtime_manager
+from .runtime.cache import cache
 
 logger = logging.getLogger("angel-claw-engine")
 
@@ -231,14 +232,61 @@ class AngelClawEngine:
             # Use isolated and unified tools from runtime
             all_tools = await runtime.get_tool_definitions()
 
-            response = await litellm.acompletion(
-                model=model,
-                messages=messages,
-                api_key=api_key,
-                api_base=api_base,
-                tools=all_tools if all_tools else None,
-                tool_choice="auto" if all_tools else None,
-            )
+            # Audit: Scalability - LLM Caching
+            cache_key = None
+            response = None
+            
+            if cache:
+                cache_key = json.dumps({
+                    "model": model,
+                    "messages": messages,
+                    "tools": all_tools,
+                    "api_base": api_base
+                }, sort_keys=True)
+                cached_res = await cache.get(cache_key)
+                if cached_res:
+                    logger.info(f"Using cached LLM response for user {user_id}")
+                    # Reconstruct a pseudo-response object for compatibility
+                    class CachedResponse:
+                        def __init__(self, data):
+                            self.choices = [type('Choice', (), {
+                                'message': type('Msg', (), {
+                                    'content': data['content'],
+                                    'tool_calls': [type('TC', (), {
+                                        'id': tc['id'],
+                                        'type': tc['type'],
+                                        'function': type('Fn', (), tc['function'])()
+                                    })() for tc in data['tool_calls']] if data['tool_calls'] else None
+                                })()
+                            })()]
+                    response = CachedResponse(cached_res)
+
+            if not response:
+                response = await litellm.acompletion(
+                    model=model,
+                    messages=messages,
+                    api_key=api_key,
+                    api_base=api_base,
+                    tools=all_tools if all_tools else None,
+                    tool_choice="auto" if all_tools else None,
+                )
+                
+                # Cache the result if caching is enabled
+                if cache and cache_key:
+                    resp_message = response.choices[0].message
+                    await cache.set(cache_key, {
+                        "content": resp_message.content,
+                        "tool_calls": [
+                            {
+                                "id": tc.id,
+                                "type": tc.type,
+                                "function": {
+                                    "name": tc.function.name,
+                                    "arguments": tc.function.arguments,
+                                }
+                            } for tc in resp_message.tool_calls
+                        ] if resp_message.tool_calls else None
+                    })
 
             response_message = response.choices[0].message
             msg_dict = {"role": "assistant", "content": response_message.content}

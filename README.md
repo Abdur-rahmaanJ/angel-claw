@@ -103,8 +103,9 @@ Control your AI from anywhere with secure pairing.
 
 ### Telegram & WhatsApp
 1. Generate a pairing token on the Web Dashboard.
-2. Message your bot: `/pair <your-token>`.
-3. The bridge routes messages to your specific **UserRuntime**.
+2. For WhatsApp: Run `angel-claw login-whatsapp` and scan the QR code.
+3. Message your bot: `/pair <your-token>`.
+4. The bridge routes messages to your specific **UserRuntime**.
 
 ---
 

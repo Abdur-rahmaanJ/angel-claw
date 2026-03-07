@@ -2,6 +2,37 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.10.1] - 2026-03-06
+
+### Added
+
+- **Multi-Tenant Agent OS Architecture**:
+  - **Isolated UserRuntimes**: Dynamic instantiation of agent environments per user, ensuring zero state leakage.
+  - **Runtime Manager (LRU)**: Efficient resource management with automatic eviction of idle runtimes from memory.
+  - **Tiered Skill Registry**: Clean separation between platform-wide read-only skills and user-specific custom skills.
+  - **Fair-Share Scheduling**: Per-user task lanes in the global queue to prevent resource starvation by single tenants.
+- **Encrypted Persistence**:
+  - **User Vaults**: Encrypted storage (AES-128 Fernet) for per-user API keys and secrets, enabling "Bring Your Own Key" (BYOK).
+  - **Private History**: Dedicated SQLite `history.db` per user for high-performance, isolated chat logging.
+  - **Database Integration**: New Shopyo models for `UserSetting` and `UserVaultSecret`.
+- **Security Hardening (Audit Remediation)**:
+  - **Reasoning Safeguards**: Hard caps on reasoning turns (`MAX_TURNS=10`) and tool calls (`MAX_TOOLS_PER_TURN=20`).
+  - **Recursive Workflow Shield**: Deterministic tracking and termination of agent-to-agent communication loops.
+  - **Unified Sandboxing**: Consolidated all tool execution (Platform & MCP) into a sandboxed environment with strict 30s-45s timeouts.
+  - **Prompt Injection Defense**: Explicit "Untrusted" labeling for RAG context and delimiter stripping to prevent escape attacks.
+  - **Identity Enforcement**: Mandatory API Key authentication for both the Gateway and the CLI.
+
+### Fixed
+
+- Resolved `RuntimeError` during startup by deferring background task creation to an active event loop.
+- Fixed Flask async view compatibility issues using `asgiref.sync.async_to_sync`.
+- Improved resource cleanup in the `RuntimeManager` background loop.
+
+### Changed
+
+- **README Refinement**: Complete overhaul to reflect the new "Agent OS" vision and comprehensive feature set.
+- **Dependency Update**: Added `cryptography` and `asgiref` to core requirements.
+
 ## [0.9.0] - 2026-02-26
 
 ### Added

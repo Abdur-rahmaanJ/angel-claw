@@ -4,24 +4,26 @@ import asyncio
 import concurrent.futures
 import inspect
 import json
+import subprocess
 from typing import List, Dict, Any, Callable, Optional
 from ..skills.manager import SkillManager
 from ..models import UserContext
 from ..mcp_manager import mcp_manager
+from ..config import settings
 
 logger = logging.getLogger("angel-claw-registry")
 
 class TieredSkillRegistry:
-    """Manages global and user-specific skills with execution sandboxing."""
+    """Manages global and user-specific skills with execution sandboxing (Threads or Docker)."""
     def __init__(self, context: UserContext):
         self.context = context
         from ..utils import get_user_root
-        user_root = get_user_root(context.user_id)
+        self.user_root = get_user_root(context.user_id)
         
         # Paths
         internal_skills = os.path.join(os.path.dirname(os.path.dirname(__file__)), "skills")
         local_skills = os.path.join(os.getcwd(), "skills")
-        user_skills = user_root / "skills"
+        user_skills = self.user_root / "skills"
         user_skills.mkdir(parents=True, exist_ok=True)
 
         self.manager = SkillManager([
@@ -44,7 +46,6 @@ class TieredSkillRegistry:
     @property
     def skills(self) -> Dict[str, Callable]:
         # DEPRECATED: Use call_tool instead for better sandboxing
-        # Wrap all skills in a sandboxed execution bridge
         sandboxed_skills = {}
         for name, func in self.manager.skills.items():
             sandboxed_skills[name] = self._make_sandboxed(func)
@@ -65,16 +66,22 @@ class TieredSkillRegistry:
                 if "user_id" not in arguments:
                     arguments["user_id"] = self.context.user_id
 
-            sandboxed_func = self._make_sandboxed(func)
-            result = await sandboxed_func(**arguments)
+            # Phase 2: Docker Sandboxing (if enabled)
+            if settings.docker_sandboxing_enabled:
+                result = await self._call_in_docker(name, arguments)
+            else:
+                # Phase 1: Thread Sandbox
+                sandboxed_func = self._make_sandboxed(func)
+                result = await sandboxed_func(**arguments)
+                
             return self._sanitize_output(str(result))
             
         elif name in mcp_manager.tool_to_server:
-            # Sandbox MCP calls as well
+            # Sandbox MCP calls
             try:
                 result = await asyncio.wait_for(
                     mcp_manager.call_tool(name, arguments),
-                    timeout=45 # MCP might need more time
+                    timeout=45 
                 )
                 return self._sanitize_output(str(result))
             except asyncio.TimeoutError:
@@ -83,6 +90,67 @@ class TieredSkillRegistry:
                 return f"Error executing MCP tool '{name}': {e}"
         else:
             return f"Error: Tool '{name}' not found."
+
+    async def _call_in_docker(self, name: str, arguments: Dict[str, Any]) -> str:
+        """Executes a skill inside a transient Docker container (optionally with gVisor)."""
+        # Find which file contains this skill
+        skill_file = None
+        for d in self.manager.skills_dirs:
+            if not os.path.exists(d): continue
+            for f in os.listdir(d):
+                if f.endswith(".py"):
+                    # This is a bit slow but necessary if we don't track file-to-func mapping
+                    with open(os.path.join(d, f), 'r') as file_content:
+                        if f"def {name}" in file_content.read():
+                            skill_file = os.path.abspath(os.path.join(d, f))
+                            break
+            if skill_file: break
+
+        if not skill_file:
+            return f"Error: Could not locate source file for skill '{name}'"
+
+        runner_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "container_runner.py"))
+        
+        # Docker Command Construction
+        cmd = [
+            "docker", "run", "--rm",
+            "--network", "none",
+            "--memory", "128m",
+            "--cpus", "0.5",
+            "--runtime", settings.docker_runtime,
+            "-v", f"{skill_file}:/app/skill.py:ro",
+            "-v", f"{runner_path}:/app/runner.py:ro",
+            settings.docker_image,
+            "python", "/app/runner.py", "/app/skill.py", name, json.dumps(arguments)
+        ]
+
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=settings.docker_timeout)
+            
+            if process.returncode != 0:
+                logger.error(f"Docker execution failed: {stderr.decode()}")
+                return f"Error: Sandbox execution failed: {stderr.decode()}"
+            
+            output = stdout.decode().strip()
+            try:
+                data = json.loads(output)
+                if data["status"] == "success":
+                    return data["result"]
+                else:
+                    return f"Error: {data['message']}"
+            except json.JSONDecodeError:
+                return f"Error: Invalid output from sandbox: {output}"
+
+        except asyncio.TimeoutError:
+            return "Error: Skill execution timed out in Docker sandbox."
+        except Exception as e:
+            logger.error(f"Docker sandbox error: {e}")
+            return f"Error: Sandbox infrastructure failure: {e}"
 
     def _sanitize_output(self, output: str) -> str:
         """Sanitizes tool output to prevent prompt injection from external sources."""

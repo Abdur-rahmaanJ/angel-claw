@@ -102,5 +102,11 @@ class Settings(BaseSettings):
     # Google Calendar Settings (Service Account JSON)
     google_client_id: Optional[str] = Field(None, validation_alias="GOOGLE_CLIENT_ID")
 
+    # Sandboxing (SaaS Grade)
+    docker_sandboxing_enabled: bool = Field(False, validation_alias="DOCKER_SANDBOXING_ENABLED")
+    docker_runtime: str = Field("runc", validation_alias="DOCKER_RUNTIME") # Use "runsc" for gVisor
+    docker_image: str = Field("python:3.11-slim", validation_alias="DOCKER_IMAGE")
+    docker_timeout: int = Field(30, validation_alias="DOCKER_TIMEOUT")
+
 
 settings = Settings()

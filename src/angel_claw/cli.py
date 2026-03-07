@@ -115,6 +115,21 @@ async def interactive_chat(model: str = None, api_base: str = None):
             print(f"\r\n[REMINDER] {message}\nYou: ", end="", flush=True)
 
     cron_manager.register_proactive_handler(cli_proactive_handler)
+    
+    # Audit: Multi-Tenant Isolation - Verify CLI Identity
+    from .engine import AngelClawEngine
+    engine = AngelClawEngine()
+    
+    cli_key = os.environ.get("CLI_API_KEY")
+    if not cli_key:
+        print("❌ Error: CLI_API_KEY not found in .env")
+        print("Please generate an API key in the web dashboard and add it to your .env as CLI_API_KEY.")
+        return
+
+    context = engine.validate_api_key(cli_key)
+    if not context:
+        print("❌ Error: Invalid or inactive CLI_API_KEY.")
+        return
 
     # Start background workers silently
     lane_queue.start_workers()
@@ -126,6 +141,7 @@ async def interactive_chat(model: str = None, api_base: str = None):
     session_id = "cli-default"
 
     print(f"\n--- Angel Claw CLI Chat ---")
+    print(f"User: {context.email}")
     print(f"Model: {model or settings.model}")
     if api_base or settings.api_base:
         print(f"API Base: {api_base or settings.api_base}")
@@ -146,14 +162,14 @@ async def interactive_chat(model: str = None, api_base: str = None):
                 continue
 
             print("Thinking...", end="\r", flush=True)
-            request = AgentRequest(
+            # Use the verified context for the request
+            response = await process_chat_request(AgentRequest(
                 session_id=session_id,
                 message=user_input,
-                user_id="cli",
+                user_id=context.user_id,
                 model=model,
                 api_base=api_base,
-            )
-            response = await process_chat_request(request)
+            ), context)
             # Clear the "thinking" line if it was still there
             print(" " * 40, end="\r", flush=True)
             print(f"Assistant: {response}\n")

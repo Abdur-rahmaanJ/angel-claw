@@ -17,17 +17,8 @@ _events_lock = asyncio.Lock()
 engine = AngelClawEngine()
 
 
-async def agent_chat_wrapper(request: AgentRequest):
+async def agent_chat_wrapper(request: AgentRequest, context: UserContext):
     try:
-        # Create a UserContext from the request
-        # For now, we assume the request.user_id is the canonical user_id
-        context = UserContext(
-            user_id=request.user_id,
-            email=f"{request.user_id}@angelclaw.local",  # Placeholder
-            roles=["user"],
-            channel_type="cli",  # Default for now
-            channel_identifier=request.session_id,
-        )
         response = await engine.execute(context, request.message)
         return response.content
     except Exception as e:
@@ -35,15 +26,16 @@ async def agent_chat_wrapper(request: AgentRequest):
         return f"Error: {str(e)}"
 
 
-async def process_chat_request(request: AgentRequest) -> str:
+async def process_chat_request(request: AgentRequest, context: UserContext) -> str:
     req_id = str(uuid.uuid4())
     event = asyncio.Event()
     async with _events_lock:
         events[req_id] = event
 
-    async def execute_and_set_result(task_data: AgentRequest):
+    async def execute_and_set_result(task_data: Dict[str, Any]):
         try:
-            result = await agent_chat_wrapper(task_data)
+            # task_data now contains both request and context
+            result = await agent_chat_wrapper(task_data["request"], task_data["context"])
             async with _results_lock:
                 results[req_id] = result
         except Exception as e:
@@ -57,7 +49,7 @@ async def process_chat_request(request: AgentRequest) -> str:
     task = Task(
         task_id=req_id,
         lane_key=request.session_id,
-        data=request,
+        data={"request": request, "context": context},
         execute_func=execute_and_set_result,
     )
 

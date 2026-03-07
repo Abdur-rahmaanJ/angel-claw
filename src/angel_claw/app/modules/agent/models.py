@@ -46,3 +46,26 @@ class InternalMessage(PkModel):
     content = db.Column(db.Text, nullable=False)
     is_read = db.Column(db.Boolean(), default=False)
     created_at = db.Column(db.DateTime, default=lambda: datetime.now())
+
+class UserSetting(PkModel):
+    __tablename__ = "user_settings"
+    
+    user_id = db.Column(db.String(100), nullable=False)
+    key = db.Column(db.String(100), nullable=False)
+    value = db.Column(db.Text, nullable=True)
+    category = db.Column(db.String(50), default="general") # llm, scheduler, ui, etc
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(), onupdate=lambda: datetime.now())
+
+    __table_args__ = (db.UniqueConstraint("user_id", "key", name="uix_user_id_key"),)
+
+class UserVaultSecret(PkModel):
+    __tablename__ = "user_vault_secrets"
+    
+    user_id = db.Column(db.String(100), nullable=False)
+    secret_key = db.Column(db.String(100), nullable=False)
+    secret_value_encrypted = db.Column(db.LargeBinary, nullable=False)
+    description = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now())
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(), onupdate=lambda: datetime.now())
+
+    __table_args__ = (db.UniqueConstraint("user_id", "secret_key", name="uix_user_secret_key"),)

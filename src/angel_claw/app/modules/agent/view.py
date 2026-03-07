@@ -4,6 +4,7 @@ from flask import jsonify
 from flask_login import login_required
 from flask_login import current_user
 from shopyo.api.module import ModuleHelp
+from asgiref.sync import async_to_sync
 
 from angel_claw.engine import AngelClawEngine
 from angel_claw.models import UserContext
@@ -48,7 +49,7 @@ def index():
 
 @blueprint.route("/chat", methods=["POST"])
 @login_required
-async def chat():
+def chat():
     data = request.get_json()
     message = data.get("message")
     if not message:
@@ -56,7 +57,7 @@ async def chat():
     
     user_context = _build_context()
     try:
-        response = await engine.execute(user_context, message)
+        response = async_to_sync(engine.execute)(user_context, message)
         return jsonify({
             "response": response.content,
             "tool_calls": response.tool_calls

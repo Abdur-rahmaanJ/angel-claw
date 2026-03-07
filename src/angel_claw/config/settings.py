@@ -108,5 +108,19 @@ class Settings(BaseSettings):
     docker_image: str = Field("python:3.11-slim", validation_alias="DOCKER_IMAGE")
     docker_timeout: int = Field(30, validation_alias="DOCKER_TIMEOUT")
 
+    # Redis Settings (Scalability)
+    redis_enabled: bool = Field(False, validation_alias="REDIS_ENABLED")
+    redis_url: str = Field("redis://localhost:6379/0", validation_alias="REDIS_URL")
+    redis_queue_name: str = Field("angel_claw_lane_queue", validation_alias="REDIS_QUEUE_NAME")
+
+    # Database Settings (Scalability)
+    # Optional: Use a single high-performance database (Postgres/MySQL) via SQLAlchemy URI
+    # If not provided, defaults to isolated per-user SQLite files.
+    history_database_uri: Optional[str] = Field(None, validation_alias="HISTORY_DATABASE_URI")
+
+    # Caching Settings (Performance)
+    cache_enabled: bool = Field(False, validation_alias="CACHE_ENABLED")
+    cache_ttl: int = Field(3600, validation_alias="CACHE_TTL") # 1 hour default
+
 
 settings = Settings()

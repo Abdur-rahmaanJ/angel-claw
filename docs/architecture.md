@@ -12,7 +12,7 @@ Traditional agent frameworks often share state (history, memory, configuration) 
 
 The `UserRuntime` is the heartbeat of the system. Every active user has an instance of this class which manages their specific context:
 
-- **Isolated History**: A private SQLite connection to `~/.angelclaw/users/{id}/history.db`.
+- **Isolated History**: A private database connection. Supports **SQLite** (per-user file) or **PostgreSQL** (centralized table with Row-Level Security logic).
 - **Isolated Memory**: Dedicated vector database paths for `angel-recall`.
 - **Personalized Soul**: Hierarchical loading of `SOUL.md` (User-specific > Global default).
 - **Private Skills**: Access to both platform-wide tools and the user's custom `skills/` directory.
@@ -34,7 +34,15 @@ The registry manages how tools are discovered and executed:
 2.  **Custom Skills**: User-uploaded Python scripts in their workspace.
 3.  **MCP Tools**: External tools connected via the Model Context Protocol.
 
-## 4. The Request Flow
+## 4. Fair-Share Scheduler & Lane Queue
+
+Angel Claw uses a "Lane Queue" architecture to manage task execution. Each user has their own "Lane" to ensure fairness and prevent resource starvation.
+
+- **In-Memory Queue**: The default implementation for standalone or development deployments.
+- **Redis-Backed Queue (Optional)**: Enables horizontal scaling by allowing multiple Gateway or Worker nodes to share a unified task backlog.
+- **LLM Response Caching (Optional)**: Utilizes Redis to cache common LLM completions, reducing latency and API costs for repeated queries.
+
+## 5. The Request Flow
 
 When a message enters the system (e.g., from Telegram):
 

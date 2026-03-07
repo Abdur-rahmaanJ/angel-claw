@@ -214,6 +214,68 @@ class TelegramBridge:
             logger.error(f"Error in Telegram chat: {e}")
             await update.message.reply_text(f"⚠️ Error: {e}")
 
+    async def handle_photo(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        if not update.effective_chat or update.effective_chat.type != "private":
+            return
+
+        if not update.message or not update.message.photo:
+            return
+
+        chat_id = str(update.effective_chat.id)
+        logger.info(f"Handling photo from {chat_id}...")
+
+        async with self._pairings_lock:
+            user_id = self.pairings.get(chat_id)
+
+        if not user_id:
+            await update.message.reply_text(
+                "This chat is not paired. Use `/pair <token>` to start."
+            )
+            return
+
+        try:
+            # Get the largest photo
+            photo = update.message.photo[-1]
+            file = await context.bot.get_file(photo.file_id)
+            
+            # Prepare user directory
+            from .utils import get_user_root
+            user_root = get_user_root(user_id)
+            images_dir = user_root / "images"
+            images_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save file
+            file_extension = file.file_path.split(".")[-1] if "." in file.file_path else "jpg"
+            file_name = f"{photo.file_unique_id}.{file_extension}"
+            file_path = images_dir / file_name
+            
+            await file.download_to_drive(custom_path=file_path)
+            logger.info(f"Photo saved to {file_path}")
+
+            # Notify engine - we can send a special message or just the caption
+            caption = update.message.caption or ""
+            user_input = f"[Image received: {file_name}] {caption}".strip()
+
+            # Show typing indicator
+            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+            user_context = UserContext(
+                user_id=user_id,
+                email=f"telegram_{chat_id}@angelclaw.local",
+                roles=["user"],
+                channel_type="telegram",
+                channel_identifier=chat_id,
+            )
+            
+            # We can optionally pass the image path to the engine if it supports it
+            # For now, we'll just inform it via text
+            response = await self.engine.execute(user_context, user_input)
+            await update.message.reply_text(response.content)
+            
+        except Exception as e:
+            logger.error(f"Error handling Telegram photo: {e}")
+            await update.message.reply_text(f"⚠️ Error processing photo: {e}")
+
     async def run(self):
         if not self.token:
             logger.warning("TELEGRAM_TOKEN not set. Telegram bridge will not start.")
@@ -253,6 +315,9 @@ class TelegramBridge:
         self.app.add_error_handler(error_handler)
         self.app.add_handler(CommandHandler("start", self.start_cmd))
         self.app.add_handler(CommandHandler("pair", self.pair_cmd))
+        self.app.add_handler(
+            MessageHandler(filters.PHOTO, self.handle_photo)
+        )
         self.app.add_handler(
             MessageHandler(filters.TEXT & (~filters.COMMAND), self.handle_message)
         )

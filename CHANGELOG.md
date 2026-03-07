@@ -6,6 +6,15 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 
+- **Multi-Tenant Agent OS Architecture**:
+  - **Isolated UserRuntimes**: Dynamic instantiation of agent environments per user, ensuring zero state leakage.
+  - **Runtime Manager (LRU)**: Efficient resource management with automatic eviction of idle runtimes from memory (Default idle: 30 mins).
+  - **Tiered Skill Registry**: Clean separation between platform-wide read-only skills and user-specific custom skills.
+  - **Fair-Share Scheduling**: Per-user task lanes in the global queue to prevent resource starvation by single tenants.
+- **Encrypted Persistence**:
+  - **User Vaults**: Encrypted storage (AES-128 Fernet) for per-user API keys and secrets, enabling "Bring Your Own Key" (BYOK).
+  - **Private History**: Dedicated SQLite `history.db` per user for high-performance, isolated chat logging.
+  - **Database Integration**: New Shopyo models for `UserSetting` and `UserVaultSecret` to support per-user config.
 - **Security Hardening (Audit Remediation)**:
   - **Reasoning Safeguards**: Hard caps on reasoning turns (`MAX_TURNS=10`) and tool calls (`MAX_TOOLS_PER_TURN=20`).
   - **Recursive Workflow Shield**: Deterministic tracking and termination of agent-to-agent communication loops (Recursion Depth limit: 3).
@@ -21,25 +30,18 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 
+- **README Refinement**: Complete overhaul to reflect the new "Agent OS" vision and comprehensive feature set including Peer-to-Peer messaging and multi-channel login guides.
 - **Dependency Update**: Added `cryptography` and `asgiref` to core requirements.
 
-## [0.10.0] - 2026-03-06
+## [0.10.1] - 2026-03-05
 
 ### Added
+- **Internal Messaging Notification**: Proactive notification via bridges when an internal message is received.
 
-- **Multi-Tenant Agent OS Architecture**:
-  - **Isolated UserRuntimes**: Dynamic instantiation of agent environments per user, ensuring zero state leakage.
-  - **Runtime Manager (LRU)**: Efficient resource management with automatic eviction of idle runtimes from memory (Default idle: 30 mins).
-  - **Tiered Skill Registry**: Clean separation between platform-wide read-only skills and user-specific custom skills.
-  - **Fair-Share Scheduling**: Per-user task lanes in the global queue to prevent resource starvation by single tenants.
-- **Encrypted Persistence**:
-  - **User Vaults**: Encrypted storage (AES-128 Fernet) for per-user API keys and secrets, enabling "Bring Your Own Key" (BYOK).
-  - **Private History**: Dedicated SQLite `history.db` per user for high-performance, isolated chat logging.
-  - **Database Integration**: New Shopyo models for `UserSetting` and `UserVaultSecret` to support per-user config.
-
-### Changed
-
-- **README Refinement**: Complete overhaul to reflect the new "Agent OS" vision and comprehensive feature set including Peer-to-Peer messaging.
+### Fixed
+- Telegram polling stability and status updates.
+- Reliability of scheduled reminders in the cron engine.
+- General bug fixes for session persistence and bridge hiccups.
 
 ## [0.9.0] - 2026-02-26
 

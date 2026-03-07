@@ -22,7 +22,14 @@ Angel Claw is configured primarily via environment variables. This document prov
 | `WEBHOOK_KEY` | Secret key required in the `X-Webhook-Key` header. | None |
 
 ## 🛡️ Security & Sandboxing
-...
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `ANGEL_CLAW_VAULT_SALT` | Secret salt used for user vault encryption. **Change this in production!** | `default-salt...` |
+| `DOCKER_SANDBOXING_ENABLED` | Set to `True` to enable containerized skill execution. | `False` |
+| `DOCKER_RUNTIME` | The container runtime (use `runsc` for gVisor). | `runc` |
+| `DOCKER_IMAGE` | The base image for the skill sandbox. | `python:3.11-slim` |
+| `DOCKER_TIMEOUT` | Hard timeout (seconds) for skill execution. | `30` |
 | `CLI_API_KEY` | The API Key used by the CLI to authenticate. | (Required) |
 
 ## 🚀 Scalability (Redis & Database)

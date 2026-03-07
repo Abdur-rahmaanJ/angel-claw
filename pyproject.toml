@@ -33,6 +33,8 @@ dependencies = [
     "shopyo-settings>=1.3.0",
     "shopyo-theme>=1.3.0",
     "asgiref>=3.11.1",
+    "redis>=7.3.0",
+    "sqlalchemy>=2.0.47",
 ]
 
 [project.optional-dependencies]

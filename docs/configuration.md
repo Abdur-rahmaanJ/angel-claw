@@ -22,15 +22,24 @@ Angel Claw is configured primarily via environment variables. This document prov
 | `WEBHOOK_KEY` | Secret key required in the `X-Webhook-Key` header. | None |
 
 ## 🛡️ Security & Sandboxing
+...
+| `CLI_API_KEY` | The API Key used by the CLI to authenticate. | (Required) |
+
+## 🚀 Scalability (Redis & Database)
 
 | Variable | Description | Default |
 | :--- | :--- | :--- |
-| `ANGEL_CLAW_VAULT_SALT` | Secret salt used for user vault encryption. **Change this in production!** | `default-salt...` |
-| `DOCKER_SANDBOXING_ENABLED` | Set to `True` to enable containerized skill execution. | `False` |
-| `DOCKER_RUNTIME` | The container runtime (use `runsc` for gVisor). | `runc` |
-| `DOCKER_IMAGE` | The base image for the skill sandbox. | `python:3.11-slim` |
-| `DOCKER_TIMEOUT` | Hard timeout (seconds) for skill execution. | `30` |
-| `CLI_API_KEY` | The API Key used by the CLI to authenticate. | (Required) |
+| `REDIS_ENABLED` | Set to `True` to use Redis for task queuing. | `False` |
+| `REDIS_URL` | The connection string for your Redis instance. | `redis://localhost:6379/0` |
+| `REDIS_QUEUE_NAME`| The name of the Redis key used for the queue. | `angel_claw_lane_queue` |
+| `HISTORY_DATABASE_URI` | SQLAlchemy connection string for centralized history management (e.g., PostgreSQL). | None |
+
+## ⚡ Performance (Caching)
+
+| Variable | Description | Default |
+| :--- | :--- | :--- |
+| `CACHE_ENABLED` | Set to `True` to enable Redis-based LLM response caching. | `False` |
+| `CACHE_TTL` | Time-to-live (seconds) for cached responses. | `3600` |
 
 ## 📱 Bridge Settings
 

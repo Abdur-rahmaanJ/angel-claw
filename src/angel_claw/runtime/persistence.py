@@ -14,67 +14,133 @@ from ..models import Message, Role, UserContext
 logger = logging.getLogger("angel-claw-persistence")
 
 class PersistentHistory:
-    """SQLite-backed persistent history for a single user."""
+    """Persistent history for a single user (SQLite file or Shared SQLAlchemy DB)."""
     def __init__(self, context: UserContext):
         self.context = context
         from ..utils import get_user_root
-        self.root = get_user_root(context.user_id)
-        self.db_path = self.root / "history.db"
+        from ..config import settings
+        
+        self.db_uri = settings.history_database_uri
+        if self.db_uri:
+            self._is_shared = True
+        else:
+            self.root = get_user_root(context.user_id)
+            self.db_path = self.root / "history.db"
+            self._is_shared = False
+            
         self._init_db()
 
     def _init_db(self):
-        self.root.mkdir(parents=True, exist_ok=True)
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS messages (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    session_id TEXT,
-                    role TEXT,
-                    content TEXT,
-                    name TEXT,
-                    tool_calls TEXT,
-                    tool_call_id TEXT,
-                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
-            conn.execute("CREATE INDEX IF NOT EXISTS idx_session ON messages(session_id)")
+        if self._is_shared:
+            import sqlalchemy
+            engine = sqlalchemy.create_engine(self.db_uri)
+            with engine.connect() as conn:
+                conn.execute(sqlalchemy.text("""
+                    CREATE TABLE IF NOT EXISTS history (
+                        id SERIAL PRIMARY KEY,
+                        user_id TEXT,
+                        session_id TEXT,
+                        role TEXT,
+                        content TEXT,
+                        name TEXT,
+                        tool_calls TEXT,
+                        tool_call_id TEXT,
+                        timestamp TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP
+                    )
+                """))
+                conn.execute(sqlalchemy.text("CREATE INDEX IF NOT EXISTS idx_session_user ON history(user_id, session_id)"))
+                conn.commit()
+        else:
+            self.root.mkdir(parents=True, exist_ok=True)
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS messages (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        session_id TEXT,
+                        role TEXT,
+                        content TEXT,
+                        name TEXT,
+                        tool_calls TEXT,
+                        tool_call_id TEXT,
+                        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_session ON messages(session_id)")
 
     def add_message(self, session_id: str, message: Message):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute(
-                "INSERT INTO messages (session_id, role, content, name, tool_calls, tool_call_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (
-                    session_id,
-                    message.role.value,
-                    message.content,
-                    message.name,
-                    json.dumps(message.tool_calls) if message.tool_calls else None,
-                    message.tool_call_id,
-                    datetime.now(UTC).isoformat()
+        if self._is_shared:
+            import sqlalchemy
+            engine = sqlalchemy.create_engine(self.db_uri)
+            with engine.connect() as conn:
+                conn.execute(
+                    sqlalchemy.text("INSERT INTO history (user_id, session_id, role, content, name, tool_calls, tool_call_id, timestamp) VALUES (:u, :s, :r, :c, :n, :tc, :tcid, :ts)"),
+                    {
+                        "u": self.context.user_id,
+                        "s": session_id,
+                        "r": message.role.value,
+                        "c": message.content,
+                        "n": message.name,
+                        "tc": json.dumps(message.tool_calls) if message.tool_calls else None,
+                        "tcid": message.tool_call_id,
+                        "ts": datetime.now(UTC)
+                    }
                 )
-            )
+                conn.commit()
+        else:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute(
+                    "INSERT INTO messages (session_id, role, content, name, tool_calls, tool_call_id, timestamp) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        session_id,
+                        message.role.value,
+                        message.content,
+                        message.name,
+                        json.dumps(message.tool_calls) if message.tool_calls else None,
+                        message.tool_call_id,
+                        datetime.now(UTC).isoformat()
+                    )
+                )
 
     def get_history(self, session_id: str, limit: int = 50) -> List[Message]:
-        with sqlite3.connect(self.db_path) as conn:
-            cursor = conn.execute(
-                "SELECT role, content, name, tool_calls, tool_call_id FROM messages WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
-                (session_id, limit)
-            )
-            rows = cursor.fetchall()
-            messages = []
-            for row in reversed(rows):
-                messages.append(Message(
-                    role=Role(row[0]),
-                    content=row[1],
-                    name=row[2],
-                    tool_calls=json.loads(row[3]) if row[3] else None,
-                    tool_call_id=row[4]
-                ))
-            return messages
+        if self._is_shared:
+            import sqlalchemy
+            engine = sqlalchemy.create_engine(self.db_uri)
+            with engine.connect() as conn:
+                cursor = conn.execute(
+                    sqlalchemy.text("SELECT role, content, name, tool_calls, tool_call_id FROM history WHERE user_id = :u AND session_id = :s ORDER BY timestamp DESC LIMIT :l"),
+                    {"u": self.context.user_id, "s": session_id, "l": limit}
+                )
+                rows = cursor.fetchall()
+        else:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute(
+                    "SELECT role, content, name, tool_calls, tool_call_id FROM messages WHERE session_id = ? ORDER BY timestamp DESC LIMIT ?",
+                    (session_id, limit)
+                )
+                rows = cursor.fetchall()
+                
+        messages = []
+        for row in reversed(rows):
+            messages.append(Message(
+                role=Role(row[0]),
+                content=row[1],
+                name=row[2],
+                tool_calls=json.loads(row[3]) if row[3] else None,
+                tool_call_id=row[4]
+            ))
+        return messages
 
     def clear_history(self, session_id: str):
-        with sqlite3.connect(self.db_path) as conn:
-            conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
+        if self._is_shared:
+            import sqlalchemy
+            engine = sqlalchemy.create_engine(self.db_uri)
+            with engine.connect() as conn:
+                conn.execute(sqlalchemy.text("DELETE FROM history WHERE user_id = :u AND session_id = :s"), 
+                             {"u": self.context.user_id, "s": session_id})
+                conn.commit()
+        else:
+            with sqlite3.connect(self.db_path) as conn:
+                conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
 
 class UserVault:
     """Encrypted key-value store for user secrets."""

@@ -226,7 +226,8 @@ def run_shopyo_command(cmd_list, quiet=False):
     env["SHOPYO_QUIET"] = "True"
 
     # Force Shopyo to use our standardized user data DB path
-    env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.abspath(settings.db_path)}"
+    db_abs_path = os.path.abspath(os.path.expanduser(settings.db_path))
+    env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_abs_path}"
 
     # Suppress output if quiet
     stdout = subprocess.DEVNULL if quiet else None
@@ -473,9 +474,13 @@ def main():
             asyncio.run(test_diagnostics())
         else:
             print("Usage: angel-claw mcp [list|test]")
-    else:
-        # Default to starting the gateway if no subcommand or 'serve'
+    elif len(sys.argv) == 1:
+        # Default to starting the gateway if no subcommand
         start_gateway()
+    else:
+        # If we reach here, it's an unrecognized subcommand OR a recognized one that already ran.
+        # We don't want to run start_gateway() here.
+        pass
 
 
 if __name__ == "__main__":

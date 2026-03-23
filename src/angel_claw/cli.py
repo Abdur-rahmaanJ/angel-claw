@@ -226,7 +226,8 @@ def run_shopyo_command(cmd_list, quiet=False):
     env["SHOPYO_QUIET"] = "True"
 
     # Force Shopyo to use our standardized user data DB path
-    env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.abspath(settings.db_path)}"
+    db_abs_path = os.path.abspath(os.path.expanduser(settings.db_path))
+    env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_abs_path}"
 
     # Suppress output if quiet
     stdout = subprocess.DEVNULL if quiet else None
@@ -407,6 +408,38 @@ def main():
             run_shopyo_command(["shopyo-create-admin", email, password])
         else:
             print("Usage: angel-claw create-admin <email> <password>")
+    elif len(sys.argv) > 1 and sys.argv[1] == "setup":
+        print("🪽  Starting Angel Claw Setup...")
+        
+        # 1. Initialize Database
+        db_path = os.path.abspath(os.path.expanduser(settings.db_path))
+        if os.path.exists(db_path):
+            print(f"⚠️  Database already exists at {db_path}")
+            confirm = input("Overwrite and re-initialize? (y/N): ")
+            if confirm.lower() != 'y':
+                print("Aborting setup.")
+                return
+            os.remove(db_path)
+            
+        print("⚙️  Step 1/2: Initializing database tables...")
+        # Shopyo 'initialise' sets up the DB schema
+        run_shopyo_command(["initialise"])
+        
+        # 2. Create Admin
+        print("\n⚙️  Step 2/2: Creating admin credentials...")
+        email = input("Admin Email [admin@admin.com]: ") or "admin@admin.com"
+        password = input("Admin Password [admin]: ") or "admin"
+        
+        run_shopyo_command(["shopyo-create-admin", email, password], quiet=True)
+        
+        console.print(Panel(
+            f"[bold green]Setup Complete![/bold green]\n\n"
+            f"📧  [bold]Email:[/bold]    {email}\n"
+            f"🔑  [bold]Password:[/bold] {password}\n\n"
+            f"You can now start the server with: [bold cyan]angel-claw serve[/bold cyan]",
+            title="🪽 Angel Claw",
+            border_style="green"
+        ))
     elif len(sys.argv) > 1 and sys.argv[1] == "list-users":
         run_shopyo_command(["shopyo-list-users"])
     elif len(sys.argv) > 1 and sys.argv[1] == "bridges":
@@ -485,7 +518,7 @@ def main():
         start_gateway()
     else:
         print("🪽 Angel Claw CLI")
-        print("Usage: angel-claw [chat|serve|tutorial|login-whatsapp|confirm-user|promote-user|create-admin|list-users|bridges|locate-static|mcp]")
+        print("Usage: angel-claw [chat|serve|tutorial|login-whatsapp|confirm-user|promote-user|create-admin|setup|list-users|bridges|locate-static|mcp]")
 
 
 if __name__ == "__main__":

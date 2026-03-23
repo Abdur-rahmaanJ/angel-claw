@@ -270,8 +270,29 @@ def custom_commands(db, app):
     def shopyo_upload():
         from shopyo_auth.models import User, Role
         import modules.agent.models
+        import importlib
+        from init import modules_path, root_path
         
-        # Ensure all tables exist (important if initialise was skipped or failed)
+        # Ensure all models are loaded manually into the current app context
+        # to ensure db.create_all() picks them up.
+        
+        # Core Shopyo modules often have models in their .models
+        core_packages = ["shopyo_auth", "shopyo_settings", "shopyo_theme", "shopyo_dashboard"]
+        for pkg in core_packages:
+            try:
+                importlib.import_module(f"{pkg}.models")
+            except Exception:
+                pass
+
+        # Our local modules
+        from shopyo.api.module import iter_modules
+        for module_name, _ in iter_modules(root_path):
+            try:
+                importlib.import_module(f"{module_name}.models")
+            except Exception:
+                pass
+        
+        # Ensure all tables exist
         db.create_all()
         
         # 1. Standard Shopyo Upload (initializes modules)

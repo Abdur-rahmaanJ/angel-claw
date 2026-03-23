@@ -480,9 +480,12 @@ def main():
             asyncio.run(test_diagnostics())
         else:
             print("Usage: angel-claw mcp [list|test]")
-    else:
-        # Default to starting the gateway if no subcommand or 'serve'
+    elif len(sys.argv) == 1:
+        # Default to starting the gateway if no subcommand
         start_gateway()
+    else:
+        print("🪽 Angel Claw CLI")
+        print("Usage: angel-claw [chat|serve|tutorial|login-whatsapp|confirm-user|promote-user|create-admin|list-users|bridges|locate-static|mcp]")
 
 
 if __name__ == "__main__":

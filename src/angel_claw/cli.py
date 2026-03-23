@@ -49,6 +49,8 @@ agent_logger.setLevel(logging.INFO)
 agent_handler = logging.StreamHandler(sys.stdout)
 agent_handler.setFormatter(CLIProgressFormatter())
 agent_logger.addHandler(agent_handler)
+
+console = Console()
 agent_logger.propagate = False  # Don't send to root logger
 
 logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
@@ -318,8 +320,6 @@ def start_web_server(port=5000):
     bridge_thread = threading.Thread(target=run_bridges, args=(app,), daemon=True)
     bridge_thread.start()
 
-    console = Console()
-
     table = Table.grid(padding=(0, 1))
     table.add_column(style="cyan")
     table.add_column(style="white")
@@ -411,31 +411,48 @@ def main():
     elif len(sys.argv) > 1 and sys.argv[1] == "setup":
         print("🪽  Starting Angel Claw Setup...")
         
+        # Parse flags
+        email = None
+        password = None
+        force_yes = "--yes" in sys.argv or "-y" in sys.argv
+        
+        for i, arg in enumerate(sys.argv):
+            if arg == "--email" and i + 1 < len(sys.argv):
+                email = sys.argv[i + 1]
+            if arg == "--password" and i + 1 < len(sys.argv):
+                password = sys.argv[i + 1]
+
         # 1. Initialize Database
         db_path = os.path.abspath(os.path.expanduser(settings.db_path))
         if os.path.exists(db_path):
-            print(f"⚠️  Database already exists at {db_path}")
-            confirm = input("Overwrite and re-initialize? (y/N): ")
-            if confirm.lower() != 'y':
-                print("Aborting setup.")
-                return
+            if not force_yes:
+                print(f"⚠️  Database already exists at {db_path}")
+                if not questionary.confirm("Overwrite and re-initialize?", default=False).ask():
+                    print("Aborting setup.")
+                    return
             os.remove(db_path)
             
         print("⚙️  Step 1/2: Initializing database tables...")
-        # Shopyo 'initialise' sets up the DB schema
-        run_shopyo_command(["initialise"])
+        # shopyo-seed handles db.create_all() and default roles
+        run_shopyo_command(["shopyo-seed"])
         
         # 2. Create Admin
         print("\n⚙️  Step 2/2: Creating admin credentials...")
-        email = input("Admin Email [admin@admin.com]: ") or "admin@admin.com"
-        password = input("Admin Password [admin]: ") or "admin"
+        if not email:
+            email = questionary.text("Admin Email:", default="admin@admin.com").ask()
+        if not password:
+            password = questionary.password("Admin Password:", default="admin").ask()
+        
+        # Final fallback for non-interactive without flags
+        email = email or "admin@admin.com"
+        password = password or "admin"
         
         run_shopyo_command(["shopyo-create-admin", email, password], quiet=True)
         
         console.print(Panel(
             f"[bold green]Setup Complete![/bold green]\n\n"
             f"📧  [bold]Email:[/bold]    {email}\n"
-            f"🔑  [bold]Password:[/bold] {password}\n\n"
+            f"🔑  [bold]Password:[/bold] [dim](hidden)[/dim]\n\n"
             f"You can now start the server with: [bold cyan]angel-claw serve[/bold cyan]",
             title="🪽 Angel Claw",
             border_style="green"

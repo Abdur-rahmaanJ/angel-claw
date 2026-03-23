@@ -65,6 +65,7 @@ warnings.filterwarnings(
 warnings.filterwarnings("ignore", category=UserWarning, module="click")
 try:
     from sqlalchemy.exc import LegacyAPIWarning, SAWarning
+
     warnings.filterwarnings("ignore", category=LegacyAPIWarning)
     warnings.filterwarnings("ignore", category=SAWarning)
     warnings.filterwarnings("ignore", category=DeprecationWarning, module="sqlalchemy")
@@ -115,21 +116,36 @@ async def interactive_chat(model: str = None, api_base: str = None):
             print(f"\r\n[REMINDER] {message}\nYou: ", end="", flush=True)
 
     cron_manager.register_proactive_handler(cli_proactive_handler)
-    
+
     # Audit: Multi-Tenant Isolation - Verify CLI Identity
     from .engine import AngelClawEngine
-    engine = AngelClawEngine()
-    
-    cli_key = os.environ.get("CLI_API_KEY")
-    if not cli_key:
-        print("❌ Error: CLI_API_KEY not found in .env")
-        print("Please generate an API key in the web dashboard and add it to your .env as CLI_API_KEY.")
-        return
+    from .models import UserContext
 
-    context = engine.validate_api_key(cli_key)
-    if not context:
-        print("❌ Error: Invalid or inactive CLI_API_KEY.")
-        return
+    engine = AngelClawEngine()
+
+    # Dev mode for testing without full Shopyo setup
+    if os.environ.get("CLI_DEV_MODE", "").lower() == "true":
+        context = UserContext(
+            user_id="dev-user",
+            email="dev@local",
+            roles=["admin"],
+            channel_type="cli",
+            channel_identifier="cli-dev",
+        )
+    else:
+        cli_key = os.environ.get("CLI_API_KEY")
+        if not cli_key:
+            print("❌ Error: CLI_API_KEY not found in .env")
+            print(
+                "Please generate an API key in the web dashboard and add it to your .env as CLI_API_KEY."
+            )
+            print("Or set CLI_DEV_MODE=true for development.")
+            return
+
+        context = engine.validate_api_key(cli_key)
+        if not context:
+            print("❌ Error: Invalid or inactive CLI_API_KEY.")
+            return
 
     # Start background workers silently
     lane_queue.start_workers()
@@ -163,13 +179,16 @@ async def interactive_chat(model: str = None, api_base: str = None):
 
             print("Thinking...", end="\r", flush=True)
             # Use the verified context for the request
-            response = await process_chat_request(AgentRequest(
-                session_id=session_id,
-                message=user_input,
-                user_id=context.user_id,
-                model=model,
-                api_base=api_base,
-            ), context)
+            response = await process_chat_request(
+                AgentRequest(
+                    session_id=session_id,
+                    message=user_input,
+                    user_id=context.user_id,
+                    model=model,
+                    api_base=api_base,
+                ),
+                context,
+            )
             # Clear the "thinking" line if it was still there
             print(" " * 40, end="\r", flush=True)
             print(f"Assistant: {response}\n")
@@ -198,22 +217,28 @@ def run_shopyo_command(cmd_list, quiet=False):
     """Runs a shopyo command via manage.py in the app directory."""
     app_dir = importlib.resources.files("angel_claw").joinpath("app")
     manage_py = os.path.join(str(app_dir), "manage.py")
-    
+
     # We must be in the app directory for shopyo to find modules
     env = os.environ.copy()
     # Ensure the package root is in PYTHONPATH so engine/models can be imported
     package_root = os.path.abspath(os.path.join(str(app_dir), "..", ".."))
     env["PYTHONPATH"] = f"{package_root}:{env.get('PYTHONPATH', '')}"
     env["SHOPYO_QUIET"] = "True"
-    
+
     # Force Shopyo to use our standardized user data DB path
     env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{os.path.abspath(settings.db_path)}"
-    
+
     # Suppress output if quiet
     stdout = subprocess.DEVNULL if quiet else None
     stderr = subprocess.DEVNULL if quiet else None
-    
-    subprocess.run([sys.executable, manage_py] + cmd_list, cwd=str(app_dir), env=env, stdout=stdout, stderr=stderr)
+
+    subprocess.run(
+        [sys.executable, manage_py] + cmd_list,
+        cwd=str(app_dir),
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+    )
 
 
 def start_web_server(port=5000):
@@ -239,10 +264,12 @@ def start_web_server(port=5000):
 
     config_name = os.environ.get("FLASK_ENV", "development")
     from app import create_app
+
     app = create_app(config_name)
 
     # Start background bridges in a separate thread
     import threading
+
     def run_bridges(shared_app):
         # Silence all bridge logging for clean serve mode
         logging.getLogger("angel-claw-cron").setLevel(logging.INFO)
@@ -278,6 +305,7 @@ def start_web_server(port=5000):
             except Exception as e:
                 logger.error(f"Error starting bridges: {e}")
                 import traceback
+
                 logger.error(traceback.format_exc())
 
         loop.run_until_complete(start_all())
@@ -308,7 +336,7 @@ def start_web_server(port=5000):
         subtitle="[dim]Powered by Shopyo[/dim]",
         expand=False,
         border_style="bright_blue",
-        padding=(1, 4)
+        padding=(1, 4),
     )
 
     console.print("\n")
@@ -317,6 +345,8 @@ def start_web_server(port=5000):
 
     # Start the Flask development server directly
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+
+
 def main():
     if len(sys.argv) > 1 and sys.argv[1] == "chat":
         if "--reconfigure" in sys.argv:
@@ -382,12 +412,10 @@ def main():
             from .telegram_bridge import telegram_bridge
             from .whatsapp_bridge import whatsapp_bridge
             from .cron import cron_manager
-            
+
             lane_queue.start_workers()
             await asyncio.gather(
-                telegram_bridge.run(),
-                whatsapp_bridge.run(),
-                cron_manager.run()
+                telegram_bridge.run(), whatsapp_bridge.run(), cron_manager.run()
             )
 
         try:

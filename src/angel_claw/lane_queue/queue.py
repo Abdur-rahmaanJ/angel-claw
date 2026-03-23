@@ -147,12 +147,10 @@ class LaneWorker:
         while True:
             try:
                 lane_key = await self._queue._work_available.get()
-                task = self._queue._lanes[lane_key].get_nowait()
+                task = await self._queue._lanes[lane_key].get()
                 await self.process_task(task)
                 self._queue._lanes[lane_key].task_done()
                 self._queue._work_available.task_done()
-            except asyncio.QueueEmpty:
-                continue
             except Exception as e:
                 logger.error(f"Worker {self._worker_id} error: {e}")
                 await asyncio.sleep(WORKER_ERROR_RETRY_DELAY)

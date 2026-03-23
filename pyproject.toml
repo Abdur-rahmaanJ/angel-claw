@@ -15,7 +15,6 @@ dependencies = [
     "croniter",
     "httpx",
     "python-telegram-bot",
-    "telegram>=0.0.1",
     "aiohttp",
     "qrcode",
     "neonize",

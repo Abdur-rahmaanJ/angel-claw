@@ -363,6 +363,40 @@ def custom_commands(db, app):
         db.session.commit()
         click.echo(f"User {email} promoted to admin.")
 
+    @click.command("shopyo-create-admin")
+    @click.argument("email")
+    @click.argument("password")
+    @with_appcontext
+    def shopyo_create_admin(email, password):
+        from shopyo_auth.models import User, Role
+        import datetime
+        
+        user = User.query.filter_by(email=email).first()
+        if user:
+            click.echo(f"User with email {email} already exists.")
+            return
+            
+        user = User()
+        user.email = email
+        user.password = password
+        user.is_admin = True
+        user.is_email_confirmed = True
+        user.email_confirm_date = datetime.datetime.now()
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        admin_role = Role.query.filter_by(name="admin").first()
+        if admin_role:
+            user.roles.append(admin_role)
+            
+        user_role = Role.query.filter_by(name="user").first()
+        if user_role:
+            user.roles.append(user_role)
+            
+        db.session.commit()
+        click.echo(f"Admin user {email} created successfully.")
+
     @click.command("shopyo-list-users")
     @with_appcontext
     def shopyo_list_users():
@@ -376,4 +410,5 @@ def custom_commands(db, app):
     app.cli.add_command(shopyo_upload)
     app.cli.add_command(shopyo_confirm_user)
     app.cli.add_command(shopyo_promote_user)
+    app.cli.add_command(shopyo_create_admin)
     app.cli.add_command(shopyo_list_users)

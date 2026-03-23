@@ -400,6 +400,13 @@ def main():
             run_shopyo_command(["shopyo-promote-user", email])
         else:
             print("Usage: angel-claw promote-user <email>")
+    elif len(sys.argv) > 1 and sys.argv[1] == "create-admin":
+        if len(sys.argv) > 3:
+            email = sys.argv[2]
+            password = sys.argv[3]
+            run_shopyo_command(["shopyo-create-admin", email, password])
+        else:
+            print("Usage: angel-claw create-admin <email> <password>")
     elif len(sys.argv) > 1 and sys.argv[1] == "list-users":
         run_shopyo_command(["shopyo-list-users"])
     elif len(sys.argv) > 1 and sys.argv[1] == "bridges":

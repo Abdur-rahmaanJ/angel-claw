@@ -270,8 +270,29 @@ def custom_commands(db, app):
     def shopyo_upload():
         from shopyo_auth.models import User, Role
         import modules.agent.models
+        import importlib
+        from init import modules_path, root_path
         
-        # Ensure all tables exist (important if initialise was skipped or failed)
+        # Ensure all models are loaded manually into the current app context
+        # to ensure db.create_all() picks them up.
+        
+        # Core Shopyo modules often have models in their .models
+        core_packages = ["shopyo_auth", "shopyo_settings", "shopyo_theme", "shopyo_dashboard"]
+        for pkg in core_packages:
+            try:
+                importlib.import_module(f"{pkg}.models")
+            except Exception:
+                pass
+
+        # Our local modules
+        from shopyo.api.module import iter_modules
+        for module_name, _ in iter_modules(root_path):
+            try:
+                importlib.import_module(f"{module_name}.models")
+            except Exception:
+                pass
+        
+        # Ensure all tables exist
         db.create_all()
         
         # 1. Standard Shopyo Upload (initializes modules)
@@ -363,6 +384,40 @@ def custom_commands(db, app):
         db.session.commit()
         click.echo(f"User {email} promoted to admin.")
 
+    @click.command("shopyo-create-admin")
+    @click.argument("email")
+    @click.argument("password")
+    @with_appcontext
+    def shopyo_create_admin(email, password):
+        from shopyo_auth.models import User, Role
+        import datetime
+        
+        user = User.query.filter_by(email=email).first()
+        if user:
+            click.echo(f"User with email {email} already exists.")
+            return
+            
+        user = User()
+        user.email = email
+        user.password = password
+        user.is_admin = True
+        user.is_email_confirmed = True
+        user.email_confirm_date = datetime.datetime.now()
+        
+        db.session.add(user)
+        db.session.commit()
+        
+        admin_role = Role.query.filter_by(name="admin").first()
+        if admin_role:
+            user.roles.append(admin_role)
+            
+        user_role = Role.query.filter_by(name="user").first()
+        if user_role:
+            user.roles.append(user_role)
+            
+        db.session.commit()
+        click.echo(f"Admin user {email} created successfully.")
+
     @click.command("shopyo-list-users")
     @with_appcontext
     def shopyo_list_users():
@@ -376,4 +431,5 @@ def custom_commands(db, app):
     app.cli.add_command(shopyo_upload)
     app.cli.add_command(shopyo_confirm_user)
     app.cli.add_command(shopyo_promote_user)
+    app.cli.add_command(shopyo_create_admin)
     app.cli.add_command(shopyo_list_users)

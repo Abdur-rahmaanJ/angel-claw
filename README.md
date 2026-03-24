@@ -32,9 +32,31 @@
 
 ```bash
 $ pip install angel-claw
-$ angel-claw serve    # Starts the Agent OS Gateway + Web Dashboard
-$ angel-claw chat     # Authenticated CLI mode
+$ angel-claw setup     # Initialize database and create admin account
+$ angel-claw serve     # Starts the Agent OS Gateway + Web Dashboard
+$ angel-claw chat      # Authenticated CLI mode
 ```
+
+---
+
+## 🚀 Quick Setup
+
+To get started with a fresh installation:
+
+1. **Initialize the Environment**:
+   ```bash
+   angel-claw setup
+   ```
+   This will create your database at `~/.angelclaw/angelclaw.db`, run initial migrations, and prompt you to create your primary administrator account.
+
+2. **Start the Services**:
+   ```bash
+   angel-claw serve
+   ```
+   The web dashboard will be available at `http://127.0.0.1:5000`.
+
+3. **Configure LLMs**:
+   Login to the dashboard with your admin credentials and navigate to the **Settings** or **Vault** to add your `MODEL_KEY` (OpenAI, Anthropic, etc.).
 
 ---
 

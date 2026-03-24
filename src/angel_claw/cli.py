@@ -230,13 +230,17 @@ def run_shopyo_command(cmd_list, quiet=False):
     # Force Shopyo to use our standardized user data DB path
     db_abs_path = os.path.abspath(os.path.expanduser(settings.db_path))
     env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_abs_path}"
+    config_name = os.environ.get("FLASK_ENV", "production")
+    env["FLASK_APP"] = f"app:create_app('{config_name}')"
+    env["FLASK_ENV"] = config_name
+
 
     # Suppress output if quiet
     stdout = subprocess.DEVNULL if quiet else None
     stderr = subprocess.DEVNULL if quiet else None
 
     subprocess.run(
-        [sys.executable, manage_py] + cmd_list,
+        [sys.executable, manage_py, "--config", config_name] + cmd_list,
         cwd=str(app_dir),
         env=env,
         stdout=stdout,

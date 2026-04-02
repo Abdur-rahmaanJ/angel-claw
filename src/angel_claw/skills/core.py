@@ -297,15 +297,16 @@ def install_skill_from_clawhub(slug: str, is_admin: bool = False) -> str:
 
 
 @skill
-def get_chat_history(date: str, session_filter: str = None) -> str:
+def get_chat_history(date: str, session_filter: str = None, user_id: str = None) -> str:
     """
     Retrieves chat history for a specific date.
     - date: Date in YYYY-MM-DD format (e.g., '2024-01-15') or 'today' or 'yesterday'
     - session_filter: Optional session ID to filter messages (e.g., 'cli-default')
+    - user_id: The user whose history to retrieve (automatically injected).
     """
     try:
         target_date = _parse_date(date)
-        chats = chat_logger.get_chats_for_date(target_date)
+        chats = chat_logger.get_chats_for_date(user_id, target_date)
 
         if session_filter:
             chats = _filter_by_session(chats, session_filter)
@@ -321,19 +322,20 @@ def get_chat_history(date: str, session_filter: str = None) -> str:
 
 @skill
 def get_chat_history_range(
-    start_date: str, end_date: str = None, session_filter: str = None
+    start_date: str, end_date: str = None, session_filter: str = None, user_id: str = None
 ) -> str:
     """
     Retrieves chat history for a date range.
     - start_date: Start date in YYYY-MM-DD format or 'today' or 'yesterday'
     - end_date: End date in YYYY-MM-DD format (defaults to today)
     - session_filter: Optional session ID to filter messages
+    - user_id: The user whose history to retrieve (automatically injected).
     """
     try:
         start = _parse_date(start_date)
         end = _parse_date(end_date) if end_date else datetime.now()
 
-        chats = chat_logger.get_chats_for_date_range(start, end)
+        chats = chat_logger.get_chats_for_date_range(user_id, start, end)
 
         if session_filter:
             chats = _filter_by_session(chats, session_filter)

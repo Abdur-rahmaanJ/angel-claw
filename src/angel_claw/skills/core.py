@@ -34,12 +34,16 @@ def _filter_by_session(chats: str, session_filter: str) -> str:
 
 
 @skill
-def create_skill(name: str, code: str) -> str:
+def create_skill(name: str, code: str, is_admin: bool = False) -> str:
     """
     Creates a new Python skill for Angel Claw.
     'name' should be the filename (without .py).
     'code' should be the full Python code, including the @skill decorator and necessary imports.
+    - is_admin: Whether the user has admin privileges (automatically injected).
     """
+    if not is_admin:
+        return "Error: Only administrators can create skills."
+
     skills_dir = os.path.join(os.getcwd(), "skills")
     if not os.path.exists(skills_dir):
         os.makedirs(skills_dir)
@@ -55,11 +59,15 @@ def create_skill(name: str, code: str) -> str:
 
 
 @skill
-def install_skill_from_github(repo_url: str) -> str:
+def install_skill_from_github(repo_url: str, is_admin: bool = False) -> str:
     """
     Installs skills from a GitHub repository.
     The repo should contain .py files with skills.
+    - is_admin: Whether the user has admin privileges (automatically injected).
     """
+    if not is_admin:
+        return "Error: Only administrators can install skills from GitHub."
+
     temp_dir = os.path.join(os.path.dirname(__file__), "_temp_repo")
     skills_dir = os.path.join(os.getcwd(), "skills")
     if not os.path.exists(skills_dir):
@@ -89,11 +97,15 @@ def install_skill_from_github(repo_url: str) -> str:
 
 
 @skill
-def import_skills_from_directory(path: str = "skills") -> str:
+def import_skills_from_directory(path: str = "skills", is_admin: bool = False) -> str:
     """
     Scans a directory for skill.md files and returns their content
     so the agent can decide to implement them.
+    - is_admin: Whether the user has admin privileges (automatically injected).
     """
+    if not is_admin:
+        return "Error: Only administrators can import skills from directory."
+
     root_dir = os.getcwd()
     target_dir = os.path.join(root_dir, path)
 
@@ -247,12 +259,16 @@ def search_clawhub(query: str = "") -> str:
 
 
 @skill
-def install_skill_from_clawhub(slug: str) -> str:
+def install_skill_from_clawhub(slug: str, is_admin: bool = False) -> str:
     """
     Downloads and installs a skill from ClawHub.ai by its slug.
     The skill will be saved as a SKILL.md file which provides instructions to the agent.
     WARNING: ClawHub skills are community-contributed; use with extreme caution.
+    - is_admin: Whether the user has admin privileges (automatically injected).
     """
+    if not is_admin:
+        return "Error: Only administrators can install skills from ClawHub."
+
     url = f"https://auth.clawdhub.com/api/v1/download?slug={slug}"
     # Use consistent local skills directory in CWD
     skills_dir = os.path.join(os.getcwd(), "skills", "clawhub", slug)

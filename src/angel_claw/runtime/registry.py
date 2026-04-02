@@ -66,6 +66,14 @@ class TieredSkillRegistry:
                 if "user_id" not in arguments:
                     arguments["user_id"] = self.context.user_id
 
+            if "roles" in sig.parameters:
+                if "roles" not in arguments:
+                    arguments["roles"] = self.context.roles
+
+            if "is_admin" in sig.parameters:
+                if "is_admin" not in arguments:
+                    arguments["is_admin"] = self.context.is_admin
+
             # Phase 2: Docker Sandboxing (if enabled)
             if settings.docker_sandboxing_enabled:
                 result = await self._call_in_docker(name, arguments)

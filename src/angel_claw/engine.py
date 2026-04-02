@@ -591,9 +591,9 @@ class AngelClawEngine:
                             roles=[r.name for r in user.roles]
                             if hasattr(user, "roles")
                             else [],
-                            is_admin=getattr(user, "is_admin", False),
                             channel_type="api",
                             channel_identifier="api-key",
+                            is_admin=getattr(user, "is_admin", False),
                         )
                 return None
         else:

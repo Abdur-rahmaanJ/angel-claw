@@ -14,9 +14,9 @@ class UserContext:
     user_id: str          # Shopyo user.id
     email: str
     roles: List[str]
-    is_admin: bool = False
     channel_type: str      # "web" | "telegram" | "cli" | "api"
     channel_identifier: str
+    is_admin: bool = False
 
 class Message(BaseModel):
     role: Role

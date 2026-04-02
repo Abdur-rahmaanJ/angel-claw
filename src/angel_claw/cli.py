@@ -131,9 +131,9 @@ async def interactive_chat(model: str = None, api_base: str = None):
             user_id="dev-user",
             email="dev@local",
             roles=["admin"],
-            is_admin=True,
             channel_type="cli",
             channel_identifier="cli-dev",
+            is_admin=True,
         )
     else:
         cli_key = os.environ.get("CLI_API_KEY")

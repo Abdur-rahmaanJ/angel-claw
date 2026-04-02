@@ -374,7 +374,7 @@ class AngelClawEngine:
             )
 
         # Log chat
-        chat_logger.log(f"{user_id}:{session_id}", message, assistant_content)
+        chat_logger.log(user_id, session_id, message, assistant_content)
 
         return EngineResponse(
             content=assistant_content,

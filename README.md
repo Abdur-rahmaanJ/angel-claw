@@ -144,7 +144,45 @@ curl -X POST http://localhost:5000/chat \
 
 ---
 
-# 🧪 Testing & Reliability
+## 🛠️ Deployment
+
+Angel Claw is designed for high-density, production-grade deployments. For a professional setup, we recommend separating the **Web Gateway** and the **Bridge Worker**.
+
+### 1. Data Architecture
+In production, all persistent user data is isolated from the application code:
+- **Database**: `~/.angelclaw/angelclaw.db`
+- **User Vaults**: `~/.angelclaw/vaults/`
+- **Bridge Data**: `~/.angelclaw/bridges/`
+
+### 2. Systemd Service Setup
+Create two services to ensure the Web UI and background bridges run independently and reliably.
+
+**Web Gateway (`/etc/systemd/system/angel-claw-web.service`):**
+```ini
+[Service]
+ExecStart=/path/to/venv/bin/gunicorn -w 4 -b 127.0.0.1:5000 "angel_claw.app.app:create_app('production')"
+Environment="USER_DATA_ROOT=/home/user/.angelclaw"
+Restart=always
+```
+
+**Bridge Worker (`/etc/systemd/system/angel-claw-bridge.service`):**
+```ini
+[Service]
+ExecStart=/path/to/venv/bin/angel-claw bridges
+Environment="USER_DATA_ROOT=/home/user/.angelclaw"
+Restart=always
+```
+
+### 3. Production Hardening
+For public-facing instances, always:
+- **Use Nginx** as a reverse proxy with SSL (Certbot/Let's Encrypt).
+- **Enable Docker Sandboxing**: Set `DOCKER_SANDBOXING_ENABLED=True` in your `.env` to execute custom skills in gVisor-hardened containers.
+- **Dedicated User**: Run services under a low-privilege `angelclaw` user.
+
+---
+
+## 🧪 Testing & Reliability
+
 
 Angel Claw is hardened for "Diamond-Tier" reliability:
 - **Loop Defense**: 10-turn reasoning limit per request.

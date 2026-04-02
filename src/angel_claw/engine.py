@@ -29,11 +29,14 @@ logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
 logging.getLogger("litellm").setLevel(logging.CRITICAL)
 
 
+import threading
+
 class AngelClawEngine:
+    _cached_app = None
+    _app_lock = threading.Lock()
+
     def __init__(self):
-        self._cached_app = None
-        import threading
-        self._app_lock = threading.Lock()
+        pass
 
     def _get_user_history(self, user_id: str, session_id: str) -> List[Message]:
         # This is now a sync bridge, but it will be slightly less efficient.
@@ -70,8 +73,8 @@ class AngelClawEngine:
         return await runtime.chat_history(session_id)
 
     def set_app(self, app):
-        with self._app_lock:
-            self._cached_app = app
+        with AngelClawEngine._app_lock:
+            AngelClawEngine._cached_app = app
 
     def _app_context(self):
         if settings.auth_mode == "shopyo":
@@ -84,26 +87,37 @@ class AngelClawEngine:
             except ImportError:
                 pass
 
-            with self._app_lock:
-                if self._cached_app:
-                    return self._cached_app.app_context()
+            with AngelClawEngine._app_lock:
+                if AngelClawEngine._cached_app:
+                    return AngelClawEngine._cached_app.app_context()
 
                 logger.info(
                     "Engine: No app context available and no cached app. Creating one."
                 )
                 try:
+                    import importlib.resources
+                    import sys
+                    import os
+                    # Find the parent of 'angel_claw' to add to sys.path
+                    pkg_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+                    if pkg_root not in sys.path:
+                        sys.path.insert(0, pkg_root)
+                    
+                    # Also add the app directory itself for 'from app import ...'
+                    app_dir = importlib.resources.files("angel_claw").joinpath("app")
+                    app_path_str = str(app_dir)
+                    if app_path_str not in sys.path:
+                        sys.path.insert(0, app_path_str)
+                    
                     from app import create_app
 
                     config_name = os.environ.get("FLASK_ENV", "production")
-                    self._cached_app = create_app(config_name)
-                    with self._cached_app.app_context():
-                        from init import db
-                        import modules.agent.models
-
-                        db.create_all()
-                    return self._cached_app.app_context()
+                    AngelClawEngine._cached_app = create_app(config_name)
+                    return AngelClawEngine._cached_app.app_context()
                 except Exception as e:
                     logger.error(f"Engine: Failed to create fallback app context: {e}")
+                    import traceback
+                    logger.error(traceback.format_exc())
                     return None
         return None
 

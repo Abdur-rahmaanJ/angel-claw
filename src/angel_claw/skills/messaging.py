@@ -23,38 +23,45 @@ async def send_internal_message(
     """
     if settings.auth_mode == "shopyo":
         try:
-            from shopyo_auth.models import User
-            from modules.agent.models import InternalMessage
-            from init import db
-            
-            recipient = User.get_by_email(to_user)
-            if not recipient:
-                return f"Error: Recipient '{to_user}' not found in the system."
-            
-            sender = db.session.get(User, user_id)
-            if not sender:
-                return f"Error: Sender ID '{user_id}' not found."
+            from angel_claw.engine import AngelClawEngine
+            engine = AngelClawEngine()
+            ctx = engine._app_context()
+            if not ctx:
+                return "Error: Could not obtain application context for Shopyo."
 
-            new_msg = InternalMessage(
-                sender_id=user_id,
-                recipient_id=str(recipient.id),
-                recipient_email=to_user,
-                content=content
-            )
-            db.session.add(new_msg)
-            db.session.commit()
-            
-            # Send proactive notification to the recipient via bridges
-            try:
-                from angel_claw.cron import cron_manager
-                sender_name = sender.email
-                notification = f"📬 [Internal Message] From: {sender_name}\n\n{content}"
-                await cron_manager._send_proactive_message(notification, str(recipient.id))
-            except Exception as e:
-                # Log but don't fail the primary delivery
-                pass
-            
-            return f"✅ Internal message delivered to {to_user}."
+            with ctx:
+                from shopyo_auth.models import User
+                from modules.agent.models import InternalMessage
+                from init import db
+                
+                recipient = User.get_by_email(to_user)
+                if not recipient:
+                    return f"Error: Recipient '{to_user}' not found in the system."
+                
+                sender = db.session.get(User, user_id)
+                if not sender:
+                    return f"Error: Sender ID '{user_id}' not found."
+
+                new_msg = InternalMessage(
+                    sender_id=user_id,
+                    recipient_id=str(recipient.id),
+                    recipient_email=to_user,
+                    content=content
+                )
+                db.session.add(new_msg)
+                db.session.commit()
+                
+                # Send proactive notification to the recipient via bridges
+                try:
+                    from angel_claw.cron import cron_manager
+                    sender_name = sender.email
+                    notification = f"📬 [Internal Message] From: {sender_name}\n\n{content}"
+                    await cron_manager._send_proactive_message(notification, str(recipient.id))
+                except Exception as e:
+                    # Log but don't fail the primary delivery
+                    pass
+                
+                return f"✅ Internal message delivered to {to_user}."
         except Exception as e:
             return f"Error delivering internal message: {str(e)}"
     else:
@@ -68,26 +75,33 @@ def list_unread_messages(user_id: str) -> str:
     """
     if settings.auth_mode == "shopyo":
         try:
-            from modules.agent.models import InternalMessage
-            from shopyo_auth.models import User
-            from init import db
-            
-            unread = InternalMessage.query.filter_by(
-                recipient_id=user_id,
-                is_read=False
-            ).order_by(InternalMessage.created_at.desc()).all()
-            
-            if not unread:
-                return "You have no unread messages."
-            
-            lines = ["## Unread Messages"]
-            for msg in unread:
-                sender = db.session.get(User, msg.sender_id)
-                sender_name = sender.email if sender else "Unknown"
-                time_str = msg.created_at.strftime("%Y-%m-%d %H:%M")
-                lines.append(f"- **From {sender_name}** ({time_str}): {msg.content}")
+            from angel_claw.engine import AngelClawEngine
+            engine = AngelClawEngine()
+            ctx = engine._app_context()
+            if not ctx:
+                return "Error: Could not obtain application context for Shopyo."
+
+            with ctx:
+                from modules.agent.models import InternalMessage
+                from shopyo_auth.models import User
+                from init import db
                 
-            return "\n".join(lines)
+                unread = InternalMessage.query.filter_by(
+                    recipient_id=user_id,
+                    is_read=False
+                ).order_by(InternalMessage.created_at.desc()).all()
+                
+                if not unread:
+                    return "You have no unread messages."
+                
+                lines = ["## Unread Messages"]
+                for msg in unread:
+                    sender = db.session.get(User, msg.sender_id)
+                    sender_name = sender.email if sender else "Unknown"
+                    time_str = msg.created_at.strftime("%Y-%m-%d %H:%M")
+                    lines.append(f"- **From {sender_name}** ({time_str}): {msg.content}")
+                    
+                return "\n".join(lines)
         except Exception as e:
             return f"Error listing messages: {str(e)}"
     else:
@@ -101,22 +115,29 @@ def mark_messages_as_read(user_id: str) -> str:
     """
     if settings.auth_mode == "shopyo":
         try:
-            from modules.agent.models import InternalMessage
-            from init import db
-            
-            unread = InternalMessage.query.filter_by(
-                recipient_id=user_id,
-                is_read=False
-            ).all()
-            
-            if not unread:
-                return "No unread messages to mark as read."
-            
-            for msg in unread:
-                msg.is_read = True
-            
-            db.session.commit()
-            return f"✅ Marked {len(unread)} messages as read."
+            from angel_claw.engine import AngelClawEngine
+            engine = AngelClawEngine()
+            ctx = engine._app_context()
+            if not ctx:
+                return "Error: Could not obtain application context for Shopyo."
+
+            with ctx:
+                from modules.agent.models import InternalMessage
+                from init import db
+                
+                unread = InternalMessage.query.filter_by(
+                    recipient_id=user_id,
+                    is_read=False
+                ).all()
+                
+                if not unread:
+                    return "No unread messages to mark as read."
+                
+                for msg in unread:
+                    msg.is_read = True
+                
+                db.session.commit()
+                return f"✅ Marked {len(unread)} messages as read."
         except Exception as e:
             return f"Error marking messages: {str(e)}"
     else:

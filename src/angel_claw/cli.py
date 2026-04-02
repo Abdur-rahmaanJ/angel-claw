@@ -469,10 +469,23 @@ def main():
         print("🤖 Telegram, WhatsApp, and Cron bridges active.")
         print("⏹️   Stop with Ctrl+C\n")
 
+        # Initialize app for engine context
+        app_dir = importlib.resources.files("angel_claw").joinpath("app")
+        app_path_str = str(app_dir)
+        if app_path_str not in sys.path:
+            sys.path.insert(0, app_path_str)
+        
+        from app import create_app
+        shared_app = create_app(os.environ.get("FLASK_ENV", "production"))
+
         async def run_all_bridges():
             from .telegram_bridge import telegram_bridge
             from .whatsapp_bridge import whatsapp_bridge
             from .cron import cron_manager
+
+            # Inject app into engine
+            telegram_bridge.engine.set_app(shared_app)
+            whatsapp_bridge.engine.set_app(shared_app)
 
             lane_queue.start_workers()
             await asyncio.gather(

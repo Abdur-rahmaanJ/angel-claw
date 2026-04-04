@@ -3,251 +3,828 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>🪽 Angel Claw | Chat</title>
+    <title>🪽 Angel Claw | Agent Control Panel</title>
     <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" content="#485fc7">
+    <meta name="theme-color" content="#09090b">
     <link rel="apple-touch-icon" href="/static/shopyo.png">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.0/css/bulma.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script>
-        if ('serviceWorker' in navigator) {
-            window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/static/sw.js')
-                    .then(reg => console.log('Service Worker registered', reg))
-                    .catch(err => console.error('Service Worker registration failed', err));
-            });
-        }
-    </script>
     <style>
+        :root {
+            --bg-color: #09090b;
+            --sidebar-bg: #121214;
+            --card-bg: #18181b;
+            --text-primary: #fafafa;
+            --text-secondary: #a1a1aa;
+            --accent-color: #4f46e5;
+            --border-color: #27272a;
+            --success-color: #10b981;
+            --sidebar-width: 260px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
         body {
-            background-color: #f5f7fa;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             height: 100vh;
+            overflow: hidden;
+            display: flex;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: var(--sidebar-width);
+            background-color: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
+            padding: 1.5rem 1rem;
+            z-index: 100;
         }
-        .chat-container {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 2rem 1rem;
-            max-width: 900px;
-            margin: 0 auto;
-            width: 100%;
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            margin-bottom: 2.5rem;
+            padding-left: 0.5rem;
         }
-        .message {
-            margin-bottom: 1.5rem;
-            max-width: 80%;
-            border-radius: 12px;
-            padding: 1rem;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+
+        .brand-logo {
+            font-size: 1.5rem;
         }
-        .message.user {
-            margin-left: auto;
-            background-color: #00d1b2;
+
+        .brand-name {
+            font-weight: 700;
+            font-size: 1.25rem;
+            letter-spacing: -0.025em;
+        }
+
+        .nav-group {
+            margin-bottom: 2rem;
+        }
+
+        .nav-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+            font-weight: 600;
+            margin-bottom: 0.75rem;
+            padding-left: 0.5rem;
+            letter-spacing: 0.05em;
+        }
+
+        .nav-item {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.625rem 0.75rem;
+            border-radius: 8px;
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9375rem;
+            transition: all 0.2s;
+            cursor: pointer;
+            margin-bottom: 0.25rem;
+        }
+
+        .nav-item:hover {
+            background-color: #27272a;
+            color: var(--text-primary);
+        }
+
+        .nav-item.active {
+            background-color: var(--accent-color);
             color: white;
         }
-        .message.assistant {
-            margin-right: auto;
-            background-color: white;
-            color: #4a4a4a;
+
+        .nav-item i {
+            width: 20px;
+            text-align: center;
         }
-        .chat-input-area {
-            background-color: white;
+
+        .sidebar-footer {
+            margin-top: auto;
+            border-top: 1px solid var(--border-color);
+            padding-top: 1rem;
+        }
+
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            padding: 0.5rem;
+        }
+
+        .user-avatar {
+            width: 32px;
+            height: 32px;
+            background-color: var(--accent-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 600;
+            font-size: 0.875rem;
+        }
+
+        .user-info {
+            flex-grow: 1;
+            min-width: 0;
+        }
+
+        .user-email {
+            font-size: 0.8125rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        /* Main Content */
+        .main-content {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .view-header {
+            height: 64px;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 2rem;
+            background-color: rgba(9, 9, 11, 0.8);
+            backdrop-filter: blur(8px);
+        }
+
+        .view-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+        }
+
+        .workspace {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            display: none; /* Hidden by default */
+        }
+
+        .workspace.active {
+            display: block;
+        }
+
+        /* Grid Layouts */
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: repeat(12, 1fr);
+            gap: 1.5rem;
+        }
+
+        .card {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
             padding: 1.5rem;
-            box-shadow: 0 -2px 10px rgba(0,0,0,0.05);
+            transition: transform 0.2s;
         }
-        .chat-input-area .container {
-            max-width: 900px;
+
+        .card:hover {
+            border-color: #3f3f46;
         }
-        .navbar {
-            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+
+        .span-4 { grid-column: span 4; }
+        .span-6 { grid-column: span 6; }
+        .span-8 { grid-column: span 8; }
+        .span-12 { grid-column: span 12; }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            margin: 0.5rem 0;
         }
-        .typing-indicator {
-            font-style: italic;
-            color: #888;
-            margin-bottom: 1rem;
+
+        .stat-label {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+
+        /* Chat View specific */
+        .chat-view {
             display: none;
+            flex-direction: column;
+            height: 100%;
         }
+
+        .chat-view.active {
+            display: flex;
+        }
+
+        .chat-history {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 2rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+
+        .chat-message {
+            max-width: 800px;
+            width: 100%;
+            margin: 0 auto;
+            display: flex;
+            gap: 1.25rem;
+        }
+
+        .message-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .chat-message.user .message-avatar {
+            background-color: #27272a;
+        }
+
+        .chat-message.assistant .message-avatar {
+            background-color: var(--accent-color);
+        }
+
+        .message-content {
+            line-height: 1.6;
+            font-size: 0.9375rem;
+            padding-top: 0.375rem;
+        }
+
+        .chat-input-container {
+            padding: 1.5rem 2rem 2.5rem;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .chat-input-wrapper {
+            max-width: 800px;
+            margin: 0 auto;
+            position: relative;
+        }
+
+        .chat-input {
+            width: 100%;
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem 3.5rem 1rem 1.25rem;
+            color: white;
+            font-size: 0.9375rem;
+            resize: none;
+            outline: none;
+            min-height: 56px;
+            max-height: 200px;
+        }
+
+        .chat-input:focus {
+            border-color: var(--accent-color);
+        }
+
+        .send-btn {
+            position: absolute;
+            right: 12px;
+            bottom: 12px;
+            width: 32px;
+            height: 32px;
+            background-color: var(--accent-color);
+            border: none;
+            border-radius: 6px;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: opacity 0.2s;
+        }
+
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* List Items */
+        .list-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .list-item:last-child {
+            border-bottom: none;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+            margin-right: 0.5rem;
+        }
+
+        .dot-online { background-color: var(--success-color); box-shadow: 0 0 8px var(--success-color); }
+
+        .badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .badge-high { background-color: #ef444433; color: #ef4444; }
+        .badge-medium { background-color: #f59e0b33; color: #f59e0b; }
+        .badge-low { background-color: #10b98133; color: #10b981; }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+        /* Animation */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .view-animate {
+            animation: fadeIn 0.3s ease-out forwards;
+        }
+
+        /* Modal */
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0,0,0,0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .modal.active { display: flex; }
+
+        .modal-content {
+            background-color: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            width: 100%;
+            max-width: 500px;
+            padding: 2rem;
+        }
+
+        .btn {
+            padding: 0.625rem 1.25rem;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+
+        .btn-primary { background-color: var(--accent-color); color: white; }
+        .btn-secondary { background-color: #27272a; color: white; }
     </style>
 </head>
 <body>
-    <nav class="navbar is-white" role="navigation" aria-label="main navigation">
-        <div class="container">
-            <div class="navbar-brand">
-                <a class="navbar-item" href="/">
-                    <strong class="is-size-4">🪽 Angel Claw</strong>
+    <!-- Sidebar -->
+    <aside class="sidebar">
+        <div class="brand">
+            <span class="brand-logo">🪽</span>
+            <span class="brand-name">Angel Claw</span>
+        </div>
+
+        <nav class="nav-group">
+            <div class="nav-label">Main</div>
+            <a class="nav-item" onclick="showView('dashboard')" id="nav-dashboard">
+                <i class="fas fa-th-large"></i> Dashboard
+            </a>
+            <a class="nav-item active" onclick="showView('chat')" id="nav-chat">
+                <i class="fas fa-comment-dots"></i> Chat
+            </a>
+            <a class="nav-item" onclick="showView('tasks')" id="nav-tasks">
+                <i class="fas fa-check-square"></i> Tasks
+            </a>
+            <a class="nav-item" onclick="showView('calendar')" id="nav-calendar">
+                <i class="fas fa-calendar-alt"></i> Calendar
+            </a>
+            <a class="nav-item" onclick="showView('messages')" id="nav-messages">
+                <i class="fas fa-inbox"></i> Messages
+            </a>
+        </nav>
+
+        <nav class="nav-group">
+            <div class="nav-label">System</div>
+            <a class="nav-item" onclick="showView('skills')" id="nav-skills">
+                <i class="fas fa-bolt"></i> Skills
+            </a>
+            <a class="nav-item" onclick="showView('integrations')" id="nav-integrations">
+                <i class="fas fa-plug"></i> Integrations
+            </a>
+            <a class="nav-item" onclick="showView('api')" id="nav-api">
+                <i class="fas fa-code"></i> API / Dev
+            </a>
+            <a class="nav-item" onclick="showView('settings')" id="nav-settings">
+                <i class="fas fa-cog"></i> Settings
+            </a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="user-profile">
+                <div class="user-avatar">{{ current_user.email[0].upper() }}</div>
+                <div class="user-info">
+                    <div class="user-email">{{ current_user.email }}</div>
+                </div>
+                <a href="/auth/logout" title="Logout" style="color: var(--text-secondary)">
+                    <i class="fas fa-sign-out-alt"></i>
                 </a>
             </div>
-            <div class="navbar-menu">
-                <div class="navbar-end">
-                    <div class="navbar-item">
-                        <div class="field is-grouped">
-                            <p class="control">
-                                <span class="tag is-rounded {% if 'telegram' in channels %}is-success{% else %}is-light{% endif %}" title="Telegram {% if 'telegram' in channels %}Connected{% else %}Not Connected{% endif %}">
-                                    <i class="fab fa-telegram mr-1"></i> Telegram
-                                </span>
-                            </p>
-                            <p class="control">
-                                <span class="tag is-rounded {% if 'whatsapp' in channels %}is-success{% else %}is-light{% endif %}" title="WhatsApp {% if 'whatsapp' in channels %}Connected{% else %}Not Connected{% endif %}">
-                                    <i class="fab fa-whatsapp mr-1"></i> WhatsApp
-                                </span>
-                            </p>
+        </div>
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="main-content">
+        
+        <!-- View: Dashboard -->
+        <div id="view-dashboard" class="workspace view-animate">
+            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
+                <h2 class="view-title">Agent Overview</h2>
+                <div class="agent-status-indicator">
+                    <span class="status-dot dot-online"></span>
+                    <span style="font-size: 0.875rem; color: var(--text-secondary)">Angel Claw System Online</span>
+                </div>
+            </header>
+
+            <div class="dashboard-grid">
+                <div class="card span-4">
+                    <div class="stat-label">Pending Tasks</div>
+                    <div class="stat-value" id="stat-tasks">--</div>
+                    <div style="font-size: 0.75rem; color: var(--success-color)">
+                        <i class="fas fa-arrow-down"></i> 2 finished today
+                    </div>
+                </div>
+                <div class="card span-4">
+                    <div class="stat-label">Upcoming Events</div>
+                    <div class="stat-value" id="stat-events">--</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary)">Next: 2:00 PM Meeting</div>
+                </div>
+                <div class="card span-4">
+                    <div class="stat-label">Unread Notes</div>
+                    <div class="stat-value" id="stat-messages">--</div>
+                    <div style="font-size: 0.75rem; color: var(--accent-color)">From 3 recipients</div>
+                </div>
+
+                <div class="card span-8">
+                    <h3 style="margin-bottom: 1rem; font-size: 1rem;">Activity Feed</h3>
+                    <div id="activity-feed">
+                        <div class="list-item">
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <i class="fas fa-calendar-check" style="color: var(--accent-color)"></i>
+                                <div>
+                                    <p style="font-size: 0.875rem;">Scheduled meeting with "John Doe"</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary)">10 minutes ago</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="list-item">
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <i class="fas fa-envelope" style="color: var(--success-color)"></i>
+                                <div>
+                                    <p style="font-size: 0.875rem;">Sent internal message to Alice</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary)">1 hour ago</p>
+                                </div>
+                            </div>
                         </div>
                     </div>
-                    <div class="navbar-item">
-                        <button class="button is-light is-rounded" onclick="showPairingModal()">
-                            <i class="fas fa-link mr-2"></i> Pair Channel
-                        </button>
+                </div>
+
+                <div class="card span-4">
+                    <h3 style="margin-bottom: 1rem; font-size: 1rem;">Memory Usage</h3>
+                    <div style="height: 150px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
+                        <div style="width: 100px; height: 100px; border-radius: 50%; border: 8px solid var(--border-color); border-top-color: var(--accent-color); display: flex; align-items: center; justify-content: center;">
+                            <span style="font-weight: 700;">12%</span>
+                        </div>
+                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 1rem;">Long-term embeddings: 1.2k</p>
                     </div>
-                    <div class="navbar-item">
-                        <span class="tag is-primary is-light">
-                            <i class="fas fa-user mr-2"></i> {{ current_user.email }}
-                        </span>
-                    </div>
-                    <a class="navbar-item" href="/auth/logout">
-                        Logout
-                    </a>
                 </div>
             </div>
         </div>
-    </nav>
 
-    <div class="chat-container" id="chat-messages">
-        {% for msg in history %}
-        <div class="message {{ msg.role }}">
-            <div class="content">
-                {{ msg.content | safe }}
-            </div>
-        </div>
-        {% endfor %}
-    </div>
-
-    <div class="chat-input-area">
-        <div class="container">
-            <div id="typing" class="typing-indicator">🪽 Angel Claw is thinking...</div>
-            <form id="chat-form" class="field has-addons">
-                <input type="hidden" name="csrf_token" id="csrf_token" value="{{ csrf_token() }}">
-                <div class="control is-expanded">
-                    <input class="input is-medium" type="text" id="user-input" placeholder="Type your message here..." autocomplete="off" style="border-top-left-radius: 25px; border-bottom-left-radius: 25px; border-right: none;">
+        <!-- View: Chat (Default behavior) -->
+        <div id="view-chat" class="chat-view active">
+            <header class="view-header">
+                <h2 class="view-title">Conversation</h2>
+                <div style="display: flex; gap: 1rem;">
+                    <span id="typing" style="font-size: 0.875rem; color: var(--text-secondary); display: none;">🪽 Thinking...</span>
                 </div>
-                <div class="control">
-                    <button class="button is-primary is-medium px-5" type="submit" id="send-btn" style="border-top-right-radius: 25px; border-bottom-right-radius: 25px;">
-                        <i class="fas fa-paper-plane"></i>
-                    </button>
-                </div>
-            </form>
-        </div>
-    </div>
-
-    <div id="pairing-modal" class="modal">
-        <div class="modal-background" onclick="closePairingModal()"></div>
-        <div class="modal-card">
-            <header class="modal-card-head">
-                <p class="modal-card-title">Pair a Channel</p>
-                <button class="delete" aria-label="close" onclick="closePairingModal()"></button>
             </header>
-            <section class="modal-card-body">
-                <p class="mb-4">Link your Telegram or WhatsApp to this 🪽 Angel Claw account using a secure, time-limited token.</p>
-                
-                <div class="field">
-                    <label class="label">Your Pairing Token</label>
-                    <div class="control has-icons-right">
-                        <input id="pairing-token-display" class="input is-medium" type="text" placeholder="Generating..." readonly>
-                        <span class="icon is-right is-clickable" onclick="copyToken()">
-                            <i class="fas fa-copy"></i>
+            
+            <div class="chat-history" id="chat-messages">
+                {% for msg in history %}
+                <div class="chat-message {{ msg.role }} view-animate">
+                    <div class="message-avatar">
+                        <i class="fas {% if msg.role == 'user' %}fa-user{% else %}fa-robot{% endif %}"></i>
+                    </div>
+                    <div class="message-content">
+                        {{ msg.content | safe }}
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div class="chat-input-container">
+                <div class="chat-input-wrapper">
+                    <form id="chat-form">
+                        <input type="hidden" name="csrf_token" id="csrf_token" value="{{ csrf_token() }}">
+                        <textarea class="chat-input" id="user-input" placeholder="Ask your agent anything..." rows="1"></textarea>
+                        <button type="submit" class="send-btn" id="send-btn">
+                            <i class="fas fa-arrow-up"></i>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Tasks -->
+        <div id="view-tasks" class="workspace view-animate">
+            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
+                <h2 class="view-title">Task Management</h2>
+                <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> New Task</button>
+            </header>
+            <div class="card span-12">
+                <div id="tasks-list">
+                    <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Fetching tasks from agent memory...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Calendar -->
+        <div id="view-calendar" class="workspace view-animate">
+            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
+                <h2 class="view-title">Calendar & Events</h2>
+            </header>
+            <div class="card span-12">
+                <div id="calendar-content">
+                    <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Loading your schedule...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Messages -->
+        <div id="view-messages" class="workspace view-animate">
+            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
+                <h2 class="view-title">Internal Inbox</h2>
+            </header>
+            <div class="card span-12">
+                <div id="messages-list">
+                    <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Checking for unread communications...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Skills -->
+        <div id="view-skills" class="workspace view-animate">
+            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
+                <h2 class="view-title">Agent Skills</h2>
+                <button class="btn btn-secondary"><i class="fas fa-upload"></i> Upload Python Skill</button>
+            </header>
+            <div class="dashboard-grid" id="skills-grid">
+                <!-- Skill cards will be injected here -->
+            </div>
+        </div>
+
+        <!-- View: Integrations -->
+        <div id="view-integrations" class="workspace view-animate">
+            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
+                <h2 class="view-title">Connected Bridges</h2>
+                <button class="btn btn-primary" onclick="showPairingModal()">Pair New Channel</button>
+            </header>
+            <div class="dashboard-grid">
+                <div class="card span-6">
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <i class="fab fa-telegram" style="font-size: 2rem; color: #0088cc; margin-bottom: 1rem;"></i>
+                            <h4 class="title is-5">Telegram</h4>
+                            <p style="font-size: 0.875rem; color: var(--text-secondary)">Control your agent via Telegram bot.</p>
+                        </div>
+                        <span class="badge {% if 'telegram' in channels %}badge-low{% else %}badge-high{% endif %}">
+                            {% if 'telegram' in channels %}CONNECTED{% else %}OFFLINE{% endif %}
                         </span>
                     </div>
-                    <p class="help is-info">Expires in 10 minutes.</p>
                 </div>
-
-                <hr>
-
-                <h4 class="title is-5">How to pair:</h4>
-                <div class="content">
-                    <ol>
-                        <li>Open your <strong>Telegram</strong> or <strong>WhatsApp</strong> bot.</li>
-                        <li>Send the command: <code id="pairing-command-example">/pair YOUR_TOKEN</code></li>
-                        <li>Your session will be linked instantly!</li>
-                    </ol>
+                <div class="card span-6">
+                    <div style="display: flex; justify-content: space-between; align-items: start;">
+                        <div>
+                            <i class="fab fa-whatsapp" style="font-size: 2rem; color: #25d366; margin-bottom: 1rem;"></i>
+                            <h4 class="title is-5">WhatsApp</h4>
+                            <p style="font-size: 0.875rem; color: var(--text-secondary)">Messaging bridge for WhatsApp Business.</p>
+                        </div>
+                        <span class="badge {% if 'whatsapp' in channels %}badge-low{% else %}badge-high{% endif %}">
+                            {% if 'whatsapp' in channels %}CONNECTED{% else %}OFFLINE{% endif %}
+                        </span>
+                    </div>
                 </div>
-            </section>
-            <footer class="modal-card-foot">
-                <button class="button is-primary" onclick="generateNewToken()">New Token</button>
-                <button class="button" onclick="closePairingModal()">Close</button>
-            </footer>
+            </div>
+        </div>
+
+        <!-- View: API -->
+        <div id="view-api" class="workspace view-animate">
+            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
+                <h2 class="view-title">Developer Access</h2>
+            </header>
+            <div class="card span-12">
+                <h4 style="margin-bottom: 1rem;">Your API Keys</h4>
+                <div id="api-keys-list" style="margin-bottom: 2rem;">
+                    <!-- API Keys injected here -->
+                </div>
+                
+                <h4 style="margin-bottom: 1rem;">Usage Example</h4>
+                <pre style="background: #000; padding: 1rem; border-radius: 8px; color: #10b981; font-family: monospace; font-size: 0.875rem; overflow-x: auto;">
+curl -X POST http://localhost:5000/chat \
+  -H "Authorization: Bearer YOUR_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"message": "Hello from the API"}'</pre>
+            </div>
+        </div>
+
+        <!-- View: Settings -->
+        <div id="view-settings" class="workspace view-animate">
+            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
+                <h2 class="view-title">Agent Settings</h2>
+            </header>
+            <div class="card span-12">
+                <p style="color: var(--text-secondary)">Configuration settings for your Angel Claw instance.</p>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Modals -->
+    <div id="pairing-modal" class="modal">
+        <div class="modal-content">
+            <h3 style="margin-bottom: 1rem;">Pair a Channel</h3>
+            <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.875rem;">
+                Link your Telegram or WhatsApp to this account using a secure token.
+            </p>
+            <div style="margin-bottom: 1.5rem;">
+                <input id="pairing-token-display" type="text" readonly style="width: 100%; background: #000; border: 1px solid var(--border-color); color: var(--accent-color); padding: 0.75rem; border-radius: 8px; font-family: monospace; text-align: center; font-size: 1.25rem;">
+            </div>
+            <div style="background: #27272a33; padding: 1rem; border-radius: 8px; font-size: 0.8125rem;">
+                <p>1. Open your bot on Telegram or WhatsApp.</p>
+                <p>2. Send: <code style="color: var(--text-primary)">/pair <span id="pairing-code-hint">TOKEN</span></code></p>
+            </div>
+            <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-secondary" onclick="closePairingModal()">Close</button>
+                <button class="btn btn-primary" onclick="generateNewToken()">New Token</button>
+            </div>
         </div>
     </div>
 
     <script>
+        // View Management
+        function showView(viewId) {
+            // Update Navigation
+            document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+            const navItem = document.getElementById('nav-' + viewId);
+            if (navItem) navItem.classList.add('active');
+
+            // Update View visibility
+            document.querySelectorAll('.workspace, .chat-view').forEach(view => view.classList.remove('active'));
+            const targetView = document.getElementById('view-' + viewId);
+            if (targetView) targetView.classList.add('active');
+
+            // Fetch data for the view if needed
+            if (viewId === 'dashboard') loadDashboardStats();
+            if (viewId === 'tasks') loadTasks();
+            if (viewId === 'skills') loadSkills();
+            if (viewId === 'messages') loadMessages();
+            if (viewId === 'api') loadApiInfo();
+        }
+
+        // Data Fetching
+        async function loadDashboardStats() {
+            try {
+                // We'll call multiple endpoints or a single 'me' endpoint
+                const res = await fetch('/me');
+                const data = await res.json();
+                
+                // Fetch other counts
+                const todoRes = await fetch('/todos');
+                const todoData = await todoRes.json();
+                document.getElementById('stat-tasks').innerText = todoData.todos.split('\n').filter(l => l.includes('[ ]')).length;
+
+                const msgRes = await fetch('/messages');
+                const msgData = await msgRes.json();
+                document.getElementById('stat-messages').innerText = msgData.messages.includes('no unread messages') ? 0 : 1; // Simplification
+                
+                document.getElementById('stat-events').innerText = '2'; // Mock
+            } catch (e) {
+                console.error("Error loading stats", e);
+            }
+        }
+
+        async function loadTasks() {
+            const container = document.getElementById('tasks-list');
+            try {
+                const res = await fetch('/todos');
+                const data = await res.json();
+                container.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9375rem;">${data.todos}</pre>`;
+            } catch (e) {
+                container.innerText = "Error loading tasks.";
+            }
+        }
+
+        async function loadSkills() {
+            const container = document.getElementById('skills-grid');
+            try {
+                const res = await fetch('/skills');
+                const data = await res.json();
+                // skills is a list of strings
+                container.innerHTML = data.skills.map(skill => `
+                    <div class="card span-4">
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <div style="width: 40px; height: 40px; border-radius: 8px; background: var(--accent-color); display: flex; align-items: center; justify-content: center;">
+                                <i class="fas fa-puzzle-piece"></i>
+                            </div>
+                            <div>
+                                <h4 style="font-size: 0.9375rem;">${skill}</h4>
+                                <span style="font-size: 0.75rem; color: var(--success-color)">Platform Native</span>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                container.innerText = "Error loading skills.";
+            }
+        }
+
+        async function loadMessages() {
+            const container = document.getElementById('messages-list');
+            try {
+                const res = await fetch('/messages');
+                const data = await res.json();
+                container.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9375rem;">${data.messages}</pre>`;
+            } catch (e) {
+                container.innerText = "Error loading messages.";
+            }
+        }
+
+        async function loadApiInfo() {
+            const container = document.getElementById('api-keys-list');
+            try {
+                const res = await fetch('/me');
+                const data = await res.json();
+                container.innerHTML = data.api_keys.map(k => `
+                    <div class="list-item">
+                        <div>
+                            <p style="font-weight: 600;">${k.name}</p>
+                            <p style="font-size: 0.75rem; color: var(--text-secondary)">Prefix: ${k.prefix}... Created: ${k.created_at}</p>
+                        </div>
+                        <button class="badge badge-low" style="border: none; cursor: pointer;">ACTIVE</button>
+                    </div>
+                `).join('') || '<p style="color: var(--text-secondary)">No API keys generated yet.</p>';
+            } catch (e) {
+                container.innerText = "Error loading API info.";
+            }
+        }
+
+        // Chat Logic
         const chatForm = document.getElementById('chat-form');
         const userInput = document.getElementById('user-input');
         const chatMessages = document.getElementById('chat-messages');
         const typingIndicator = document.getElementById('typing');
         const sendBtn = document.getElementById('send-btn');
-        const pairingModal = document.getElementById('pairing-modal');
-        const tokenDisplay = document.getElementById('pairing-token-display');
-        const commandExample = document.getElementById('pairing-command-example');
-
-        async function showPairingModal() {
-            pairingModal.classList.add('is-active');
-            if (!tokenDisplay.value) {
-                await generateNewToken();
-            }
-        }
-
-        function closePairingModal() {
-            pairingModal.classList.remove('is-active');
-        }
-
-        async function generateNewToken() {
-            tokenDisplay.value = "Generating...";
-            try {
-                const csrfToken = document.getElementById('csrf_token').value;
-                const response = await fetch('/pair-token', {
-                    method: 'POST',
-                    headers: {
-                        'X-CSRFToken': csrfToken
-                    }
-                });
-                const data = await response.json();
-                if (data.token) {
-                    tokenDisplay.value = data.token;
-                    commandExample.innerText = `/pair ${data.token}`;
-                } else {
-                    tokenDisplay.value = `Error: ${data.error || 'Unknown error'}`;
-                }
-            } catch (error) {
-                tokenDisplay.value = "Failed to connect to server";
-            }
-        }
-
-        async function copyToken() {
-            try {
-                const token = tokenDisplay.value;
-                if (!token || token === "Generating..." || token.startsWith("Error")) return;
-                
-                await navigator.clipboard.writeText(token);
-                
-                // Visual feedback
-                const icon = document.querySelector('.icon.is-right i');
-                icon.classList.remove('fa-copy');
-                icon.classList.add('fa-check', 'has-text-success');
-                
-                setTimeout(() => {
-                    icon.classList.remove('fa-check', 'has-text-success');
-                    icon.classList.add('fa-copy');
-                }, 2000);
-            } catch (err) {
-                console.error('Failed to copy: ', err);
-                // Fallback for older browsers
-                tokenDisplay.select();
-                document.execCommand('copy');
-            }
-        }
 
         function appendMessage(role, content) {
             const div = document.createElement('div');
-            div.className = `message ${role}`;
-            div.innerHTML = `<div class="content">${content}</div>`;
+            div.className = `chat-message ${role} view-animate`;
+            div.innerHTML = `
+                <div class="message-avatar">
+                    <i class="fas ${role === 'user' ? 'fa-user' : 'fa-robot'}"></i>
+                </div>
+                <div class="message-content">${content}</div>
+            `;
             chatMessages.appendChild(div);
             chatMessages.scrollTop = chatMessages.scrollHeight;
         }
@@ -261,8 +838,7 @@
             userInput.disabled = true;
             sendBtn.disabled = true;
             appendMessage('user', message);
-            typingIndicator.style.display = 'block';
-            chatMessages.scrollTop = chatMessages.scrollHeight;
+            typingIndicator.style.display = 'inline';
 
             try {
                 const csrfToken = document.getElementById('csrf_token').value;
@@ -281,11 +857,11 @@
                 if (data.response) {
                     appendMessage('assistant', data.response);
                 } else if (data.error) {
-                    appendMessage('assistant', `<span class="has-text-danger">Error: ${data.error}</span>`);
+                    appendMessage('assistant', `<span style="color: #ef4444">Error: ${data.error}</span>`);
                 }
             } catch (error) {
                 typingIndicator.style.display = 'none';
-                appendMessage('assistant', `<span class="has-text-danger">Failed to connect to the agent.</span>`);
+                appendMessage('assistant', `<span style="color: #ef4444">Failed to connect to the agent.</span>`);
             } finally {
                 userInput.disabled = false;
                 sendBtn.disabled = false;
@@ -293,8 +869,51 @@
             }
         });
 
-        // Initial scroll to bottom
-        chatMessages.scrollTop = chatMessages.scrollHeight;
+        // Auto-resize textarea
+        userInput.addEventListener('input', function() {
+            this.style.height = 'auto';
+            this.style.height = (this.scrollHeight) + 'px';
+        });
+
+        // Pairing Modal
+        const pairingModal = document.getElementById('pairing-modal');
+        const tokenDisplay = document.getElementById('pairing-token-display');
+        const codeHint = document.getElementById('pairing-code-hint');
+
+        function showPairingModal() {
+            pairingModal.classList.add('active');
+            if (!tokenDisplay.value) generateNewToken();
+        }
+
+        function closePairingModal() {
+            pairingModal.classList.remove('active');
+        }
+
+        async function generateNewToken() {
+            tokenDisplay.value = "Generating...";
+            try {
+                const csrfToken = document.getElementById('csrf_token').value;
+                const response = await fetch('/pair-token', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken }
+                });
+                const data = await response.json();
+                if (data.token) {
+                    tokenDisplay.value = data.token;
+                    codeHint.innerText = data.token;
+                }
+            } catch (e) { tokenDisplay.value = "Error"; }
+        }
+
+        // Initialize
+        window.addEventListener('load', () => {
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+            
+            // Service Worker for PWA
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/static/sw.js');
+            }
+        });
     </script>
 </body>
 </html>

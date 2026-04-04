@@ -120,4 +120,40 @@ def me():
         ]
     })
 
+@blueprint.route("/todos")
+@login_required
+def get_todos():
+    user_context = _build_context()
+    # Use the skill directly but we need to parse it if it returns string
+    # For prototype, we will fetch from the skill manager
+    from angel_claw.skills.todo import list_todos
+    result = list_todos(user_context.user_id, user_context.channel_identifier)
+    return jsonify({"todos": result})
+
+@blueprint.route("/calendar")
+@login_required
+def get_calendar():
+    user_context = _build_context()
+    from angel_claw.skills.calendar import list_events
+    result = list_events(user_context.user_id)
+    return jsonify({"events": result})
+
+@blueprint.route("/messages")
+@login_required
+def get_messages():
+    user_context = _build_context()
+    from angel_claw.skills.messaging import list_unread_messages
+    result = list_unread_messages(user_context.user_id)
+    return jsonify({"messages": result})
+
+@blueprint.route("/skills")
+@login_required
+def get_skills():
+    # Use the registry to get skills including user-specific ones
+    from angel_claw.runtime.registry import TieredSkillRegistry
+    user_context = _build_context()
+    registry = TieredSkillRegistry(user_context)
+    skills = registry.manager.list_skills()
+    return jsonify({"skills": skills})
+
 

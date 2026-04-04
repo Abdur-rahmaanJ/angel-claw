@@ -66,6 +66,11 @@ class SkillManager:
         if self._needs_reload():
             self.load_skills()
 
+    def list_skills(self) -> List[str]:
+        """Returns a list of all loaded skill names."""
+        self.reload_if_needed()
+        return list(self.skills.keys())
+
     def _load_skill_from_path(self, skill_name: str, skill_path: str):
         try:
             spec = importlib.util.spec_from_file_location(skill_name, skill_path)

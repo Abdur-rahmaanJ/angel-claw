@@ -760,15 +760,15 @@ curl -X POST http://localhost:5000/chat \
             try {
                 const res = await fetch('/skills');
                 const data = await res.json();
-                // skills is a list of strings
-                container.innerHTML = data.skills.map(skill => `
+                // skills is a mapping of name to docstring
+                container.innerHTML = Object.entries(data.skills).map(([name, doc]) => `
                     <div class="card span-4">
                         <div style="display: flex; gap: 1rem; align-items: center;">
                             <div style="width: 40px; height: 40px; border-radius: 8px; background: var(--accent-color); display: flex; align-items: center; justify-content: center;">
                                 <i class="fas fa-puzzle-piece"></i>
                             </div>
                             <div>
-                                <h4 style="font-size: 0.9375rem;">${skill}</h4>
+                                <h4 style="font-size: 0.9375rem;">${name}</h4>
                                 <span style="font-size: 0.75rem; color: var(--success-color)">Platform Native</span>
                             </div>
                         </div>

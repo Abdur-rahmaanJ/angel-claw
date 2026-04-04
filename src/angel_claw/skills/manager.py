@@ -71,6 +71,15 @@ class SkillManager:
         self.reload_if_needed()
         return list(self.skills.keys())
 
+    def get_skill_details(self) -> Dict[str, str]:
+        """Returns a mapping of skill names to their docstrings."""
+        self.reload_if_needed()
+        details = {}
+        for name, func in self.skills.items():
+            doc = inspect.getdoc(func) or "No description provided."
+            details[name] = doc
+        return details
+
     def _load_skill_from_path(self, skill_name: str, skill_path: str):
         try:
             spec = importlib.util.spec_from_file_location(skill_name, skill_path)

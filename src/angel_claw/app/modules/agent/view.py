@@ -32,7 +32,8 @@ def _build_context():
 def index():
     context = mhelp.context()
     user_context = _build_context()
-    history = engine.get_history(user_context)
+    # history = engine.get_history(user_context) # Cleared on reload per request
+    history = []
     
     from modules.agent.models import Channel
     user_id = str(current_user.id)
@@ -153,7 +154,7 @@ def get_skills():
     from angel_claw.runtime.registry import TieredSkillRegistry
     user_context = _build_context()
     registry = TieredSkillRegistry(user_context)
-    skills = registry.manager.list_skills()
+    skills = registry.manager.get_skill_details()
     return jsonify({"skills": skills})
 
 

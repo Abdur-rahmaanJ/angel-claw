@@ -1,0 +1,21 @@
+{
+  "name": "Angel Claw",
+  "short_name": "Angel Claw",
+  "description": "The Multi-Tenant Agent Operating System",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f5f7fa",
+  "theme_color": "#485fc7",
+  "icons": [
+    {
+      "src": "/static/shopyo.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/shopyo.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

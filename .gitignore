@@ -209,4 +209,4 @@ __marimo__/
 vaults/
 skills/
 !src/angel_claw/skills/
-.angelclaw/
+.angelclaw/*.db

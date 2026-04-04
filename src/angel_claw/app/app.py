@@ -428,8 +428,25 @@ def custom_commands(db, app):
         for user in users:
             click.echo(f"{user.id:<4} {user.email:<30} {str(user.is_email_confirmed):<10} {str(user.is_admin):<6}")
 
+    @click.command("shopyo-update-password")
+    @click.argument("email")
+    @click.argument("new_password")
+    @with_appcontext
+    def shopyo_update_password(email, new_password):
+        from shopyo_auth.models import User
+        
+        user = User.query.filter_by(email=email).first()
+        if not user:
+            click.echo(f"User with email {email} not found.")
+            return
+            
+        user.password = new_password
+        db.session.commit()
+        click.echo(f"Password for user {email} updated successfully.")
+
     app.cli.add_command(shopyo_upload)
     app.cli.add_command(shopyo_confirm_user)
     app.cli.add_command(shopyo_promote_user)
     app.cli.add_command(shopyo_create_admin)
     app.cli.add_command(shopyo_list_users)
+    app.cli.add_command(shopyo_update_password)

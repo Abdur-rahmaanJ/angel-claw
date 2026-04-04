@@ -60,6 +60,32 @@ To get started with a fresh installation:
 
 ---
 
+## 🛠️ CLI Reference
+
+Angel Claw provides a powerful command-line interface for managing the OS, users, and bridges.
+
+### Core Commands
+*   `angel-claw setup`: Interactive wizard to initialize the database and create the primary admin account.
+*   `angel-claw serve`: Starts the Flask Web Gateway and the background Bridge Worker in a single process.
+*   `angel-claw chat`: Launches an authenticated interactive chat session in your terminal.
+*   `angel-claw bridges`: Starts only the background bridge workers (Telegram, WhatsApp, Cron). Recommended for production.
+*   `angel-claw tutorial`: Runs the interactive "Guided Tour" of Angel Claw's features.
+
+### User Management
+*   `angel-claw list-users`: Displays all registered users, their confirmation status, and admin privileges.
+*   `angel-claw create-admin <email> <password>`: Directly creates a new administrator account.
+*   `angel-claw update-password <email> <new_password>`: Updates the password for an existing user.
+*   `angel-claw promote-user <email>`: Grants administrative privileges to an existing user.
+*   `angel-claw confirm-user <email>`: Manually marks a user's email as confirmed.
+
+### Utilities & Diagnostics
+*   `angel-claw mcp list`: Lists all tools discovered from connected MCP servers.
+*   `angel-claw mcp test`: Runs a diagnostic suite on your LLM and MCP connections.
+*   `angel-claw login-whatsapp`: Generates a QR code for linking your WhatsApp account.
+*   `angel-claw locate-static`: Prints the absolute path to the web static files (useful for Nginx configuration).
+
+---
+
 ## 🚀 Key Features
 
 | Feature                        | Description                                                 |

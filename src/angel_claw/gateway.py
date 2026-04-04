@@ -88,9 +88,9 @@ async def handle_webhook(payload: Dict[str, Any], request: Request):
             user_id=user_id,
             email=f"{user_id}@angelclaw.local",
             roles=["user"],
-            is_admin=False, # Webhooks are not admin by default
             channel_type="webhook",
-            channel_identifier=session_id
+            channel_identifier=session_id,
+            is_admin=False, # Webhooks are not admin by default
         )
         # We wrap the webhook message with context
         context_message = f"[Webhook Trigger]: {message}"

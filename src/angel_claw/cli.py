@@ -131,9 +131,9 @@ async def interactive_chat(model: str = None, api_base: str = None):
             user_id="dev-user",
             email="dev@local",
             roles=["admin"],
-            is_admin=True,
             channel_type="cli",
             channel_identifier="cli-dev",
+            is_admin=True,
         )
     else:
         cli_key = os.environ.get("CLI_API_KEY")
@@ -464,6 +464,13 @@ def main():
         ))
     elif len(sys.argv) > 1 and sys.argv[1] == "list-users":
         run_shopyo_command(["shopyo-list-users"])
+    elif len(sys.argv) > 1 and sys.argv[1] == "update-password":
+        if len(sys.argv) > 3:
+            email = sys.argv[2]
+            password = sys.argv[3]
+            run_shopyo_command(["shopyo-update-password", email, password])
+        else:
+            print("Usage: angel-claw update-password <email> <new_password>")
     elif len(sys.argv) > 1 and sys.argv[1] == "bridges":
         ensure_env()
         print("🪽  Angel Claw Bridge Worker starting...")
@@ -553,7 +560,7 @@ def main():
         start_gateway()
     else:
         print("🪽 Angel Claw CLI")
-        print("Usage: angel-claw [chat|serve|tutorial|login-whatsapp|confirm-user|promote-user|create-admin|setup|list-users|bridges|locate-static|mcp]")
+        print("Usage: angel-claw [chat|serve|tutorial|login-whatsapp|confirm-user|promote-user|create-admin|update-password|setup|list-users|bridges|locate-static|mcp]")
 
 
 if __name__ == "__main__":

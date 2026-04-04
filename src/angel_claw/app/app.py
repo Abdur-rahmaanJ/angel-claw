@@ -114,6 +114,13 @@ def create_app(config_name="development"):
     from init import db
 
     custom_commands(db, app)
+
+    @app.before_request
+    def make_session_permanent():
+        from flask import session
+        if current_user.is_authenticated:
+            session.permanent = True
+
     @app.route("/")
     def home_redirect():
         return redirect(url_for("agent.index"))

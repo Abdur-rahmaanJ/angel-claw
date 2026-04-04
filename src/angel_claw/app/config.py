@@ -46,6 +46,13 @@ class BaseConfig:
     SHOPYO_DASHBOARD_URL = '/dashboard'
     EMAIL_CONFIRMATION_DISABLED = True
 
+    # Session / Persistent Login
+    PERMANENT_SESSION_LIFETIME = 31536000  # 1 year in seconds
+    REMEMBER_COOKIE_DURATION = 31536000  # 1 year in seconds
+    REMEMBER_COOKIE_REFRESH_EACH_REQUEST = True
+    SESSION_PROTECTION = "basic"
+    SHOPYO_AUTH_LOGIN_TEMPLATE = "agent/login.html"
+
 
 class ProductionConfig(BaseConfig):
     """Configurations for production"""

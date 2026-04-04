@@ -717,12 +717,23 @@ curl -X POST http://localhost:5000/chat \
             // Fetch data for the view if needed
             if (viewId === 'dashboard') loadDashboardStats();
             if (viewId === 'tasks') loadTasks();
+            if (viewId === 'calendar') loadCalendar();
             if (viewId === 'skills') loadSkills();
             if (viewId === 'messages') loadMessages();
             if (viewId === 'api') loadApiInfo();
         }
 
         // Data Fetching
+        async function loadCalendar() {
+            const container = document.getElementById('calendar-content');
+            try {
+                const res = await fetch('/calendar');
+                const data = await res.json();
+                container.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9375rem;">${data.events}</pre>`;
+            } catch (e) {
+                container.innerText = "Error loading calendar.";
+            }
+        }
         async function loadDashboardStats() {
             try {
                 // We'll call multiple endpoints or a single 'me' endpoint

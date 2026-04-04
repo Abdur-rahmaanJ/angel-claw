@@ -136,7 +136,7 @@ def get_todos():
 def get_calendar():
     user_context = _build_context()
     from angel_claw.skills.calendar import list_calendar_events
-    result = list_calendar_events(session_id=user_context.channel_identifier)
+    result = list_calendar_events(session_id=user_context.channel_identifier, user_id=user_context.user_id)
     return jsonify({"events": result})
 
 @blueprint.route("/messages")

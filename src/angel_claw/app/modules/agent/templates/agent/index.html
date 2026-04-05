@@ -564,41 +564,23 @@
                     <div class="stat-label">Pending Tasks</div>
                     <div class="stat-value" id="stat-tasks">--</div>
                     <div style="font-size: 0.75rem; color: var(--success-color)">
-                        <i class="fas fa-arrow-down"></i> 2 finished today
+                        <i class="fas fa-arrow-down"></i> <span id="stat-tasks-completed">0</span> finished today
                     </div>
                 </div>
                 <div class="card span-4">
                     <div class="stat-label">Upcoming Events</div>
                     <div class="stat-value" id="stat-events">--</div>
-                    <div style="font-size: 0.75rem; color: var(--text-secondary)">Next: 2:00 PM Meeting</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary)">Next: <span id="stat-events-next">--</span></div>
                 </div>
                 <div class="card span-4">
                     <div class="stat-label">Unread Notes</div>
                     <div class="stat-value" id="stat-messages">--</div>
-                    <div style="font-size: 0.75rem; color: var(--accent-color)">From 3 recipients</div>
+                    <div style="font-size: 0.75rem; color: var(--accent-color)">From <span id="stat-messages-recipients">0</span> recipients</div>
                 </div>
 
                 <div class="card span-8">
                     <h3 style="margin-bottom: 1rem; font-size: 1rem;">Activity Feed</h3>
                     <div id="activity-feed">
-                        <div class="list-item">
-                            <div style="display: flex; gap: 1rem; align-items: center;">
-                                <i class="fas fa-calendar-check" style="color: var(--accent-color)"></i>
-                                <div>
-                                    <p style="font-size: 0.875rem;">Scheduled meeting with "John Doe"</p>
-                                    <p style="font-size: 0.75rem; color: var(--text-secondary)">10 minutes ago</p>
-                                </div>
-                            </div>
-                        </div>
-                        <div class="list-item">
-                            <div style="display: flex; gap: 1rem; align-items: center;">
-                                <i class="fas fa-envelope" style="color: var(--success-color)"></i>
-                                <div>
-                                    <p style="font-size: 0.875rem;">Sent internal message to Alice</p>
-                                    <p style="font-size: 0.75rem; color: var(--text-secondary)">1 hour ago</p>
-                                </div>
-                            </div>
-                        </div>
                     </div>
                 </div>
 
@@ -880,20 +862,72 @@ curl -X POST http://localhost:5000/chat \
         }
         async function loadDashboardStats() {
             try {
-                // We'll call multiple endpoints or a single 'me' endpoint
-                const res = await fetch('/me');
-                const data = await res.json();
-                
-                // Fetch other counts
                 const todoRes = await fetch('/todos');
                 const todoData = await todoRes.json();
-                document.getElementById('stat-tasks').innerText = todoData.todos.split('\n').filter(l => l.includes('[ ]')).length;
+                const todoLines = todoData.todos.split('\n').filter(l => l.includes('[ ]'));
+                const completedLines = todoData.todos.split('\n').filter(l => l.includes('[x]') || l.includes('✅'));
+                document.getElementById('stat-tasks').innerText = todoLines.length;
+                document.getElementById('stat-tasks-completed').innerText = completedLines.length;
+
+                const eventsRes = await fetch('/calendar');
+                const eventsData = await eventsRes.json();
+                const events = eventsData.events || [];
+                document.getElementById('stat-events').innerText = events.length;
+                if (events.length > 0) {
+                    const nextEvent = events[0];
+                    const start = new Date(nextEvent.start);
+                    const timeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    document.getElementById('stat-events-next').innerText = timeStr + ' ' + nextEvent.title;
+                }
 
                 const msgRes = await fetch('/messages');
                 const msgData = await msgRes.json();
-                document.getElementById('stat-messages').innerText = msgData.messages.includes('no unread messages') ? 0 : 1; // Simplification
+                const messages = msgData.messages || [];
+                document.getElementById('stat-messages').innerText = messages.length;
+                const recipients = [...new Set(messages.map(m => m.from))];
+                document.getElementById('stat-messages-recipients').innerText = recipients.length;
+
+                const activityFeed = document.getElementById('activity-feed');
+                let activityHtml = '';
                 
-                document.getElementById('stat-events').innerText = '2'; // Mock
+                const now = new Date();
+                messages.slice(0, 3).forEach(msg => {
+                    const msgTime = new Date(msg.timestamp);
+                    const diffMs = now - msgTime;
+                    const diffMins = Math.floor(diffMs / 60000);
+                    const diffHours = Math.floor(diffMins / 60);
+                    let timeAgo = diffMins < 60 ? diffMins + ' minutes ago' : diffHours + ' hour' + (diffHours > 1 ? 's' : '') + ' ago';
+                    activityHtml += `
+                        <div class="list-item">
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <i class="fas fa-envelope" style="color: var(--success-color)"></i>
+                                <div>
+                                    <p style="font-size: 0.875rem;">Received message from ${msg.from}</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary)">${timeAgo}</p>
+                                </div>
+                            </div>
+                        </div>`;
+                });
+
+                events.slice(0, 2).forEach(event => {
+                    const start = new Date(event.start);
+                    const timeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    activityHtml += `
+                        <div class="list-item">
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <i class="fas fa-calendar-check" style="color: var(--accent-color)"></i>
+                                <div>
+                                    <p style="font-size: 0.875rem;">Upcoming: ${event.title}</p>
+                                    <p style="font-size: 0.75rem; color: var(--text-secondary)">${start.toLocaleDateString()} at ${timeStr}</p>
+                                </div>
+                            </div>
+                        </div>`;
+                });
+
+                if (!activityHtml) {
+                    activityHtml = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No recent activity</p>';
+                }
+                activityFeed.innerHTML = activityHtml;
             } catch (e) {
                 console.error("Error loading stats", e);
             }

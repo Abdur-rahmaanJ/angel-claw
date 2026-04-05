@@ -541,12 +541,13 @@ class AngelClawEngine:
                     stream=True,  # Enable streaming
                 )
 
-                # Yield chunks as they arrive
+                # Yield chunks as they arrive - yield char by char for true streaming
                 async for chunk in response:
                     delta = chunk.choices[0].delta
                     if delta.content:
                         assistant_content += delta.content
-                        yield delta.content
+                        for char in delta.content:
+                            yield char
 
                     if delta.tool_calls:
                         for tc in delta.tool_calls:

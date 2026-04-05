@@ -62,6 +62,11 @@ executor = ThreadPoolExecutor(max_workers=2)
 
 def run_async_streaming(user_context, message):
     """Run async generator in thread and yield chunks."""
+    print(f"[VIEW DEBUG] Starting stream for message: {message[:50]}...")
+    import sys
+
+    sys.stdout.flush()
+
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)
@@ -70,9 +75,15 @@ def run_async_streaming(user_context, message):
         while True:
             try:
                 chunk = loop.run_until_complete(async_gen.__anext__())
+                print(
+                    f"[VIEW DEBUG] got chunk: {repr(chunk[:20]) if chunk else None}..."
+                )
+                sys.stdout.flush()
                 if chunk is not None:
                     yield f"data: {json.dumps({'chunk': chunk})}\n\n"
             except StopAsyncIteration:
+                print("[VIEW DEBUG] done")
+                sys.stdout.flush()
                 yield f"data: {json.dumps({'done': True})}\n\n"
                 break
     except Exception as e:
@@ -82,6 +93,8 @@ def run_async_streaming(user_context, message):
         logger = logging.getLogger("angel-claw-view")
         logger.error(f"Error in streaming chat: {e}")
         logger.error(traceback.format_exc())
+        print(f"[VIEW DEBUG] exception: {e}")
+        sys.stdout.flush()
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
     finally:
         loop.run_until_complete(asyncio.sleep(0))

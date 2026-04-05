@@ -1446,20 +1446,39 @@ curl -X POST http://localhost:5000/chat \
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             try {
+                                console.log('[CLIENT DEBUG] raw line:', line);
                                 const data = JSON.parse(line.slice(6));
+                                console.log('[CLIENT DEBUG] parsed data:', data);
                                 if (data.chunk) {
+                                    console.log('[CLIENT DEBUG] got chunk:', data.chunk);
                                     if (!data.chunk.startsWith('[TOOL_CALL:')) {
                                         assistantMessage += data.chunk;
-                                        contentDiv.innerHTML = assistantMessage.replace(/\n/g, '<br>');
+                                        console.log('[CLIENT DEBUG] full message now:', assistantMessage);
+                                        
+                                        // Use textContent + convert newlines to <br>
+                                        const formatted = assistantMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                                        contentDiv.innerHTML = formatted;
+                                        
+                                        // Force browser reflow
+                                        void contentDiv.offsetWidth;
+                                        
+                                        // Scroll immediately
                                         chatMessages.scrollTop = chatMessages.scrollHeight;
+                                        console.log('[CLIENT DEBUG] About to hide typingIndicator');
+                                        typingIndicator.style.display = 'none';
+                                        console.log('[CLIENT DEBUG] typingIndicator hidden, computed style:', window.getComputedStyle(typingIndicator).display);
                                     }
                                 } else if (data.done) {
+                                    console.log('[CLIENT DEBUG] done');
                                     typingIndicator.style.display = 'none';
                                 } else if (data.error) {
+                                    console.log('[CLIENT DEBUG] error:', data.error);
                                     contentDiv.innerHTML = `<span style="color: #ef4444">Error: ${data.error}</span>`;
                                     typingIndicator.style.display = 'none';
                                 }
-                            } catch (e) {}
+                            } catch (e) {
+                                console.log('[CLIENT DEBUG] parse error:', e);
+                            }
                         }
                     }
                 }

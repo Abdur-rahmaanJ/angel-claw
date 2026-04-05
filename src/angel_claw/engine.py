@@ -211,6 +211,13 @@ class AngelClawEngine:
         return True
 
     async def execute(self, context: UserContext, message: str) -> EngineResponse:
+        ctx = self._app_context()
+        if ctx:
+            with ctx:
+                return await self._execute_internal(context, message)
+        return await self._execute_internal(context, message)
+
+    async def _execute_internal(self, context: UserContext, message: str) -> EngineResponse:
         self._ensure_channel(context)
 
         # Ensure cleanup task is running
@@ -516,6 +523,17 @@ class AngelClawEngine:
         )
 
     async def execute_streaming(self, context: UserContext, message: str):
+        """Streaming version of execute - yields chunks as they arrive."""
+        ctx = self._app_context()
+        if ctx:
+            with ctx:
+                async for chunk in self._execute_streaming_internal(context, message):
+                    yield chunk
+        else:
+            async for chunk in self._execute_streaming_internal(context, message):
+                yield chunk
+
+    async def _execute_streaming_internal(self, context: UserContext, message: str):
         """Streaming version of execute - yields chunks as they arrive."""
         self._ensure_channel(context)
 

@@ -75,21 +75,23 @@ def deduct_credits(
 ) -> tuple[bool, str]:
     """
     Deduct credits for a given action.
-    Uses model methods for logic and atomicity (via session management).
-    If amount is provided, use it. Otherwise use the default cost for the action.
+    Initializes user credits if not found.
     """
     try:
+        from angel_claw.config.settings import settings
         cost = amount if amount is not None else get_action_cost(action)
-        # Use with_for_update for atomicity
+        
+        # Use get_or_create to ensure record exists
+        initial = getattr(settings, "initial_free_credits", 1000)
+        credit = UserCredit.get_or_create(user_id, initial=initial)
+        
+        # Lock for update
         credit = (
             db.session.query(UserCredit)
             .filter_by(user_id=user_id)
             .with_for_update()
             .first()
         )
-
-        if not credit:
-            return False, "User credits not found"
 
         success, msg = credit.deduct_credits(
             cost, action, meta=metadata, allow_negative=allow_negative
@@ -130,9 +132,11 @@ def add_credits(
 
 
 def get_balance(user_id: str) -> int:
-    """Get current credit balance for a user."""
-    credit = UserCredit.query.filter_by(user_id=user_id).first()
-    return credit.balance if credit else 0
+    """Get current credit balance for a user, initializing if missing."""
+    from angel_claw.config.settings import settings
+    initial = getattr(settings, "initial_free_credits", 1000)
+    credit = UserCredit.get_or_create(user_id, initial=initial)
+    return credit.balance
 
 
 def check_sufficient_credits(user_id: str, action: str) -> tuple[bool, int]:

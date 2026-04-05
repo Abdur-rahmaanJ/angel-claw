@@ -490,6 +490,11 @@ class AngelClawEngine:
             logger.warning(f"Turn limit reached ({MAX_TURNS}) for user {user_id}")
             assistant_content += "\n\n[SYSTEM: Maximum reasoning turns reached. I've stopped to prevent excessive resource usage.]"
 
+        # If we called tools but the model didn't provide any final text content,
+        # provide a default acknowledgement to avoid sending empty messages.
+        if not assistant_content.strip() and tool_calls_list:
+            assistant_content = "✅ I've processed your request using my available tools."
+
         # 4. Update history (Isolated)
         runtime.add_message(session_id, Message(role=Role.USER, content=message))
         runtime.add_message(
@@ -685,6 +690,14 @@ class AngelClawEngine:
 
         # Update history
         runtime.add_message(session_id, Message(role=Role.USER, content=message))
+        
+        # If assistant_content is empty but we had tool calls, use a default ack
+        if not assistant_content.strip() and tool_calls_list:
+            assistant_content = "✅ I've processed your request using my available tools."
+            # We need to yield this if it hasn't been yielded already
+            for char in assistant_content:
+                yield char
+
         runtime.add_message(
             session_id, Message(role=Role.ASSISTANT, content=assistant_content)
         )

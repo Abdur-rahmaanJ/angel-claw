@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -9,700 +9,147 @@
     <link rel="icon" type="image/png" href="/static/wing.png">
     <link rel="apple-touch-icon" href="/static/wing.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        :root {
-            --bg-color: #09090b;
-            --sidebar-bg: #121214;
-            --card-bg: #18181b;
-            --text-primary: #fafafa;
-            --text-secondary: #a1a1aa;
-            --accent-color: #4f46e5;
-            --border-color: #27272a;
-            --success-color: #10b981;
-            --sidebar-width: 260px;
+    
+    <!-- Local Tailwind (Standalone) -->
+    <script src="/static/js/tailwind.min.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        accent: 'var(--accent-color)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style type="text/tailwindcss">
+        @layer base {
+            :root {
+                --bg-color: #09090b;
+                --sidebar-bg: #121214;
+                --card-bg: #18181b;
+                --text-primary: #fafafa;
+                --text-secondary: #a1a1aa;
+                --accent-color: #22c55e;
+                --border-color: #27272a;
+                --success-color: #10b981;
+            }
+
+            .light {
+                --bg-color: #f4f4f5;
+                --sidebar-bg: #ffffff;
+                --card-bg: #ffffff;
+                --text-primary: #18181b;
+                --text-secondary: #71717a;
+                --accent-color: #10b981;
+                --border-color: #e4e4e7;
+            }
+
+            body {
+                background-color: var(--bg-color);
+                color: var(--text-primary);
+                font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            }
         }
 
-        [data-theme="light"] {
-            --bg-color: #f4f4f5;
-            --sidebar-bg: #ffffff;
-            --card-bg: #ffffff;
-            --text-primary: #18181b;
-            --text-secondary: #71717a;
-            --accent-color: #22c55e;
-            --border-color: #e4e4e7;
-            --success-color: #10b981;
+        @layer components {
+            .nav-item {
+                @apply flex items-center gap-3 px-3 py-2.5 rounded-lg text-zinc-400 hover:bg-zinc-800 hover:text-zinc-100 transition-all cursor-pointer mb-1 text-[15px];
+            }
+            .nav-item.active {
+                @apply bg-accent text-white;
+            }
+            .stat-card {
+                @apply bg-[var(--card-bg)] border border-[var(--border-color)] rounded-xl p-6 transition-all hover:border-zinc-700;
+            }
+            .btn {
+                @apply px-5 py-2.5 rounded-lg font-semibold cursor-pointer transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed;
+            }
+            .btn-primary {
+                @apply bg-accent text-white hover:opacity-90;
+            }
+            .btn-secondary {
+                @apply bg-zinc-800 text-white hover:bg-zinc-700;
+            }
+            .view-header {
+                @apply h-16 border-b border-[var(--border-color)] flex items-center justify-between px-4 md:px-8 backdrop-blur-md sticky top-0 z-30;
+                background-color: color-mix(in srgb, var(--bg-color), transparent 20%);
+            }
+            .workspace {
+                @apply flex-grow overflow-y-auto p-4 md:p-8;
+            }
+            .workspace.active-view {
+                @apply animate-[fadeIn_0.3s_ease-out];
+            }
         }
 
-        [data-theme="dark"] {
-            --accent-color: #22c55e;
-        }
-
-        /* Accent Color Palette */
-        .color-option {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            cursor: pointer;
-            border: 2px solid transparent;
-            transition: all 0.2s;
-        }
-        .color-option:hover {
-            transform: scale(1.1);
-        }
-        .color-option.selected {
-            border-color: var(--text-primary);
-            box-shadow: 0 0 0 2px var(--bg-color);
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-        }
-
-        body {
-            background-color: var(--bg-color);
-            color: var(--text-primary);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            height: 100vh;
-            overflow: hidden;
-            display: flex;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: var(--sidebar-width);
-            background-color: var(--sidebar-bg);
-            border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            padding: 1.5rem 1rem;
-            z-index: 100;
-        }
-
-        .brand {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            margin-bottom: 2.5rem;
-            padding-left: 0.5rem;
-        }
-
-        .brand-logo {
-            font-size: 1.5rem;
-        }
-
-        .brand-name {
-            font-weight: 700;
-            font-size: 1.25rem;
-            letter-spacing: -0.025em;
-        }
-
-        .nav-group {
-            margin-bottom: 2rem;
-        }
-
-        .nav-label {
-            font-size: 0.75rem;
-            text-transform: uppercase;
-            color: var(--text-secondary);
-            font-weight: 600;
-            margin-bottom: 0.75rem;
-            padding-left: 0.5rem;
-            letter-spacing: 0.05em;
-        }
-
-        .nav-item {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.625rem 0.75rem;
-            border-radius: 8px;
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9375rem;
-            transition: all 0.2s;
-            cursor: pointer;
-            margin-bottom: 0.25rem;
-        }
-
-        .nav-item:hover {
-            background-color: #27272a;
-            color: var(--text-primary);
-        }
-
-        .nav-item.active {
-            background-color: var(--accent-color);
-            color: white;
-        }
-
-        .nav-item i {
-            width: 20px;
-            text-align: center;
-        }
-
-        .sidebar-footer {
-            margin-top: auto;
-            border-top: 1px solid var(--border-color);
-            padding-top: 1rem;
-        }
-
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-            padding: 0.5rem;
-        }
-
-        .user-avatar {
-            width: 32px;
-            height: 32px;
-            background-color: var(--accent-color);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            font-size: 0.875rem;
-        }
-
-        .user-info {
-            flex-grow: 1;
-            min-width: 0;
-        }
-
-        .user-email {
-            font-size: 0.8125rem;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        /* Main Content */
-        .main-content {
-            flex-grow: 1;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
-            position: relative;
-        }
-
-        .view-header {
-            height: 64px;
-            border-bottom: 1px solid var(--border-color);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 0 2rem;
-            background-color: rgba(9, 9, 11, 0.8);
-            backdrop-filter: blur(8px);
-        }
-
-        [data-theme="light"] .view-header {
-            background-color: rgba(255, 255, 255, 0.8);
-        }
-
-        .theme-toggle {
-            background: none;
-            border: 1px solid var(--border-color);
-            color: var(--text-primary);
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.2s;
-        }
-
-        .theme-toggle:hover {
-            background: var(--card-bg);
-            border-color: var(--accent-color);
-        }
-
-        .view-title {
-            font-size: 1.125rem;
-            font-weight: 600;
-        }
-
-        .workspace {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 2rem;
-            display: none; /* Hidden by default */
-        }
-
-        .workspace.active {
-            display: block;
-        }
-
-        /* Grid Layouts */
-        .dashboard-grid {
-            display: grid;
-            grid-template-columns: repeat(12, 1fr);
-            gap: 1.5rem;
-        }
-
-        .card {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1.5rem;
-            transition: transform 0.2s;
-        }
-
-        .card:hover {
-            border-color: #3f3f46;
-        }
-
-        .span-4 { grid-column: span 4; }
-        .span-6 { grid-column: span 6; }
-        .span-8 { grid-column: span 8; }
-        .span-12 { grid-column: span 12; }
-
-        .stat-value {
-            font-size: 2rem;
-            font-weight: 700;
-            margin: 0.5rem 0;
-        }
-
-        .stat-label {
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-        }
-
-        /* Chat View specific */
-        .chat-view {
-            display: none;
-            flex-direction: column;
-            height: 100%;
-        }
-
-        .chat-view.active {
-            display: flex;
-        }
-
-        .chat-history {
-            flex-grow: 1;
-            overflow-y: auto;
-            padding: 2rem;
-            display: flex;
-            flex-direction: column;
-            gap: 1.5rem;
-        }
-
-        .chat-message {
-            max-width: 800px;
-            width: 100%;
-            margin: 0 auto;
-            display: flex;
-            gap: 1.25rem;
-        }
-
-        .message-avatar {
-            width: 36px;
-            height: 36px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .chat-message.user .message-avatar {
-            background-color: #27272a;
-        }
-
-        .chat-message.assistant .message-avatar {
-            background-color: var(--accent-color);
-        }
-
-        .message-content {
-            line-height: 1.6;
-            font-size: 0.9375rem;
-            padding-top: 0.375rem;
-        }
-
-        .chat-input-container {
-            padding: 1.5rem 2rem 2.5rem;
-            border-top: 1px solid var(--border-color);
-        }
-
-        .chat-input-wrapper {
-            max-width: 800px;
-            margin: 0 auto;
-            position: relative;
-        }
-
-        .chat-input {
-            width: 100%;
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 12px;
-            padding: 1rem 3.5rem 1rem 1.25rem;
-            color: white;
-            font-size: 0.9375rem;
-            resize: none;
-            outline: none;
-            min-height: 56px;
-            max-height: 200px;
-        }
-
-        .chat-input:focus {
-            border-color: var(--accent-color);
-        }
-
-        .send-btn {
-            position: absolute;
-            right: 12px;
-            bottom: 12px;
-            width: 32px;
-            height: 32px;
-            background-color: var(--accent-color);
-            border: none;
-            border-radius: 6px;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: opacity 0.2s;
-        }
-
-        .send-btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-
-        /* List Items */
-        .list-item {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 1rem;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .list-item:last-child {
-            border-bottom: none;
-        }
-
-        .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 0.5rem;
-        }
-
-        .dot-online { background-color: var(--success-color); box-shadow: 0 0 8px var(--success-color); }
-
-        .badge {
-            padding: 0.25rem 0.5rem;
-            border-radius: 4px;
-            font-size: 0.75rem;
-            font-weight: 600;
-        }
-
-        .badge-high { background-color: #ef444433; color: #ef4444; }
-        .badge-medium { background-color: #f59e0b33; color: #f59e0b; }
-        .badge-low { background-color: #10b98133; color: #10b981; }
-
-        /* Scrollbar */
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: transparent; }
-        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
-
-        /* Animation */
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(10px); }
             to { opacity: 1; transform: translateY(0); }
         }
 
-        .view-animate {
-            animation: fadeIn 0.3s ease-out forwards;
-        }
-
-        /* Modal */
-        .modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0,0,0,0.8);
-            display: none;
-            align-items: center;
-            justify-content: center;
-            z-index: 1000;
-        }
-
-        .modal.active { display: flex; }
-
-        .modal-content {
-            background-color: var(--card-bg);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            width: 100%;
-            max-width: 500px;
-            padding: 2rem;
-        }
-
-        .btn {
-            padding: 0.625rem 1.25rem;
-            border-radius: 8px;
-            font-weight: 600;
-            cursor: pointer;
-            border: none;
-            transition: all 0.2s;
-        }
-
-        .btn-primary { background-color: var(--accent-color); color: white; }
-        .btn-secondary { background-color: #27272a; color: white; }
-
-        /* Inbox Styles */
-        .inbox-row {
-            display: flex;
-            align-items: center;
-            padding: 1rem 1.5rem;
-            border-bottom: 1px solid var(--border-color);
-            cursor: pointer;
-            transition: background 0.2s;
-            gap: 2rem;
-        }
-
-        .inbox-row:hover {
-            background-color: #1c1c1f;
-        }
-
-        .inbox-from {
-            width: 200px;
-            font-weight: 600;
-            flex-shrink: 0;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .inbox-snippet {
-            flex-grow: 1;
-            color: var(--text-secondary);
-            font-size: 0.875rem;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
-        .inbox-time {
-            width: 120px;
-            text-align: right;
-            font-size: 0.75rem;
-            color: var(--text-secondary);
-            flex-shrink: 0;
-        }
-
-        /* Calendar Styles */
-        .calendar-table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 0.9375rem;
-        }
-
-        .calendar-table th {
-            text-align: left;
-            padding: 1rem;
-            color: var(--text-secondary);
-            font-weight: 600;
-            border-bottom: 1px solid var(--border-color);
-            text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-        }
-
-        .calendar-table td {
-            padding: 1rem;
-            border-bottom: 1px solid var(--border-color);
-            vertical-align: middle;
-        }
-
-        .calendar-table tr:hover {
-            background-color: #1c1c1f;
-        }
-
-        .event-date-cell {
-            font-weight: 600;
-            width: 120px;
-        }
-
-        .event-time-badge {
-            background-color: #4f46e533;
-            color: var(--accent-color);
-            padding: 0.25rem 0.5rem;
-            border-radius: 6px;
-            font-size: 0.8125rem;
-            font-weight: 600;
-        }
-
-        /* Mobile Menu Toggle */
-        .mobile-toggle {
-            display: none;
-            background: none;
-            border: none;
-            color: var(--text-primary);
-            font-size: 1.25rem;
-            cursor: pointer;
-            padding: 0.5rem;
-        }
-
-        .sidebar-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0,0,0,0.5);
-            z-index: 99;
-        }
-
-        /* Mobile Responsive */
-        @media (max-width: 768px) {
-            body {
-                flex-direction: column;
-            }
-
-            .mobile-toggle {
-                display: block;
-            }
-
-            .sidebar {
-                position: fixed;
-                top: 0;
-                left: 0;
-                height: 100%;
-                width: 280px;
-                transform: translateX(-100%);
-                transition: transform 0.3s ease;
-            }
-
-            .sidebar.open {
-                transform: translateX(0);
-            }
-
-            .sidebar-overlay.open {
-                display: block;
-            }
-
-            .view-header {
-                padding: 0 1rem;
-                height: 56px;
-            }
-
-            .view-header h2 {
-                font-size: 1rem;
-            }
-
-            .workspace {
-                padding: 1rem;
-            }
-
-            .dashboard-grid {
-                grid-template-columns: 1fr;
-                gap: 1rem;
-            }
-
-            .span-4, .span-6, .span-8, .span-12 {
-                grid-column: span 1;
-            }
-
-            .card {
-                padding: 1rem;
-            }
-
-            .stat-value {
-                font-size: 1.5rem;
-            }
-
-            .inbox-row {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 0.5rem;
-            }
-
-            .inbox-from, .inbox-snippet, .inbox-time {
-                width: 100%;
-                text-align: left;
-            }
-
-            .chat-history {
-                padding: 1rem;
-            }
-
-            .chat-input-container {
-                padding: 1rem;
-            }
-
-            .modal-content {
-                margin: 1rem;
-                max-width: calc(100% - 2rem);
-            }
-        }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { @apply bg-zinc-800 rounded-full; }
+        ::-webkit-scrollbar-thumb:hover { @apply bg-zinc-700; }
     </style>
 </head>
-<body>
-    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+<body class="h-screen overflow-hidden flex">
+    <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-[40] hidden backdrop-blur-sm lg:hidden transition-opacity duration-300"></div>
     
     <!-- Sidebar -->
-    <aside class="sidebar" id="sidebar">
-        <div class="brand">
-            <span class="brand-logo">🪽</span>
-            <span class="brand-name">Angel Claw</span>
+    <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-[280px] lg:w-[260px] bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] flex flex-col p-6 z-[50] -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out overflow-y-auto">
+        <div class="flex items-center gap-3 mb-10 px-2">
+            <span class="text-2xl">🪽</span>
+            <span class="font-bold text-xl tracking-tight">Angel Claw</span>
         </div>
 
-        <nav class="nav-group">
-            <div class="nav-label">Main</div>
+        <nav class="mb-8">
+            <div class="text-[10px] uppercase text-zinc-500 font-bold mb-4 px-3 tracking-widest">Main</div>
             <a class="nav-item" onclick="showView('dashboard')" id="nav-dashboard">
-                <i class="fas fa-th-large"></i> Dashboard
+                <i class="fas fa-th-large w-5 text-center"></i> Dashboard
             </a>
             <a class="nav-item active" onclick="showView('chat')" id="nav-chat">
-                <i class="fas fa-comment-dots"></i> Chat
+                <i class="fas fa-comment-dots w-5 text-center"></i> Chat
             </a>
             <a class="nav-item" onclick="showView('tasks')" id="nav-tasks">
-                <i class="fas fa-check-square"></i> Tasks
+                <i class="fas fa-check-square w-5 text-center"></i> Tasks
             </a>
             <a class="nav-item" onclick="showView('calendar')" id="nav-calendar">
-                <i class="fas fa-calendar-alt"></i> Calendar
+                <i class="fas fa-calendar-alt w-5 text-center"></i> Calendar
             </a>
             <a class="nav-item" onclick="showView('messages')" id="nav-messages">
-                <i class="fas fa-inbox"></i> Messages
+                <i class="fas fa-inbox w-5 text-center"></i> Messages
             </a>
         </nav>
 
-        <nav class="nav-group">
-            <div class="nav-label">System</div>
+        <nav class="mb-8">
+            <div class="text-[10px] uppercase text-zinc-500 font-bold mb-4 px-3 tracking-widest">System</div>
             <a class="nav-item" onclick="showView('skills')" id="nav-skills">
-                <i class="fas fa-bolt"></i> Skills
+                <i class="fas fa-bolt w-5 text-center"></i> Skills
             </a>
             <a class="nav-item" onclick="showView('integrations')" id="nav-integrations">
-                <i class="fas fa-plug"></i> Integrations
+                <i class="fas fa-plug w-5 text-center"></i> Integrations
             </a>
             <a class="nav-item" onclick="showView('api')" id="nav-api">
-                <i class="fas fa-code"></i> API / Dev
+                <i class="fas fa-code w-5 text-center"></i> API / Dev
             </a>
             <a class="nav-item" onclick="showView('settings')" id="nav-settings">
-                <i class="fas fa-cog"></i> Settings
+                <i class="fas fa-cog w-5 text-center"></i> Settings
             </a>
         </nav>
 
-        <div class="sidebar-footer">
-            <div class="user-profile">
-                <div class="user-avatar">{{ current_user.email[0].upper() }}</div>
-                <div class="user-info">
-                    <div class="user-email">{{ current_user.email }}</div>
+        <div class="mt-auto pt-4 border-t border-[var(--border-color)]">
+            <div class="flex items-center gap-3 p-2">
+                <div class="w-8 h-8 bg-accent rounded-full flex items-center justify-center font-bold text-sm text-white">
+                    {{ current_user.email[0].upper() }}
                 </div>
-                <a href="/auth/logout" title="Logout" style="color: var(--text-secondary)">
+                <div class="flex-grow min-w-0">
+                    <div class="text-sm truncate opacity-90">{{ current_user.email }}</div>
+                </div>
+                <a href="/auth/logout" title="Logout" class="text-zinc-500 hover:text-red-400 transition-colors">
                     <i class="fas fa-sign-out-alt"></i>
                 </a>
             </div>
@@ -710,105 +157,104 @@
     </aside>
 
     <!-- Main Content Area -->
-    <main class="main-content">
+    <main class="flex-grow flex flex-col relative min-w-0">
         
         <!-- View: Dashboard -->
-        <div id="view-dashboard" class="workspace view-animate">
-            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="mobile-toggle" onclick="toggleSidebar()">
+        <div id="view-dashboard" class="workspace hidden">
+            <header class="view-header">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <h2 class="view-title">Agent Overview</h2>
+                    <h2 class="font-bold text-lg md:text-xl">Agent Overview</h2>
                 </div>
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">
+                <div class="flex items-center gap-4">
+                    <button class="w-9 h-9 border border-[var(--border-color)] rounded-lg flex items-center justify-center hover:border-accent transition-all" onclick="toggleTheme()" title="Toggle theme">
                         <i class="fas fa-moon" id="theme-icon"></i>
                     </button>
                 </div>
             </header>
 
-            <div class="dashboard-grid">
-                <div class="card span-4">
-                    <div class="stat-label">Credits Usage</div>
-                    <div class="stat-value" style="color: var(--accent-color);">
-                        {{ credit_info.lifetime_spent if credit_info else 0 }} <span style="font-size: 1rem; color: var(--text-secondary)">/ {{ credit_info.limit if credit_info else 1000 }}</span>
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6 mt-6">
+                <div class="stat-card md:col-span-4">
+                    <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Credits Usage</div>
+                    <div class="text-3xl font-bold mb-2 text-accent">
+                        {{ credit_info.lifetime_spent if credit_info else 0 }} <span class="text-sm font-normal text-zinc-500">/ {{ credit_info.limit if credit_info else 1000 }}</span>
                     </div>
-                    <div class="progress-container" style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin: 0.5rem 0;">
-                        <div class="progress-bar" style="height: 100%; background: var(--accent-color); border-radius: 2px; width: {{ (credit_info.lifetime_spent / credit_info.limit * 100) if credit_info and credit_info.limit else 0 }}%"></div>
+                    <div class="h-1 bg-zinc-800 rounded-full mb-2">
+                        <div class="h-full bg-accent rounded-full" style="width: {{ (credit_info.lifetime_spent / credit_info.limit * 100) if credit_info and credit_info.limit else 0 }}%"></div>
                     </div>
-                    <div style="font-size: 0.75rem; color: var(--text-secondary)">
+                    <div class="text-[10px] text-zinc-500">
                         {{ credit_info.balance if credit_info else 0 }} credits remaining
                     </div>
                 </div>
-                <div class="card span-4">
-                    <div class="stat-label">Pending Tasks</div>
-                    <div class="stat-value" id="stat-tasks">--</div>
-                    <div style="font-size: 0.75rem; color: var(--success-color)">
+                <div class="stat-card md:col-span-4">
+                    <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Pending Tasks</div>
+                    <div class="text-3xl font-bold mb-2" id="stat-tasks">--</div>
+                    <div class="text-xs text-[var(--success-color)] flex items-center gap-1">
                         <i class="fas fa-arrow-down"></i> <span id="stat-tasks-completed">0</span> finished today
                     </div>
                 </div>
-                <div class="card span-4">
-                    <div class="stat-label">Upcoming Events</div>
-                    <div class="stat-value" id="stat-events">--</div>
-                    <div style="font-size: 0.75rem; color: var(--text-secondary)">Next: <span id="stat-events-next">--</span></div>
+                <div class="stat-card md:col-span-4">
+                    <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Upcoming Events</div>
+                    <div class="text-3xl font-bold mb-2" id="stat-events">--</div>
+                    <div class="text-xs text-zinc-500 truncate">Next: <span id="stat-events-next">--</span></div>
                 </div>
-                <div class="card span-4">
-                    <div class="stat-label">Unread Notes</div>
-                    <div class="stat-value" id="stat-messages">--</div>
-                    <div style="font-size: 0.75rem; color: var(--accent-color)">From <span id="stat-messages-recipients">0</span> recipients</div>
+                <div class="stat-card md:col-span-4">
+                    <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Unread Notes</div>
+                    <div class="text-3xl font-bold mb-2" id="stat-messages">--</div>
+                    <div class="text-xs text-accent">From <span id="stat-messages-recipients">0</span> recipients</div>
                 </div>
 
-                <div class="card span-8">
-                    <h3 style="margin-bottom: 1rem; font-size: 1rem;">Activity Feed</h3>
-                    <div id="activity-feed">
+                <div class="stat-card md:col-span-8">
+                    <h3 class="font-bold mb-4">Activity Feed</h3>
+                    <div id="activity-feed" class="space-y-4">
+                        <!-- Content Injected -->
                     </div>
                 </div>
 
-                <div class="card span-4">
-                    <h3 style="margin-bottom: 1rem; font-size: 1rem;">Memory Usage</h3>
-                    <div style="height: 150px; display: flex; align-items: center; justify-content: center; flex-direction: column;">
-                        <div style="width: 100px; height: 100px; border-radius: 50%; border: 8px solid var(--border-color); border-top-color: var(--accent-color); display: flex; align-items: center; justify-content: center;">
-                            <span style="font-weight: 700;">12%</span>
+                <div class="stat-card md:col-span-4">
+                    <h3 class="font-bold mb-6">Memory Usage</h3>
+                    <div class="flex flex-col items-center justify-center py-4">
+                        <div class="w-32 h-32 rounded-full border-[6px] border-[var(--border-color)] border-t-accent flex items-center justify-center relative">
+                            <span class="text-2xl font-bold">12%</span>
                         </div>
-                        <p style="font-size: 0.75rem; color: var(--text-secondary); margin-top: 1rem;">Long-term embeddings: 1.2k</p>
+                        <p class="text-xs text-zinc-500 mt-6 font-medium">Long-term embeddings: 1.2k</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- View: Chat (Default behavior) -->
-        <div id="view-chat" class="chat-view active">
+        <!-- View: Chat -->
+        <div id="view-chat" class="workspace !p-0 flex flex-col h-full">
             <header class="view-header">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <h2 class="view-title">Conversation</h2>
-                </div>
-                <div style="display: flex; gap: 1rem;">
+                    <h2 class="font-bold text-lg md:text-xl">Conversation</h2>
                 </div>
             </header>
             
-            <div class="chat-history" id="chat-messages">
+            <div class="flex-grow overflow-y-auto px-4 md:px-8 py-8 space-y-6" id="chat-messages">
                 {% for msg in history %}
-                <div class="chat-message {{ msg.role }} view-animate">
-                    <div class="message-avatar">
-                        <i class="fas {% if msg.role == 'user' %}fa-user{% else %}fa-robot{% endif %}"></i>
+                <div class="max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]">
+                    <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white {{ 'bg-zinc-800' if msg.role == 'user' else 'bg-accent' }}">
+                        <i class="fas {{ 'fa-user' if msg.role == 'user' else 'fa-robot' }}"></i>
                     </div>
-                    <div class="message-content">
+                    <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words">
                         {{ msg.content | safe }}
                     </div>
                 </div>
                 {% endfor %}
             </div>
-
-            <div class="chat-input-container">
-                <div class="chat-input-wrapper">
+            
+            <div class="px-4 md:px-8 pb-8 pt-4 border-t border-[var(--border-color)]">
+                <div class="max-w-[850px] mx-auto relative">
                     <form id="chat-form">
                         <input type="hidden" name="csrf_token" id="csrf_token" value="{{ csrf_token() }}">
-                        <textarea class="chat-input" id="user-input" placeholder="Ask your agent anything..." rows="1"></textarea>
-                        <button type="submit" class="send-btn" id="send-btn">
+                        <textarea class="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 pr-14 py-4 text-[15px] focus:border-accent outline-none resize-none min-h-[60px] max-h-[200px] transition-all" id="user-input" placeholder="Ask your agent anything..." rows="1"></textarea>
+                        <button type="submit" class="absolute right-2 bottom-2 w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all disabled:opacity-50" id="send-btn">
                             <i class="fas fa-arrow-up"></i>
                         </button>
                     </form>
@@ -817,106 +263,107 @@
         </div>
 
         <!-- View: Tasks -->
-        <div id="view-tasks" class="workspace view-animate">
-            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="mobile-toggle" onclick="toggleSidebar()">
+        <div id="view-tasks" class="workspace hidden">
+            <header class="view-header">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <h2 class="view-title">Task Management</h2>
+                    <h2 class="font-bold text-lg md:text-xl">Task Management</h2>
                 </div>
-                <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> New Task</button>
             </header>
-            <div class="card span-12">
+            <div class="stat-card mt-6">
                 <div id="tasks-list">
-                    <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Fetching tasks from agent memory...</p>
+                    <p class="text-zinc-500 text-center py-12">Fetching tasks from agent memory...</p>
                 </div>
             </div>
         </div>
 
         <!-- View: Calendar -->
-        <div id="view-calendar" class="workspace view-animate">
-            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="mobile-toggle" onclick="toggleSidebar()">
+        <div id="view-calendar" class="workspace hidden">
+            <header class="view-header">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <h2 class="view-title">Calendar & Events</h2>
+                    <h2 class="font-bold text-lg md:text-xl">Calendar & Events</h2>
                 </div>
             </header>
-            <div class="card span-12" style="padding: 0; overflow: hidden;">
+            <div class="stat-card mt-6 !p-0 overflow-hidden">
                 <div id="calendar-content">
-                    <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Loading your schedule...</p>
+                    <p class="text-zinc-500 text-center py-12">Loading your schedule...</p>
                 </div>
             </div>
         </div>
 
         <!-- View: Messages -->
-        <div id="view-messages" class="workspace view-animate">
-            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="mobile-toggle" onclick="toggleSidebar()">
+        <div id="view-messages" class="workspace hidden">
+            <header class="view-header">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <h2 class="view-title">Internal Inbox</h2>
+                    <h2 class="font-bold text-lg md:text-xl">Internal Inbox</h2>
                 </div>
             </header>
-            <div class="card span-12" style="padding: 0; overflow: hidden;">
+            <div class="stat-card mt-6 !p-0 overflow-hidden">
                 <div id="messages-list">
-                    <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Checking for unread communications...</p>
+                    <p class="text-zinc-500 text-center py-12">Checking for unread communications...</p>
                 </div>
             </div>
         </div>
 
         <!-- View: Skills -->
-        <div id="view-skills" class="workspace view-animate">
-            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="mobile-toggle" onclick="toggleSidebar()">
+        <div id="view-skills" class="workspace hidden">
+            <header class="view-header">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <h2 class="view-title">Agent Skills</h2>
+                    <h2 class="font-bold text-lg md:text-xl">Agent Skills</h2>
                 </div>
-                <button class="btn btn-secondary"><i class="fas fa-upload"></i> Upload Python Skill</button>
+                <button class="btn btn-secondary text-sm flex items-center gap-2">
+                    <i class="fas fa-upload"></i> Upload Python Skill
+                </button>
             </header>
-            <div class="dashboard-grid" id="skills-grid">
-                <!-- Skill cards will be injected here -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-6" id="skills-grid">
+                <!-- Skill cards -->
             </div>
         </div>
 
         <!-- View: Integrations -->
-        <div id="view-integrations" class="workspace view-animate">
-            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="mobile-toggle" onclick="toggleSidebar()">
+        <div id="view-integrations" class="workspace hidden">
+            <header class="view-header">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <h2 class="view-title">Connected Bridges</h2>
+                    <h2 class="font-bold text-lg md:text-xl">Connected Bridges</h2>
                 </div>
-                <button class="btn btn-primary" onclick="showPairingModal()">Pair New Channel</button>
+                <button class="btn btn-primary text-sm" onclick="showPairingModal()">Pair New Channel</button>
             </header>
-            <div class="dashboard-grid">
-                <div class="card span-6">
-                    <div style="display: flex; justify-content: space-between; align-items: start;">
-                        <div>
-                            <i class="fab fa-telegram" style="font-size: 2rem; color: #0088cc; margin-bottom: 1rem;"></i>
-                            <h4 class="title is-5">Telegram</h4>
-                            <p style="font-size: 0.875rem; color: var(--text-secondary)">Control your agent via Telegram bot.</p>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                <div class="stat-card group">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-grow pr-4">
+                            <i class="fab fa-telegram text-4xl text-[#0088cc] mb-4"></i>
+                            <h4 class="font-bold text-lg mb-1">Telegram</h4>
+                            <p class="text-sm text-zinc-500">Control your agent via Telegram bot.</p>
                         </div>
-                        <span class="badge {% if 'telegram' in channels %}badge-low{% else %}badge-high{% endif %}">
-                            {% if 'telegram' in channels %}CONNECTED{% else %}OFFLINE{% endif %}
+                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest {{ 'bg-green-500/10 text-green-500' if 'telegram' in channels else 'bg-red-500/10 text-red-500' }}">
+                            {{ 'CONNECTED' if 'telegram' in channels else 'OFFLINE' }}
                         </span>
                     </div>
                 </div>
-                <div class="card span-6">
-                    <div style="display: flex; justify-content: space-between; align-items: start;">
-                        <div>
-                            <i class="fab fa-whatsapp" style="font-size: 2rem; color: #25d366; margin-bottom: 1rem;"></i>
-                            <h4 class="title is-5">WhatsApp</h4>
-                            <p style="font-size: 0.875rem; color: var(--text-secondary)">Messaging bridge for WhatsApp Business.</p>
+                <div class="stat-card group">
+                    <div class="flex justify-between items-start">
+                        <div class="flex-grow pr-4">
+                            <i class="fab fa-whatsapp text-4xl text-[#25d366] mb-4"></i>
+                            <h4 class="font-bold text-lg mb-1">WhatsApp</h4>
+                            <p class="text-sm text-zinc-500">Messaging bridge for WhatsApp Business.</p>
                         </div>
-                        <span class="badge {% if 'whatsapp' in channels %}badge-low{% else %}badge-high{% endif %}">
-                            {% if 'whatsapp' in channels %}CONNECTED{% else %}OFFLINE{% endif %}
+                        <span class="px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest {{ 'bg-green-500/10 text-green-500' if 'whatsapp' in channels else 'bg-red-500/10 text-red-500' }}">
+                            {{ 'CONNECTED' if 'whatsapp' in channels else 'OFFLINE' }}
                         </span>
                     </div>
                 </div>
@@ -924,55 +371,56 @@
         </div>
 
         <!-- View: API -->
-        <div id="view-api" class="workspace view-animate">
-            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="mobile-toggle" onclick="toggleSidebar()">
+        <div id="view-api" class="workspace hidden">
+            <header class="view-header">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <h2 class="view-title">Developer Access</h2>
+                    <h2 class="font-bold text-lg md:text-xl">Developer Access</h2>
                 </div>
             </header>
-            <div class="card span-12">
-                <h4 style="margin-bottom: 1rem;">Your API Keys</h4>
-                <div id="api-keys-list" style="margin-bottom: 2rem;">
-                    <!-- API Keys injected here -->
+            <div class="stat-card mt-6">
+                <h4 class="font-bold mb-4">Your API Keys</h4>
+                <div id="api-keys-list" class="space-y-2 mb-8">
+                    <!-- API Keys -->
                 </div>
                 
-                <h4 style="margin-bottom: 1rem;">Usage Example</h4>
-                <pre style="background: #000; padding: 1rem; border-radius: 8px; color: #10b981; font-family: monospace; font-size: 0.875rem; overflow-x: auto;">
-curl -X POST http://localhost:5000/chat \
+                <h4 class="font-bold mb-4">Usage Example</h4>
+                <div class="bg-black/40 rounded-xl p-4 overflow-hidden">
+                    <pre class="text-sm text-green-500 font-mono overflow-x-auto">curl -X POST http://localhost:5000/chat \
   -H "Authorization: Bearer YOUR_API_KEY" \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello from the API"}'</pre>
+                </div>
             </div>
         </div>
 
         <!-- View: Settings -->
-        <div id="view-settings" class="workspace view-animate">
-            <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <div style="display: flex; align-items: center; gap: 1rem;">
-                    <button class="mobile-toggle" onclick="toggleSidebar()">
+        <div id="view-settings" class="workspace hidden">
+            <header class="view-header">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
                         <i class="fas fa-bars"></i>
                     </button>
-                    <h2 class="view-title">Agent Settings</h2>
+                    <h2 class="font-bold text-lg md:text-xl">Agent Settings</h2>
                 </div>
             </header>
-            <div class="card span-12">
-                <h3 style="margin-bottom: 1rem;">Accent Color</h3>
-                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Choose a color for buttons, icons, and highlights.</p>
-                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;" id="color-palette">
-                    <div class="color-option selected" style="background: #22c55e;" data-color="#22c55e" title="Green"></div>
-                    <div class="color-option" style="background: #4f46e5;" data-color="#4f46e5" title="Indigo"></div>
-                    <div class="color-option" style="background: #7c3aed;" data-color="#7c3aed" title="Violet"></div>
-                    <div class="color-option" style="background: #ec4899;" data-color="#ec4899" title="Pink"></div>
-                    <div class="color-option" style="background: #ef4444;" data-color="#ef4444" title="Red"></div>
-                    <div class="color-option" style="background: #f97316;" data-color="#f97316" title="Orange"></div>
-                    <div class="color-option" style="background: #eab308;" data-color="#eab308" title="Yellow"></div>
-                    <div class="color-option" style="background: #14b8a6;" data-color="#14b8a6" title="Teal"></div>
-                    <div class="color-option" style="background: #06b6d4;" data-color="#06b6d4" title="Cyan"></div>
-                    <div class="color-option" style="background: #3b82f6;" data-color="#3b82f6" title="Blue"></div>
-                    <div class="color-option" style="background: #64748b;" data-color="#64748b" title="Slate"></div>
+            <div class="stat-card mt-6">
+                <h3 class="font-bold mb-1">Accent Color</h3>
+                <p class="text-sm text-zinc-500 mb-6">Choose a color for buttons, icons, and highlights.</p>
+                <div class="flex flex-wrap gap-3" id="color-palette">
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #22c55e;" data-color="#22c55e" title="Green"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #4f46e5;" data-color="#4f46e5" title="Indigo"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #7c3aed;" data-color="#7c3aed" title="Violet"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #ec4899;" data-color="#ec4899" title="Pink"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #ef4444;" data-color="#ef4444" title="Red"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #f97316;" data-color="#f97316" title="Orange"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #eab308;" data-color="#eab308" title="Yellow"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #14b8a6;" data-color="#14b8a6" title="Teal"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #06b6d4;" data-color="#06b6d4" title="Cyan"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #3b82f6;" data-color="#3b82f6" title="Blue"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #64748b;" data-color="#64748b" title="Slate"></div>
                 </div>
             </div>
         </div>
@@ -980,44 +428,44 @@ curl -X POST http://localhost:5000/chat \
     </main>
 
     <!-- Modals -->
-    <div id="message-modal" class="modal">
-        <div class="modal-content" style="max-width: 700px;">
-            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1.5rem;">
+    <div id="message-modal" class="fixed inset-0 bg-black/80 z-[1000] hidden items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl w-full max-w-[700px] p-8 animate-[fadeIn_0.3s_ease-out]">
+            <div class="flex justify-between items-start mb-6">
                 <div>
-                    <h3 id="msg-modal-from" style="margin-bottom: 0.25rem;">Sender</h3>
-                    <p id="msg-modal-time" style="font-size: 0.75rem; color: var(--text-secondary)">Timestamp</p>
+                    <h3 id="msg-modal-from" class="text-xl font-bold mb-1">Sender</h3>
+                    <p id="msg-modal-time" class="text-xs text-zinc-500">Timestamp</p>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="closeMessageModal()">
+                <button class="w-10 h-10 bg-zinc-800 rounded-xl flex items-center justify-center hover:bg-zinc-700 transition-all" onclick="closeMessageModal()">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <div id="msg-modal-content" style="white-space: pre-wrap; line-height: 1.6; color: var(--text-primary); border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
-                Message body...
+            <div id="msg-modal-content" class="text-[15px] leading-relaxed border-t border-[var(--border-color)] pt-6 max-h-[400px] overflow-y-auto">
+                <!-- Body -->
             </div>
-            <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: flex-end;">
-                <button class="btn" style="background-color: #ef444433; color: #ef4444;" id="msg-modal-delete-btn">
-                    <i class="fas fa-trash-alt mr-1"></i> Delete
+            <div class="mt-10 flex gap-4 justify-end">
+                <button class="btn bg-red-500/10 text-red-500 hover:bg-red-500/20 px-4" id="msg-modal-delete-btn">
+                    <i class="fas fa-trash-alt mr-2"></i> Delete
                 </button>
-                <div style="flex-grow: 1;"></div>
-                <button class="btn btn-primary" onclick="closeMessageModal()">Close</button>
+                <div class="flex-grow"></div>
+                <button class="btn btn-secondary" onclick="closeMessageModal()">Close</button>
             </div>
         </div>
     </div>
 
-    <div id="pairing-modal" class="modal">
-        <div class="modal-content">
-            <h3 style="margin-bottom: 1rem;">Pair a Channel</h3>
-            <p style="color: var(--text-secondary); margin-bottom: 1.5rem; font-size: 0.875rem;">
+    <div id="pairing-modal" class="fixed inset-0 bg-black/80 z-[1000] hidden items-center justify-center p-4 backdrop-blur-md">
+        <div class="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl w-full max-w-[500px] p-8 animate-[fadeIn_0.3s_ease-out]">
+            <h3 class="text-2xl font-bold mb-2">Pair a Channel</h3>
+            <p class="text-sm text-zinc-500 mb-8 leading-relaxed">
                 Link your Telegram or WhatsApp to this account using a secure token.
             </p>
-            <div style="margin-bottom: 1.5rem;">
-                <input id="pairing-token-display" type="text" readonly style="width: 100%; background: #000; border: 1px solid var(--border-color); color: var(--accent-color); padding: 0.75rem; border-radius: 8px; font-family: monospace; text-align: center; font-size: 1.25rem;">
+            <div class="mb-8">
+                <input id="pairing-token-display" type="text" readonly class="w-full bg-black/60 border border-[var(--border-color)] text-accent py-4 rounded-xl font-mono text-center text-2xl tracking-widest outline-none shadow-inner" value="TOKEN_HERE">
             </div>
-            <div style="background: #27272a33; padding: 1rem; border-radius: 8px; font-size: 0.8125rem;">
-                <p>1. Open your bot on Telegram or WhatsApp.</p>
-                <p>2. Send: <code style="color: var(--text-primary)">/pair <span id="pairing-code-hint">TOKEN</span></code></p>
+            <div class="bg-zinc-800/30 p-5 rounded-2xl text-[13px] border border-[var(--border-color)]">
+                <p class="mb-2 opacity-80">1. Open your bot on Telegram or WhatsApp.</p>
+                <p class="opacity-80">2. Send: <code class="text-white bg-zinc-700 px-2 py-0.5 rounded ml-1">/pair <span id="pairing-code-hint" class="font-bold text-accent">TOKEN</span></code></p>
             </div>
-            <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: flex-end;">
+            <div class="mt-10 flex gap-4 justify-end">
                 <button class="btn btn-secondary" onclick="closePairingModal()">Close</button>
                 <button class="btn btn-primary" onclick="generateNewToken()">New Token</button>
             </div>
@@ -1025,518 +473,503 @@ curl -X POST http://localhost:5000/chat \
     </div>
 
     <script>
-        // Theme Toggle
-        function toggleTheme() {
+        // Core Logic
+        const state = {
+            theme: localStorage.getItem('theme') || 'dark',
+            accent: localStorage.getItem('accent-color') || '#22c55e',
+            currentMessageId: null,
+            messages: []
+        };
+
+        function init() {
+            applyTheme();
+            applyAccent(state.accent);
+            setupEventListeners();
+            loadDashboardStats();
+            
+            // Auto-scroll chat
+            const chatBox = document.getElementById('chat-messages');
+            if (chatBox) chatBox.scrollTop = chatBox.scrollHeight;
+
+            // PWA support
+            if ('serviceWorker' in navigator) {
+                navigator.serviceWorker.register('/static/sw.js');
+            }
+        }
+
+        function applyTheme() {
             const html = document.documentElement;
             const icon = document.getElementById('theme-icon');
             const themeMeta = document.getElementById('theme-meta');
-            const currentTheme = html.getAttribute('data-theme');
-            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
             
-            html.setAttribute('data-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
+            html.className = state.theme;
+            if (icon) icon.className = state.theme === 'light' ? 'fas fa-sun' : 'fas fa-moon';
+            if (themeMeta) themeMeta.content = state.theme === 'light' ? '#f4f4f5' : '#09090b';
             
-            icon.className = newTheme === 'light' ? 'fas fa-sun' : 'fas fa-moon';
-            themeMeta.content = newTheme === 'light' ? '#f4f4f5' : '#09090b';
+            localStorage.setItem('theme', state.theme);
         }
 
-        // Accent Color Picker
-        function setAccentColor(color) {
+        function toggleTheme() {
+            state.theme = state.theme === 'light' ? 'dark' : 'light';
+            applyTheme();
+        }
+
+        function applyAccent(color) {
             document.documentElement.style.setProperty('--accent-color', color);
             localStorage.setItem('accent-color', color);
-            updateColorSelection(color);
-        }
-
-        function updateColorSelection(selectedColor) {
+            
             document.querySelectorAll('.color-option').forEach(el => {
-                el.classList.toggle('selected', el.dataset.color === selectedColor);
+                if (el.dataset.color === color) {
+                    el.classList.add('border-white', 'scale-110');
+                } else {
+                    el.classList.remove('border-white', 'scale-110');
+                }
             });
         }
 
-        // Load saved theme
-        (function() {
-            const saved = localStorage.getItem('theme') || 'dark';
-            document.documentElement.setAttribute('data-theme', saved);
-            const icon = document.getElementById('theme-icon');
-            const themeMeta = document.getElementById('theme-meta');
-            if (icon) icon.className = saved === 'light' ? 'fas fa-sun' : 'fas fa-moon';
-            if (themeMeta) themeMeta.content = saved === 'light' ? '#f4f4f5' : '#09090b';
-            
-            // Load saved accent color
-            const accentColor = localStorage.getItem('accent-color') || '#22c55e';
-            document.documentElement.style.setProperty('--accent-color', accentColor);
-        })();
-
-        // Initialize color picker on load
-        window.addEventListener('DOMContentLoaded', () => {
-            const accentColor = localStorage.getItem('accent-color') || '#22c55e';
-            updateColorSelection(accentColor);
-            
+        function setupEventListeners() {
             document.querySelectorAll('.color-option').forEach(el => {
-                el.addEventListener('click', () => setAccentColor(el.dataset.color));
+                el.addEventListener('click', () => applyAccent(el.dataset.color));
             });
-        });
 
-        // Sidebar Toggle for Mobile
+            const overlay = document.getElementById('sidebar-overlay');
+            if (overlay) overlay.addEventListener('click', toggleSidebar);
+
+            // Auto-resize textarea
+            const userInput = document.getElementById('user-input');
+            if (userInput) {
+                userInput.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                });
+            }
+        }
+
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
             const overlay = document.getElementById('sidebar-overlay');
-            sidebar.classList.toggle('open');
-            overlay.classList.toggle('open');
+            if (!sidebar || !overlay) return;
+
+            const isOpen = sidebar.classList.contains('translate-x-0');
+
+            if (isOpen) {
+                sidebar.classList.remove('translate-x-0');
+                sidebar.classList.add('-translate-x-full');
+                overlay.classList.add('hidden');
+                document.body.classList.remove('overflow-hidden');
+            } else {
+                sidebar.classList.add('translate-x-0');
+                sidebar.classList.remove('-translate-x-full');
+                overlay.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+            }
         }
 
-        // Close sidebar when clicking overlay
-        document.getElementById('sidebar-overlay').addEventListener('click', toggleSidebar);
-
-        // View Management
         function showView(viewId) {
-            // Close sidebar on mobile when switching views
-            if (window.innerWidth <= 768) {
-                toggleSidebar();
+            if (window.innerWidth < 1024) {
+                const sidebar = document.getElementById('sidebar');
+                if (sidebar && sidebar.classList.contains('translate-x-0')) {
+                    toggleSidebar();
+                }
             }
 
             // Update Navigation
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-            const navItem = document.getElementById('nav-' + viewId);
-            if (navItem) navItem.classList.add('active');
+            document.getElementById('nav-' + viewId)?.classList.add('active');
 
             // Update View visibility
-            document.querySelectorAll('.workspace, .chat-view').forEach(view => view.classList.remove('active'));
+            document.querySelectorAll('.workspace').forEach(view => {
+                view.classList.add('hidden');
+                view.classList.remove('active-view');
+            });
+            
             const targetView = document.getElementById('view-' + viewId);
-            if (targetView) targetView.classList.add('active');
-
-            // Fetch data for the view if needed
-            if (viewId === 'dashboard') loadDashboardStats();
-            if (viewId === 'tasks') loadTasks();
-            if (viewId === 'calendar') loadCalendar();
-            if (viewId === 'skills') loadSkills();
-            if (viewId === 'messages') loadMessages();
-            if (viewId === 'api') loadApiInfo();
-        }
-
-        // Data Fetching
-        async function loadCalendar() {
-            const container = document.getElementById('calendar-content');
-            try {
-                const res = await fetch('/calendar');
-                const data = await res.json();
-                
-                if (!data.events || data.events.length === 0) {
-                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No upcoming events found.</p>';
-                    return;
-                }
-
-                let html = `
-                    <table class="calendar-table">
-                        <thead>
-                            <tr>
-                                <th>Date</th>
-                                <th>Time</th>
-                                <th>Event</th>
-                                <th>Location</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                `;
-
-                html += data.events.map(event => {
-                    const start = new Date(event.start);
-                    const dateStr = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-                    const timeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    
-                    return `
-                        <tr>
-                            <td class="event-date-cell">${dateStr}</td>
-                            <td><span class="event-time-badge">${timeStr}</span></td>
-                            <td style="font-weight: 500;">${event.title}</td>
-                            <td style="color: var(--text-secondary); font-size: 0.8125rem;">
-                                ${event.location ? '<i class="fas fa-map-marker-alt mr-1"></i> ' + event.location : ''}
-                            </td>
-                        </tr>
-                    `;
-                }).join('');
-
-                html += '</tbody></table>';
-                container.innerHTML = html;
-            } catch (e) {
-                container.innerText = "Error loading calendar.";
+            if (targetView) {
+                targetView.classList.remove('hidden');
+                targetView.classList.add('active-view');
             }
+
+            const viewLoaders = {
+                'dashboard': loadDashboardStats,
+                'tasks': loadTasks,
+                'calendar': loadCalendar,
+                'skills': loadSkills,
+                'messages': loadMessages,
+                'api': loadApiInfo
+            };
+            
+            if (viewLoaders[viewId]) viewLoaders[viewId]();
         }
+
+        // Data Management
         async function loadDashboardStats() {
             try {
-                const todoRes = await fetch('/todos');
-                const todoData = await todoRes.json();
-                const todoLines = todoData.todos.split('\n').filter(l => l.includes('[ ]'));
-                const completedLines = todoData.todos.split('\n').filter(l => l.includes('[x]') || l.includes('✅'));
-                document.getElementById('stat-tasks').innerText = todoLines.length;
-                document.getElementById('stat-tasks-completed').innerText = completedLines.length;
+                const [todoRes, eventRes, msgRes] = await Promise.all([
+                    fetch('/todos').then(r => r.json()),
+                    fetch('/calendar').then(r => r.json()),
+                    fetch('/messages').then(r => r.json())
+                ]);
 
-                const eventsRes = await fetch('/calendar');
-                const eventsData = await eventsRes.json();
-                const events = eventsData.events || [];
-                document.getElementById('stat-events').innerText = events.length;
+                // Helper to safe update innerText
+                const safeUpdate = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) el.innerText = val;
+                };
+
+                // Tasks
+                const pending = todoRes.todos.split('\n').filter(l => l.includes('[ ]')).length;
+                const completed = todoRes.todos.split('\n').filter(l => l.includes('[x]') || l.includes('✅')).length;
+                safeUpdate('stat-tasks', pending);
+                safeUpdate('stat-tasks-completed', completed);
+
+                // Events
+                const events = eventRes.events || [];
+                safeUpdate('stat-events', events.length);
                 if (events.length > 0) {
-                    const nextEvent = events[0];
-                    const start = new Date(nextEvent.start);
-                    const timeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    document.getElementById('stat-events-next').innerText = timeStr + ' ' + nextEvent.title;
+                    const next = events[0];
+                    const time = new Date(next.start).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    safeUpdate('stat-events-next', `${time} ${next.title}`);
                 }
 
-                const msgRes = await fetch('/messages');
-                const msgData = await msgRes.json();
-                const messages = msgData.messages || [];
-                document.getElementById('stat-messages').innerText = messages.length;
-                const recipients = [...new Set(messages.map(m => m.from))];
-                document.getElementById('stat-messages-recipients').innerText = recipients.length;
+                // Messages
+                const messages = msgRes.messages || [];
+                safeUpdate('stat-messages', messages.length);
+                const senders = new Set(messages.map(m => m.from)).size;
+                safeUpdate('stat-messages-recipients', senders);
 
-                const activityFeed = document.getElementById('activity-feed');
-                let activityHtml = '';
-                
-                const now = new Date();
-                messages.slice(0, 3).forEach(msg => {
-                    const msgTime = new Date(msg.timestamp);
-                    const diffMs = now - msgTime;
-                    const diffMins = Math.floor(diffMs / 60000);
-                    const diffHours = Math.floor(diffMins / 60);
-                    let timeAgo = diffMins < 60 ? diffMins + ' minutes ago' : diffHours + ' hour' + (diffHours > 1 ? 's' : '') + ' ago';
-                    const unreadBadge = !msg.is_read ? '<span style="background: var(--accent-color); color: white; font-size: 0.625rem; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">UNREAD</span>' : '';
-                    activityHtml += `
-                        <div class="list-item">
-                            <div style="display: flex; gap: 1rem; align-items: center;">
-                                <i class="fas fa-envelope${msg.is_read ? '-open' : ''}" style="color: ${msg.is_read ? 'var(--success-color)' : 'var(--accent-color)'}"></i>
-                                <div>
-                                    <p style="font-size: 0.875rem;">Received message from ${msg.from}${unreadBadge}</p>
-                                    <p style="font-size: 0.75rem; color: var(--text-secondary)">${timeAgo}</p>
+                // Activity Feed
+                const feed = document.getElementById('activity-feed');
+                if (feed) {
+                    let html = '';
+                    messages.slice(0, 3).forEach(msg => {
+                        const time = timeAgo(new Date(msg.timestamp));
+                        html += `
+                            <div class="flex items-center gap-4 p-3 rounded-xl bg-zinc-800/20 border border-[var(--border-color)]">
+                                <div class="w-10 h-10 rounded-full bg-accent/10 text-accent flex items-center justify-center">
+                                    <i class="fas fa-envelope${msg.is_read ? '-open' : ''}"></i>
                                 </div>
-                            </div>
-                        </div>`;
-                });
-
-                events.slice(0, 2).forEach(event => {
-                    const start = new Date(event.start);
-                    const timeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                    activityHtml += `
-                        <div class="list-item">
-                            <div style="display: flex; gap: 1rem; align-items: center;">
-                                <i class="fas fa-calendar-check" style="color: var(--accent-color)"></i>
                                 <div>
-                                    <p style="font-size: 0.875rem;">Upcoming: ${event.title}</p>
-                                    <p style="font-size: 0.75rem; color: var(--text-secondary)">${start.toLocaleDateString()} at ${timeStr}</p>
+                                    <p class="text-sm font-medium">New message from ${msg.from}</p>
+                                    <p class="text-[11px] text-zinc-500">${time}</p>
                                 </div>
-                            </div>
-                        </div>`;
-                });
+                                ${!msg.is_read ? '<span class="ml-auto w-2 h-2 rounded-full bg-accent animate-pulse"></span>' : ''}
+                            </div>`;
+                    });
 
-                if (!activityHtml) {
-                    activityHtml = '<p style="color: var(--text-secondary); text-align: center; padding: 1rem;">No recent activity</p>';
+                    if (!html) html = '<p class="text-center text-zinc-500 py-4 text-sm italic">No recent activity</p>';
+                    feed.innerHTML = html;
                 }
-                activityFeed.innerHTML = activityHtml;
-            } catch (e) {
-                console.error("Error loading stats", e);
-            }
+
+            } catch (e) { console.error("Stats Error:", e); }
+        }
+
+        function timeAgo(date) {
+            const diff = Math.floor((new Date() - date) / 1000);
+            if (diff < 60) return 'just now';
+            if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+            if (diff < 86400) return Math.floor(diff/3600) + 'h ago';
+            return date.toLocaleDateString();
         }
 
         async function loadTasks() {
             const container = document.getElementById('tasks-list');
+            if (!container) return;
             try {
                 const res = await fetch('/todos');
                 const data = await res.json();
-                container.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9375rem;">${data.todos}</pre>`;
-            } catch (e) {
-                container.innerText = "Error loading tasks.";
-            }
+                container.innerHTML = `<pre class="whitespace-pre-wrap font-mono text-sm leading-relaxed p-4 bg-black/20 rounded-xl">${data.todos}</pre>`;
+            } catch (e) { container.innerText = "Error loading tasks."; }
         }
 
-        async function loadSkills() {
-            const container = document.getElementById('skills-grid');
+        async function loadCalendar() {
+            const container = document.getElementById('calendar-content');
+            if (!container) return;
             try {
-                const res = await fetch('/skills');
+                const res = await fetch('/calendar');
                 const data = await res.json();
-                // skills is a mapping of name to docstring
-                container.innerHTML = Object.entries(data.skills).map(([name, doc]) => `
-                    <div class="card span-4">
-                        <div style="display: flex; gap: 1rem; align-items: center;">
-                            <div style="width: 40px; height: 40px; border-radius: 8px; background: var(--accent-color); display: flex; align-items: center; justify-content: center;">
-                                <i class="fas fa-puzzle-piece"></i>
-                            </div>
-                            <div>
-                                <h4 style="font-size: 0.9375rem;">${name}</h4>
-                                <span style="font-size: 0.75rem; color: var(--success-color)">Platform Native</span>
-                            </div>
-                        </div>
-                    </div>
-                `).join('');
-            } catch (e) {
-                container.innerText = "Error loading skills.";
-            }
+                
+                if (!data.events?.length) {
+                    container.innerHTML = '<p class="text-zinc-500 text-center py-12">No upcoming events found.</p>';
+                    return;
+                }
+
+                container.innerHTML = `
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm border-collapse">
+                            <thead class="bg-zinc-800/30 text-zinc-400 font-bold uppercase tracking-widest text-[10px]">
+                                <tr>
+                                    <th class="p-5">Date</th>
+                                    <th class="p-5">Time</th>
+                                    <th class="p-5">Event</th>
+                                    <th class="p-5">Location</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-[var(--border-color)]">
+                                ${data.events.map(ev => {
+                                    const d = new Date(ev.start);
+                                    return `
+                                        <tr class="hover:bg-zinc-800/20 transition-colors">
+                                            <td class="p-5 font-bold whitespace-nowrap">${d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}</td>
+                                            <td class="p-5"><span class="bg-accent/10 text-accent px-3 py-1 rounded-full text-[11px] font-bold tracking-tight">${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span></td>
+                                            <td class="p-5 font-medium min-w-[200px]">${ev.title}</td>
+                                            <td class="p-5 text-zinc-500 text-xs">${ev.location ? '<i class="fas fa-map-marker-alt mr-2 opacity-70"></i>'+ev.location : ''}</td>
+                                        </tr>
+                                    `;
+                                }).join('')}
+                            </tbody>
+                        </table>
+                    </div>`;
+            } catch (e) { container.innerText = "Error loading calendar."; }
         }
 
         async function loadMessages() {
             const container = document.getElementById('messages-list');
+            if (!container) return;
             try {
                 const res = await fetch('/messages');
                 const data = await res.json();
+                state.messages = data.messages || [];
                 
-                if (!data.messages || data.messages.length === 0) {
-                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Your inbox is empty.</p>';
+                if (!state.messages.length) {
+                    container.innerHTML = '<p class="text-zinc-500 text-center py-12">Your inbox is empty.</p>';
                     return;
                 }
 
-                // Internal data storage for the session
-                window._currentMessages = data.messages;
-
-                container.innerHTML = data.messages.map((msg, index) => {
-                    const date = new Date(msg.timestamp).toLocaleDateString();
-                    const snippet = msg.content.substring(0, 200) + (msg.content.length > 200 ? '...' : '');
-                    const unreadStyle = !msg.is_read ? 'background: rgba(42, 130, 218, 0.1); border-left: 3px solid var(--accent-color);' : '';
-                    const boldStyle = !msg.is_read ? 'font-weight: 700;' : '';
-                    return `
-                        <div class="inbox-row" onclick="openMessage(${index})" style="${unreadStyle}">
-                            <div class="inbox-from" style="${boldStyle}">${!msg.is_read ? '<i class="fas fa-circle" style="color: var(--accent-color); font-size: 0.5rem; margin-right: 6px;"></i>' : ''}${msg.from}</div>
-                            <div class="inbox-snippet" style="${boldStyle}">${snippet}</div>
-                            <div class="inbox-time" style="${boldStyle}">${date}</div>
+                container.innerHTML = state.messages.map((msg, idx) => `
+                    <div onclick="openMessage(${idx})" class="group flex items-center gap-6 p-5 cursor-pointer border-b border-[var(--border-color)] transition-all hover:bg-zinc-800/30 ${!msg.is_read ? 'bg-accent/[0.03]' : ''}">
+                        <div class="w-48 font-bold truncate ${!msg.is_read ? 'text-white' : 'text-zinc-400'} flex items-center gap-3">
+                            ${!msg.is_read ? '<span class="w-2 h-2 rounded-full bg-accent shadow-[0_0_8px_var(--accent-color)]"></span>' : ''}
+                            ${msg.from}
                         </div>
-                    `;
-                }).join('');
-            } catch (e) {
-                container.innerText = "Error loading messages.";
-            }
+                        <div class="flex-grow text-sm truncate ${!msg.is_read ? 'text-zinc-200 font-medium' : 'text-zinc-500'}">
+                            ${msg.content.substring(0, 150)}
+                        </div>
+                        <div class="w-24 text-right text-xs text-zinc-500 whitespace-nowrap">
+                            ${new Date(msg.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { container.innerText = "Error loading messages."; }
         }
 
-        let _currentMessageId = null;
-        
-        function openMessage(index) {
-            const msg = window._currentMessages[index];
+        function openMessage(idx) {
+            const msg = state.messages[idx];
             if (!msg) return;
             
-            _currentMessageId = msg.id;
+            state.currentMessageId = msg.id;
+            const fromEl = document.getElementById('msg-modal-from');
+            const timeEl = document.getElementById('msg-modal-time');
+            const contentEl = document.getElementById('msg-modal-content');
+            if (fromEl) fromEl.innerText = msg.from;
+            if (timeEl) timeEl.innerText = new Date(msg.timestamp).toLocaleString();
+            if (contentEl) contentEl.innerText = msg.content;
             
-            document.getElementById('msg-modal-from').innerText = msg.from;
-            document.getElementById('msg-modal-time').innerText = new Date(msg.timestamp).toLocaleString();
-            document.getElementById('msg-modal-content').innerText = msg.content;
+            const delBtn = document.getElementById('msg-modal-delete-btn');
+            if (delBtn) delBtn.onclick = () => deleteMessage(msg.id);
             
-            const deleteBtn = document.getElementById('msg-modal-delete-btn');
-            deleteBtn.onclick = () => deleteMessage(msg.id);
-            
-            document.getElementById('message-modal').classList.add('active');
+            const modal = document.getElementById('message-modal');
+            if (modal) modal.classList.replace('hidden', 'flex');
         }
 
         function closeMessageModal() {
             const modal = document.getElementById('message-modal');
-            modal.classList.remove('active');
+            if (modal) modal.classList.replace('flex', 'hidden');
             
-            if (_currentMessageId) {
-                const csrfToken = document.getElementById('csrf_token').value;
-                fetch('/messages/mark-read/' + _currentMessageId, { 
-                    method: 'POST',
-                    headers: { 'X-CSRFToken': csrfToken }
-                })
-                    .then(res => res.json())
-                    .then(data => {
-                        console.log('Marked as read:', data);
-                    })
-                    .catch(err => console.error('Error:', err))
-                    .finally(() => {
-                        _currentMessageId = null;
-                        loadDashboardStats();
+            if (state.currentMessageId) {
+                const token = document.getElementById('csrf_token')?.value;
+                if (token) {
+                    fetch('/messages/mark-read/' + state.currentMessageId, { 
+                        method: 'POST',
+                        headers: { 'X-CSRFToken': token }
+                    }).then(() => {
+                        state.currentMessageId = null;
                         loadMessages();
+                        loadDashboardStats();
                     });
-            } else {
-                loadDashboardStats();
-                loadMessages();
+                }
             }
         }
 
-        async function deleteMessage(messageId) {
-            if (!confirm("Are you sure you want to delete this message?")) return;
-            
+        async function deleteMessage(id) {
+            if (!confirm("Delete this message?")) return;
             try {
-                const csrfToken = document.getElementById('csrf_token').value;
-                const response = await fetch(`/messages/delete/${messageId}`, {
+                const token = document.getElementById('csrf_token')?.value;
+                if (!token) return;
+                const res = await fetch(`/messages/delete/${id}`, {
                     method: 'POST',
-                    headers: { 'X-CSRFToken': csrfToken }
-                });
-                const data = await response.json();
+                    headers: { 'X-CSRFToken': token }
+                }).then(r => r.json());
                 
-                if (data.result && data.result.includes("deleted")) {
+                if (res.result?.includes("deleted")) {
                     closeMessageModal();
-                    loadMessages(); // Refresh list
-                } else {
-                    alert(data.result || "Error deleting message.");
+                    loadMessages();
                 }
-            } catch (e) {
-                alert("Failed to connect to server.");
-            }
+            } catch (e) { alert("Delete failed"); }
+        }
+
+        async function loadSkills() {
+            const container = document.getElementById('skills-grid');
+            if (!container) return;
+            try {
+                const res = await fetch('/skills');
+                const data = await res.json();
+                container.innerHTML = Object.entries(data.skills).map(([name, doc]) => `
+                    <div class="stat-card flex items-center gap-4 hover:border-accent group">
+                        <div class="w-12 h-12 rounded-2xl bg-accent text-white flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                            <i class="fas fa-puzzle-piece"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <h4 class="font-bold truncate text-[15px]">${name}</h4>
+                            <span class="text-[10px] font-bold text-accent uppercase tracking-widest opacity-80">Platform Native</span>
+                        </div>
+                    </div>
+                `).join('');
+            } catch (e) { container.innerText = "Error loading skills."; }
         }
 
         async function loadApiInfo() {
             const container = document.getElementById('api-keys-list');
+            if (!container) return;
             try {
                 const res = await fetch('/me');
                 const data = await res.json();
                 container.innerHTML = data.api_keys.map(k => `
-                    <div class="list-item">
+                    <div class="flex items-center justify-between p-4 bg-black/20 rounded-xl border border-[var(--border-color)]">
                         <div>
-                            <p style="font-weight: 600;">${k.name}</p>
-                            <p style="font-size: 0.75rem; color: var(--text-secondary)">Prefix: ${k.prefix}... Created: ${k.created_at}</p>
+                            <p class="font-bold text-sm">${k.name}</p>
+                            <p class="text-[11px] text-zinc-500 mt-0.5 font-mono">Prefix: ${k.prefix}... • Created: ${new Date(k.created_at).toLocaleDateString()}</p>
                         </div>
-                        <button class="badge badge-low" style="border: none; cursor: pointer;">ACTIVE</button>
+                        <span class="bg-green-500/10 text-green-500 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter">Active</span>
                     </div>
-                `).join('') || '<p style="color: var(--text-secondary)">No API keys generated yet.</p>';
-            } catch (e) {
-                container.innerText = "Error loading API info.";
-            }
+                `).join('') || '<p class="text-zinc-500 text-sm italic">No API keys generated yet.</p>';
+            } catch (e) { container.innerText = "Error loading API info."; }
         }
 
-        // Chat Logic
+        // Chat Form
         const chatForm = document.getElementById('chat-form');
-        const userInput = document.getElementById('user-input');
-        const chatMessages = document.getElementById('chat-messages');
-        const sendBtn = document.getElementById('send-btn');
+        if (chatForm) {
+            chatForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const input = document.getElementById('user-input');
+                const btn = document.getElementById('send-btn');
+                const message = input.value.trim();
+                
+                if (!message) return;
 
-        function appendMessage(role, content) {
-            const div = document.createElement('div');
-            div.className = `chat-message ${role} view-animate`;
-            div.innerHTML = `
-                <div class="message-avatar">
-                    <i class="fas ${role === 'user' ? 'fa-user' : 'fa-robot'}"></i>
-                </div>
-                <div class="message-content">${content}</div>
-            `;
-            chatMessages.appendChild(div);
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-        }
+                input.value = '';
+                input.disabled = true;
+                btn.disabled = true;
+                appendMessage('user', message);
 
-        chatForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-            const message = userInput.value.trim();
-            if (!message) return;
+                try {
+                    const token = document.getElementById('csrf_token')?.value;
+                    if (!token) return;
+                    const res = await fetch('/chat', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+                        body: JSON.stringify({ message })
+                    });
 
-            userInput.value = '';
-            userInput.disabled = true;
-            sendBtn.disabled = true;
-            appendMessage('user', message);
-
-            try {
-                const csrfToken = document.getElementById('csrf_token').value;
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-CSRFToken': csrfToken
-                    },
-                    body: JSON.stringify({ message: message })
-                });
-
-                const reader = response.body.getReader();
-                const decoder = new TextDecoder();
-                let assistantMessage = '';
-                let buffer = '';
-
-                // Create placeholder for streaming response
-                const assistantDiv = document.createElement('div');
-                assistantDiv.className = 'chat-message assistant view-animate';
-                assistantDiv.innerHTML = `
-                    <div class="message-avatar">
-                        <i class="fas fa-robot"></i>
-                    </div>
-                    <div class="message-content"></div>
-                `;
-                chatMessages.appendChild(assistantDiv);
-                const contentDiv = assistantDiv.querySelector('.message-content');
-
-                while (true) {
-                    const { done, value } = await reader.read();
-                    if (done) break;
+                    const reader = res.body.getReader();
+                    const decoder = new TextDecoder();
                     
-                    buffer += decoder.decode(value, { stream: true });
-                    const lines = buffer.split('\n');
-                    buffer = lines.pop() || '';
+                    // Create assistant message container
+                    const msgDiv = document.createElement('div');
+                    msgDiv.className = 'max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]';
+                    msgDiv.innerHTML = `
+                        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white bg-accent">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words message-content"></div>
+                    `;
+                    const container = document.getElementById('chat-messages');
+                    if (container) {
+                        container.appendChild(msgDiv);
+                        const contentDiv = msgDiv.querySelector('.message-content');
 
-                    for (const line of lines) {
-                        if (line.startsWith('data: ')) {
-                            try {
-                                const data = JSON.parse(line.slice(6));
-                                if (data.chunk) {
-                                    if (!data.chunk.startsWith('[TOOL_CALL:')) {
-                                        assistantMessage += data.chunk;
-                                        
-                                        // Use textContent + convert newlines to <br>
-                                        const formatted = assistantMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-                                        contentDiv.innerHTML = formatted;
-                                        
-                                        // Force browser reflow
-                                        void contentDiv.offsetWidth;
-                                        
-                                        // Scroll immediately
-                                        chatMessages.scrollTop = chatMessages.scrollHeight;
-                                    }
-                                } else if (data.done) {
-                                    // Done
-                                } else if (data.error) {
-                                    contentDiv.innerHTML = `<span style="color: #ef4444">Error: ${data.error}</span>`;
+                        let assistantMsg = '';
+                        let buffer = '';
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+                            
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop() || '';
+
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const data = JSON.parse(line.slice(6));
+                                        if (data.chunk && !data.chunk.startsWith('[TOOL_CALL:')) {
+                                            assistantMsg += data.chunk;
+                                            contentDiv.innerHTML = assistantMsg.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                                            container.scrollTop = container.scrollHeight;
+                                        }
+                                    } catch (e) {}
                                 }
-                            } catch (e) {
-                                // Ignore parse errors
                             }
                         }
                     }
+                } catch (err) {
+                    appendMessage('assistant', '<span class="text-red-500 font-bold">Failed to connect to agent.</span>');
+                } finally {
+                    input.disabled = false;
+                    btn.disabled = false;
+                    input.focus();
+                    input.style.height = 'auto';
                 }
+            });
+        }
 
-            } catch (error) {
-                appendMessage('assistant', `<span style="color: #ef4444">Failed to connect to the agent.</span>`);
-            } finally {
-                userInput.disabled = false;
-                sendBtn.disabled = false;
-                userInput.focus();
+        function appendMessage(role, content) {
+            const div = document.createElement('div');
+            div.className = 'max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]';
+            div.innerHTML = `
+                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white ${role === 'user' ? 'bg-zinc-800' : 'bg-accent'}">
+                    <i class="fas ${role === 'user' ? 'fa-user' : 'fa-robot'}"></i>
+                </div>
+                <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words">${content}</div>
+            `;
+            const box = document.getElementById('chat-messages');
+            if (box) {
+                box.appendChild(div);
+                box.scrollTop = box.scrollHeight;
             }
-        });
+        }
 
-        // Auto-resize textarea
-        userInput.addEventListener('input', function() {
-            this.style.height = 'auto';
-            this.style.height = (this.scrollHeight) + 'px';
-        });
-
-        // Pairing Modal
-        const pairingModal = document.getElementById('pairing-modal');
-        const tokenDisplay = document.getElementById('pairing-token-display');
-        const codeHint = document.getElementById('pairing-code-hint');
-
+        // Modal Helpers
         function showPairingModal() {
-            pairingModal.classList.add('active');
-            if (!tokenDisplay.value) generateNewToken();
+            const modal = document.getElementById('pairing-modal');
+            if (modal) modal.classList.replace('hidden', 'flex');
+            generateNewToken();
         }
-
         function closePairingModal() {
-            pairingModal.classList.remove('active');
+            const modal = document.getElementById('pairing-modal');
+            if (modal) modal.classList.replace('flex', 'hidden');
         }
-
         async function generateNewToken() {
-            tokenDisplay.value = "Generating...";
+            const display = document.getElementById('pairing-token-display');
+            const hint = document.getElementById('pairing-code-hint');
+            if (!display) return;
+            display.value = "...";
             try {
-                const csrfToken = document.getElementById('csrf_token').value;
-                const response = await fetch('/pair-token', {
+                const token = document.getElementById('csrf_token')?.value;
+                if (!token) return;
+                const res = await fetch('/pair-token', {
                     method: 'POST',
-                    headers: { 'X-CSRFToken': csrfToken }
-                });
-                const data = await response.json();
-                if (data.token) {
-                    tokenDisplay.value = data.token;
-                    codeHint.innerText = data.token;
+                    headers: { 'X-CSRFToken': token }
+                }).then(r => r.json());
+                if (res.token) {
+                    display.value = res.token;
+                    if (hint) hint.innerText = res.token;
                 }
-            } catch (e) { tokenDisplay.value = "Error"; }
+            } catch (e) { display.value = "ERROR"; }
         }
 
-        // Initialize
-        window.addEventListener('load', () => {
-            chatMessages.scrollTop = chatMessages.scrollHeight;
-            
-            // Service Worker for PWA
-            if ('serviceWorker' in navigator) {
-                navigator.serviceWorker.register('/static/sw.js');
-            }
-        });
+        // Start
+        init();
     </script>
 </body>
 </html>

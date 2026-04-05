@@ -488,11 +488,118 @@
             font-size: 0.8125rem;
             font-weight: 600;
         }
+
+        /* Mobile Menu Toggle */
+        .mobile-toggle {
+            display: none;
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 0.5rem;
+        }
+
+        .sidebar-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 99;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            body {
+                flex-direction: column;
+            }
+
+            .mobile-toggle {
+                display: block;
+            }
+
+            .sidebar {
+                position: fixed;
+                top: 0;
+                left: 0;
+                height: 100%;
+                width: 280px;
+                transform: translateX(-100%);
+                transition: transform 0.3s ease;
+            }
+
+            .sidebar.open {
+                transform: translateX(0);
+            }
+
+            .sidebar-overlay.open {
+                display: block;
+            }
+
+            .view-header {
+                padding: 0 1rem;
+                height: 56px;
+            }
+
+            .view-header h2 {
+                font-size: 1rem;
+            }
+
+            .workspace {
+                padding: 1rem;
+            }
+
+            .dashboard-grid {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+
+            .span-4, .span-6, .span-8, .span-12 {
+                grid-column: span 1;
+            }
+
+            .card {
+                padding: 1rem;
+            }
+
+            .stat-value {
+                font-size: 1.5rem;
+            }
+
+            .inbox-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 0.5rem;
+            }
+
+            .inbox-from, .inbox-snippet, .inbox-time {
+                width: 100%;
+                text-align: left;
+            }
+
+            .chat-history {
+                padding: 1rem;
+            }
+
+            .chat-input-container {
+                padding: 1rem;
+            }
+
+            .modal-content {
+                margin: 1rem;
+                max-width: calc(100% - 2rem);
+            }
+        }
     </style>
 </head>
 <body>
+    <div class="sidebar-overlay" id="sidebar-overlay"></div>
+    
     <!-- Sidebar -->
-    <aside class="sidebar">
+    <aside class="sidebar" id="sidebar">
         <div class="brand">
             <span class="brand-logo">🪽</span>
             <span class="brand-name">Angel Claw</span>
@@ -552,7 +659,12 @@
         <!-- View: Dashboard -->
         <div id="view-dashboard" class="workspace view-animate">
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <h2 class="view-title">Agent Overview</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="view-title">Agent Overview</h2>
+                </div>
                 <div class="agent-status-indicator">
                     <span class="status-dot dot-online"></span>
                     <span style="font-size: 0.875rem; color: var(--text-secondary)">Angel Claw System Online</span>
@@ -599,7 +711,12 @@
         <!-- View: Chat (Default behavior) -->
         <div id="view-chat" class="chat-view active">
             <header class="view-header">
-                <h2 class="view-title">Conversation</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="view-title">Conversation</h2>
+                </div>
                 <div style="display: flex; gap: 1rem;">
                     <span id="typing" style="font-size: 0.875rem; color: var(--text-secondary); display: none;">🪽 Thinking...</span>
                 </div>
@@ -634,7 +751,12 @@
         <!-- View: Tasks -->
         <div id="view-tasks" class="workspace view-animate">
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <h2 class="view-title">Task Management</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="view-title">Task Management</h2>
+                </div>
                 <button class="btn btn-primary btn-sm"><i class="fas fa-plus"></i> New Task</button>
             </header>
             <div class="card span-12">
@@ -647,7 +769,12 @@
         <!-- View: Calendar -->
         <div id="view-calendar" class="workspace view-animate">
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <h2 class="view-title">Calendar & Events</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="view-title">Calendar & Events</h2>
+                </div>
             </header>
             <div class="card span-12" style="padding: 0; overflow: hidden;">
                 <div id="calendar-content">
@@ -659,7 +786,12 @@
         <!-- View: Messages -->
         <div id="view-messages" class="workspace view-animate">
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <h2 class="view-title">Internal Inbox</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="view-title">Internal Inbox</h2>
+                </div>
             </header>
             <div class="card span-12" style="padding: 0; overflow: hidden;">
                 <div id="messages-list">
@@ -671,7 +803,12 @@
         <!-- View: Skills -->
         <div id="view-skills" class="workspace view-animate">
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <h2 class="view-title">Agent Skills</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="view-title">Agent Skills</h2>
+                </div>
                 <button class="btn btn-secondary"><i class="fas fa-upload"></i> Upload Python Skill</button>
             </header>
             <div class="dashboard-grid" id="skills-grid">
@@ -682,7 +819,12 @@
         <!-- View: Integrations -->
         <div id="view-integrations" class="workspace view-animate">
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <h2 class="view-title">Connected Bridges</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="view-title">Connected Bridges</h2>
+                </div>
                 <button class="btn btn-primary" onclick="showPairingModal()">Pair New Channel</button>
             </header>
             <div class="dashboard-grid">
@@ -716,7 +858,12 @@
         <!-- View: API -->
         <div id="view-api" class="workspace view-animate">
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <h2 class="view-title">Developer Access</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="view-title">Developer Access</h2>
+                </div>
             </header>
             <div class="card span-12">
                 <h4 style="margin-bottom: 1rem;">Your API Keys</h4>
@@ -736,7 +883,12 @@ curl -X POST http://localhost:5000/chat \
         <!-- View: Settings -->
         <div id="view-settings" class="workspace view-animate">
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
-                <h2 class="view-title">Agent Settings</h2>
+                <div style="display: flex; align-items: center; gap: 1rem;">
+                    <button class="mobile-toggle" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="view-title">Agent Settings</h2>
+                </div>
             </header>
             <div class="card span-12">
                 <p style="color: var(--text-secondary)">Configuration settings for your Angel Claw instance.</p>
@@ -791,8 +943,24 @@ curl -X POST http://localhost:5000/chat \
     </div>
 
     <script>
+        // Sidebar Toggle for Mobile
+        function toggleSidebar() {
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebar-overlay');
+            sidebar.classList.toggle('open');
+            overlay.classList.toggle('open');
+        }
+
+        // Close sidebar when clicking overlay
+        document.getElementById('sidebar-overlay').addEventListener('click', toggleSidebar);
+
         // View Management
         function showView(viewId) {
+            // Close sidebar on mobile when switching views
+            if (window.innerWidth <= 768) {
+                toggleSidebar();
+            }
+
             // Update Navigation
             document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
             const navItem = document.getElementById('nav-' + viewId);

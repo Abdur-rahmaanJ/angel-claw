@@ -100,6 +100,7 @@ class UserCredit(PkModel):
 
     user_id = db.Column(db.String(100), nullable=False, unique=True)
     balance = db.Column(db.Integer, nullable=False, default=0)
+    limit = db.Column(db.Integer, nullable=False, default=1000)
     lifetime_spent = db.Column(db.Integer, nullable=False, default=0)
     updated_at = db.Column(
         db.DateTime, default=lambda: datetime.now(), onupdate=lambda: datetime.now()

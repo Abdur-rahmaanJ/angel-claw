@@ -147,6 +147,7 @@ def get_user_stats(user_id: str) -> Dict[str, Any]:
 
     return {
         "balance": credit.balance,
+        "limit": credit.limit,
         "lifetime_spent": credit.lifetime_spent,
         "transactions_count": transactions_count,
         "updated_at": credit.updated_at.isoformat() if credit.updated_at else None,

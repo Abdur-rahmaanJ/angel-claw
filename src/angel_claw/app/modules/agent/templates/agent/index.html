@@ -730,10 +730,15 @@
 
             <div class="dashboard-grid">
                 <div class="card span-4">
-                    <div class="stat-label">Credits Balance</div>
-                    <div class="stat-value" style="color: var(--accent-color);">{{ credit_info.balance if credit_info else 0 }}</div>
+                    <div class="stat-label">Credits Usage</div>
+                    <div class="stat-value" style="color: var(--accent-color);">
+                        {{ credit_info.lifetime_spent if credit_info else 0 }} <span style="font-size: 1rem; color: var(--text-secondary)">/ {{ credit_info.limit if credit_info else 1000 }}</span>
+                    </div>
+                    <div class="progress-container" style="height: 4px; background: rgba(255,255,255,0.1); border-radius: 2px; margin: 0.5rem 0;">
+                        <div class="progress-bar" style="height: 100%; background: var(--accent-color); border-radius: 2px; width: {{ (credit_info.lifetime_spent / credit_info.limit * 100) if credit_info and credit_info.limit else 0 }}%"></div>
+                    </div>
                     <div style="font-size: 0.75rem; color: var(--text-secondary)">
-                        {{ credit_info.lifetime_spent if credit_info else 0 }} credits spent total
+                        {{ credit_info.balance if credit_info else 0 }} credits remaining
                     </div>
                 </div>
                 <div class="card span-4">

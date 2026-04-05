@@ -147,6 +147,14 @@ def get_messages():
     result = list_unread_messages(user_context.user_id)
     return jsonify({"messages": result})
 
+@blueprint.route("/messages/delete/<int:message_id>", methods=["POST"])
+@login_required
+def delete_message(message_id):
+    user_context = _build_context()
+    from angel_claw.skills.messaging import delete_internal_message
+    result = delete_internal_message(message_id=message_id, user_id=user_context.user_id)
+    return jsonify({"result": result})
+
 @blueprint.route("/skills")
 @login_required
 def get_skills():

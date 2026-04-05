@@ -779,6 +779,10 @@ curl -X POST http://localhost:5000/chat \
                 Message body...
             </div>
             <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn" style="background-color: #ef444433; color: #ef4444;" id="msg-modal-delete-btn">
+                    <i class="fas fa-trash-alt mr-1"></i> Delete
+                </button>
+                <div style="flex-grow: 1;"></div>
                 <button class="btn btn-primary" onclick="closeMessageModal()">Close</button>
             </div>
         </div>
@@ -967,11 +971,37 @@ curl -X POST http://localhost:5000/chat \
             document.getElementById('msg-modal-from').innerText = msg.from;
             document.getElementById('msg-modal-time').innerText = new Date(msg.timestamp).toLocaleString();
             document.getElementById('msg-modal-content').innerText = msg.content;
+            
+            const deleteBtn = document.getElementById('msg-modal-delete-btn');
+            deleteBtn.onclick = () => deleteMessage(msg.id);
+            
             document.getElementById('message-modal').classList.add('active');
         }
 
         function closeMessageModal() {
             document.getElementById('message-modal').classList.remove('active');
+        }
+
+        async function deleteMessage(messageId) {
+            if (!confirm("Are you sure you want to delete this message?")) return;
+            
+            try {
+                const csrfToken = document.getElementById('csrf_token').value;
+                const response = await fetch(`/messages/delete/${messageId}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken }
+                });
+                const data = await response.json();
+                
+                if (data.result && data.result.includes("deleted")) {
+                    closeMessageModal();
+                    loadMessages(); // Refresh list
+                } else {
+                    alert(data.result || "Error deleting message.");
+                }
+            } catch (e) {
+                alert("Failed to connect to server.");
+            }
         }
 
         async function loadApiInfo() {

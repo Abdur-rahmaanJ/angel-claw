@@ -114,7 +114,7 @@ def create_calendar_event(
 
 
 @skill
-def list_calendar_events(days: int = 365, session_id: str = "cli-default", user_id: Optional[str] = None) -> str:
+def list_calendar_events(days: int = 365, session_id: str = "cli-default", user_id: Optional[str] = None) -> List[dict]:
     """
     Lists upcoming calendar events.
     - days: Number of days to look ahead (default 365)
@@ -123,7 +123,7 @@ def list_calendar_events(days: int = 365, session_id: str = "cli-default", user_
     events = _load_events(session_id, user_id)
 
     if not events:
-        return "No events found."
+        return []
 
     now = datetime.now()
     future = now + timedelta(days=days)
@@ -133,34 +133,12 @@ def list_calendar_events(days: int = 365, session_id: str = "cli-default", user_
         try:
             event_start = datetime.fromisoformat(event["start"])
             if now <= event_start <= future:
-                upcoming.append((event_start, event))
+                upcoming.append(event)
         except (KeyError, ValueError):
             continue
 
-    if not upcoming:
-        return f"No events in the next {days} days."
-
-    upcoming.sort()
-
-    lines = [f"## Upcoming Events (next {days} days)\n"]
-    for event_start, event in upcoming:
-        end_str = ""
-        try:
-            end_dt = datetime.fromisoformat(event["end"])
-            end_str = f" - {_format_datetime(end_dt)}"
-        except (KeyError, ValueError):
-            pass
-
-        location = f" 📍 {event['location']}" if event.get("location") else ""
-        lines.append(
-            f"📅 **{event_start.strftime('%a, %b %d')}** at {_format_datetime(event_start)}{end_str}"
-        )
-        lines.append(f"   {event['title']}{location}")
-        if event.get("description"):
-            lines.append(f"   {event['description']}")
-        lines.append("")
-
-    return "\n".join(lines)
+    upcoming.sort(key=lambda x: x["start"])
+    return upcoming
 
 
 @skill

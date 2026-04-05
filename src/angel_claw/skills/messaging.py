@@ -68,7 +68,7 @@ async def send_internal_message(
         return "Internal messaging is only supported in Shopyo mode."
 
 @skill
-def list_unread_messages(user_id: str) -> str:
+def list_unread_messages(user_id: str) -> List[dict]:
     """
     Lists all unread internal messages for the current user.
     - user_id: The ID of the current user (automatically injected).
@@ -79,7 +79,7 @@ def list_unread_messages(user_id: str) -> str:
             engine = AngelClawEngine()
             ctx = engine._app_context()
             if not ctx:
-                return "Error: Could not obtain application context for Shopyo."
+                return []
 
             with ctx:
                 from modules.agent.models import InternalMessage
@@ -91,21 +91,21 @@ def list_unread_messages(user_id: str) -> str:
                     is_read=False
                 ).order_by(InternalMessage.created_at.desc()).all()
                 
-                if not unread:
-                    return "You have no unread messages."
-                
-                lines = ["## Unread Messages"]
+                results = []
                 for msg in unread:
                     sender = db.session.get(User, msg.sender_id)
-                    sender_name = sender.email if sender else "Unknown"
-                    time_str = msg.created_at.strftime("%Y-%m-%d %H:%M")
-                    lines.append(f"- **From {sender_name}** ({time_str}): {msg.content}")
+                    results.append({
+                        "id": msg.id,
+                        "from": sender.email if sender else "Unknown",
+                        "content": msg.content,
+                        "timestamp": msg.created_at.isoformat()
+                    })
                     
-                return "\n".join(lines)
-        except Exception as e:
-            return f"Error listing messages: {str(e)}"
+                return results
+        except Exception:
+            return []
     else:
-        return "Internal messaging is only supported in Shopyo mode for now."
+        return []
 
 @skill
 def mark_messages_as_read(user_id: str) -> str:

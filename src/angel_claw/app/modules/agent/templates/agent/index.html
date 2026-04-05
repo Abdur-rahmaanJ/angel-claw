@@ -405,6 +405,89 @@
 
         .btn-primary { background-color: var(--accent-color); color: white; }
         .btn-secondary { background-color: #27272a; color: white; }
+
+        /* Inbox Styles */
+        .inbox-row {
+            display: flex;
+            align-items: center;
+            padding: 1rem 1.5rem;
+            border-bottom: 1px solid var(--border-color);
+            cursor: pointer;
+            transition: background 0.2s;
+            gap: 2rem;
+        }
+
+        .inbox-row:hover {
+            background-color: #1c1c1f;
+        }
+
+        .inbox-from {
+            width: 200px;
+            font-weight: 600;
+            flex-shrink: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .inbox-snippet {
+            flex-grow: 1;
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .inbox-time {
+            width: 120px;
+            text-align: right;
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            flex-shrink: 0;
+        }
+
+        /* Calendar Styles */
+        .calendar-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9375rem;
+        }
+
+        .calendar-table th {
+            text-align: left;
+            padding: 1rem;
+            color: var(--text-secondary);
+            font-weight: 600;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.05em;
+        }
+
+        .calendar-table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+        }
+
+        .calendar-table tr:hover {
+            background-color: #1c1c1f;
+        }
+
+        .event-date-cell {
+            font-weight: 600;
+            width: 120px;
+        }
+
+        .event-time-badge {
+            background-color: #4f46e533;
+            color: var(--accent-color);
+            padding: 0.25rem 0.5rem;
+            border-radius: 6px;
+            font-size: 0.8125rem;
+            font-weight: 600;
+        }
     </style>
 </head>
 <body>
@@ -584,7 +667,7 @@
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
                 <h2 class="view-title">Calendar & Events</h2>
             </header>
-            <div class="card span-12">
+            <div class="card span-12" style="padding: 0; overflow: hidden;">
                 <div id="calendar-content">
                     <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Loading your schedule...</p>
                 </div>
@@ -596,7 +679,7 @@
             <header class="view-header" style="margin: -2rem -2rem 2rem -2rem;">
                 <h2 class="view-title">Internal Inbox</h2>
             </header>
-            <div class="card span-12">
+            <div class="card span-12" style="padding: 0; overflow: hidden;">
                 <div id="messages-list">
                     <p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Checking for unread communications...</p>
                 </div>
@@ -681,6 +764,26 @@ curl -X POST http://localhost:5000/chat \
     </main>
 
     <!-- Modals -->
+    <div id="message-modal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 1.5rem;">
+                <div>
+                    <h3 id="msg-modal-from" style="margin-bottom: 0.25rem;">Sender</h3>
+                    <p id="msg-modal-time" style="font-size: 0.75rem; color: var(--text-secondary)">Timestamp</p>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="closeMessageModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div id="msg-modal-content" style="white-space: pre-wrap; line-height: 1.6; color: var(--text-primary); border-top: 1px solid var(--border-color); padding-top: 1.5rem;">
+                Message body...
+            </div>
+            <div style="margin-top: 2rem; display: flex; gap: 1rem; justify-content: flex-end;">
+                <button class="btn btn-primary" onclick="closeMessageModal()">Close</button>
+            </div>
+        </div>
+    </div>
+
     <div id="pairing-modal" class="modal">
         <div class="modal-content">
             <h3 style="margin-bottom: 1rem;">Pair a Channel</h3>
@@ -729,7 +832,44 @@ curl -X POST http://localhost:5000/chat \
             try {
                 const res = await fetch('/calendar');
                 const data = await res.json();
-                container.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9375rem;">${data.events}</pre>`;
+                
+                if (!data.events || data.events.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">No upcoming events found.</p>';
+                    return;
+                }
+
+                let html = `
+                    <table class="calendar-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Time</th>
+                                <th>Event</th>
+                                <th>Location</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                `;
+
+                html += data.events.map(event => {
+                    const start = new Date(event.start);
+                    const dateStr = start.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+                    const timeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    
+                    return `
+                        <tr>
+                            <td class="event-date-cell">${dateStr}</td>
+                            <td><span class="event-time-badge">${timeStr}</span></td>
+                            <td style="font-weight: 500;">${event.title}</td>
+                            <td style="color: var(--text-secondary); font-size: 0.8125rem;">
+                                ${event.location ? '<i class="fas fa-map-marker-alt mr-1"></i> ' + event.location : ''}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                html += '</tbody></table>';
+                container.innerHTML = html;
             } catch (e) {
                 container.innerText = "Error loading calendar.";
             }
@@ -795,10 +935,43 @@ curl -X POST http://localhost:5000/chat \
             try {
                 const res = await fetch('/messages');
                 const data = await res.json();
-                container.innerHTML = `<pre style="white-space: pre-wrap; font-family: inherit; font-size: 0.9375rem;">${data.messages}</pre>`;
+                
+                if (!data.messages || data.messages.length === 0) {
+                    container.innerHTML = '<p style="color: var(--text-secondary); text-align: center; padding: 2rem;">Your inbox is empty.</p>';
+                    return;
+                }
+
+                // Internal data storage for the session
+                window._currentMessages = data.messages;
+
+                container.innerHTML = data.messages.map((msg, index) => {
+                    const date = new Date(msg.timestamp).toLocaleDateString();
+                    const snippet = msg.content.substring(0, 200) + (msg.content.length > 200 ? '...' : '');
+                    return `
+                        <div class="inbox-row" onclick="openMessage(${index})">
+                            <div class="inbox-from">${msg.from}</div>
+                            <div class="inbox-snippet">${snippet}</div>
+                            <div class="inbox-time">${date}</div>
+                        </div>
+                    `;
+                }).join('');
             } catch (e) {
                 container.innerText = "Error loading messages.";
             }
+        }
+
+        function openMessage(index) {
+            const msg = window._currentMessages[index];
+            if (!msg) return;
+            
+            document.getElementById('msg-modal-from').innerText = msg.from;
+            document.getElementById('msg-modal-time').innerText = new Date(msg.timestamp).toLocaleString();
+            document.getElementById('msg-modal-content').innerText = msg.content;
+            document.getElementById('message-modal').classList.add('active');
+        }
+
+        function closeMessageModal() {
+            document.getElementById('message-modal').classList.remove('active');
         }
 
         async function loadApiInfo() {

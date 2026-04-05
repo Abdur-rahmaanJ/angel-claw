@@ -56,18 +56,30 @@ def get_action_cost(action_name: str) -> int:
     return CreditAction.get_cost(action_name)
 
 
+def calculate_token_cost(tokens: int) -> int:
+    """
+    Calculate credit cost based on token usage.
+    Appropriate pricing: 1 credit per 1000 tokens (rounded up).
+    """
+    if tokens <= 0:
+        return 0
+    return (tokens + 999) // 1000
+
+
 def deduct_credits(
     user_id: str,
     action: str,
+    amount: Optional[int] = None,
     metadata: Optional[Dict] = None,
     allow_negative: bool = False,
 ) -> tuple[bool, str]:
     """
     Deduct credits for a given action.
     Uses model methods for logic and atomicity (via session management).
+    If amount is provided, use it. Otherwise use the default cost for the action.
     """
     try:
-        cost = get_action_cost(action)
+        cost = amount if amount is not None else get_action_cost(action)
         # Use with_for_update for atomicity
         credit = (
             db.session.query(UserCredit)
@@ -140,8 +152,12 @@ def get_user_stats(user_id: str) -> Dict[str, Any]:
 
     credit = UserCredit.query.filter_by(user_id=user_id).first()
     if not credit:
-        initial = getattr(settings, "initial_free_credits", 100)
+        initial = getattr(settings, "initial_free_credits", 1000)
         credit = UserCredit.get_or_create(user_id, initial=initial)
+        # Ensure limit matches initial if it was defaulted differently in DB
+        if credit.limit != initial:
+            credit.limit = initial
+            db.session.commit()
 
     transactions_count = CreditTransaction.query.filter_by(user_id=user_id).count()
 

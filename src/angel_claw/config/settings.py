@@ -131,7 +131,7 @@ class Settings(BaseSettings):
     cache_ttl: int = Field(3600, validation_alias="CACHE_TTL")  # 1 hour default
 
     # Credit System Settings
-    initial_free_credits: int = Field(100, validation_alias="INITIAL_FREE_CREDITS")
+    initial_free_credits: int = Field(1000, validation_alias="INITIAL_FREE_CREDITS")
     credits_enabled: bool = Field(True, validation_alias="CREDITS_ENABLED")
 
 

@@ -110,7 +110,7 @@ class UserCredit(PkModel):
     def get_or_create(user_id: str, initial: int = 0):
         credit = UserCredit.query.filter_by(user_id=user_id).first()
         if not credit:
-            credit = UserCredit(user_id=user_id, balance=initial)
+            credit = UserCredit(user_id=user_id, balance=initial, limit=initial)
             db.session.add(credit)
             db.session.commit()
         return credit

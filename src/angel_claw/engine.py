@@ -198,11 +198,13 @@ class AngelClawEngine:
                 )
         return True, ""
 
-    def _deduct_credits_sync(self, user_id: str, action: str, metadata: dict = None):
+    def _deduct_credits_sync(
+        self, user_id: str, action: str, metadata: dict = None, amount: int = None
+    ):
         from .credits import credits_enabled, deduct_credits
 
         if credits_enabled():
-            success, msg = deduct_credits(user_id, action, metadata)
+            success, msg = deduct_credits(user_id, action, amount=amount, metadata=metadata)
             if not success:
                 logger.warning(f"Credit deduction failed for user {user_id}: {msg}")
             return success
@@ -272,6 +274,7 @@ class AngelClawEngine:
         # 3. Call LLM
         assistant_content = ""
         tool_calls_list = []
+        total_tokens = 0
 
         # Allow per-user model overrides from Vault
         model = runtime.vault.get("MODEL", settings.model)
@@ -394,6 +397,9 @@ class AngelClawEngine:
                         },
                     )
 
+            if hasattr(response, "usage") and response.usage:
+                total_tokens += getattr(response.usage, "total_tokens", 0)
+
             response_message = response.choices[0].message
             msg_dict = {"role": "assistant", "content": response_message.content}
 
@@ -494,8 +500,15 @@ class AngelClawEngine:
         # Log chat
         chat_logger.log(user_id, session_id, message, assistant_content)
 
-        # Deduct credits for message
-        self._deduct_credits_sync(user_id, "chat_message", {"session_id": session_id})
+        # Deduct credits for message based on tokens
+        from .credits import calculate_token_cost
+        credit_amount = calculate_token_cost(total_tokens)
+        self._deduct_credits_sync(
+            user_id, 
+            "chat_message", 
+            {"session_id": session_id, "tokens": total_tokens},
+            amount=credit_amount
+        )
 
         return EngineResponse(
             content=assistant_content,
@@ -577,6 +590,7 @@ class AngelClawEngine:
         MAX_TURNS = 10
         tool_calls_list = []
         assistant_content = ""
+        total_tokens = 0
 
         # Convert Message objects to dicts for litellm
         messages = [{"role": m["role"], "content": m["content"]} for m in messages]
@@ -593,10 +607,17 @@ class AngelClawEngine:
                     tools=all_tools if all_tools else None,
                     tool_choice="auto" if all_tools else None,
                     stream=True,  # Enable streaming
+                    stream_options={"include_usage": True}
                 )
 
                 # Yield chunks as they arrive - yield char by char for true streaming
                 async for chunk in response:
+                    if hasattr(chunk, "usage") and chunk.usage:
+                        total_tokens += getattr(chunk.usage, "total_tokens", 0)
+
+                    if not chunk.choices:
+                        continue
+
                     delta = chunk.choices[0].delta
                     if delta.content:
                         assistant_content += delta.content
@@ -660,8 +681,15 @@ class AngelClawEngine:
 
         chat_logger.log(user_id, session_id, message, assistant_content)
 
-        # Deduct credits
-        self._deduct_credits_sync(user_id, "chat_message", {"session_id": session_id})
+        # Deduct credits for message based on tokens
+        from .credits import calculate_token_cost
+        credit_amount = calculate_token_cost(total_tokens)
+        self._deduct_credits_sync(
+            user_id, 
+            "chat_message", 
+            {"session_id": session_id, "tokens": total_tokens},
+            amount=credit_amount
+        )
 
     def get_history(self, context: UserContext) -> List[Message]:
         return self._get_user_history(context.user_id, context.channel_identifier)

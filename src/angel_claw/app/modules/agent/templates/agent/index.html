@@ -774,7 +774,6 @@
                     <h2 class="view-title">Conversation</h2>
                 </div>
                 <div style="display: flex; gap: 1rem;">
-                    <span id="typing" style="font-size: 0.875rem; color: var(--text-secondary); display: none;">🪽 Thinking...</span>
                 </div>
             </header>
             
@@ -1380,7 +1379,6 @@ curl -X POST http://localhost:5000/chat \
         const chatForm = document.getElementById('chat-form');
         const userInput = document.getElementById('user-input');
         const chatMessages = document.getElementById('chat-messages');
-        const typingIndicator = document.getElementById('typing');
         const sendBtn = document.getElementById('send-btn');
 
         function appendMessage(role, content) {
@@ -1405,7 +1403,6 @@ curl -X POST http://localhost:5000/chat \
             userInput.disabled = true;
             sendBtn.disabled = true;
             appendMessage('user', message);
-            typingIndicator.style.display = 'inline';
 
             try {
                 const csrfToken = document.getElementById('csrf_token').value;
@@ -1446,14 +1443,10 @@ curl -X POST http://localhost:5000/chat \
                     for (const line of lines) {
                         if (line.startsWith('data: ')) {
                             try {
-                                console.log('[CLIENT DEBUG] raw line:', line);
                                 const data = JSON.parse(line.slice(6));
-                                console.log('[CLIENT DEBUG] parsed data:', data);
                                 if (data.chunk) {
-                                    console.log('[CLIENT DEBUG] got chunk:', data.chunk);
                                     if (!data.chunk.startsWith('[TOOL_CALL:')) {
                                         assistantMessage += data.chunk;
-                                        console.log('[CLIENT DEBUG] full message now:', assistantMessage);
                                         
                                         // Use textContent + convert newlines to <br>
                                         const formatted = assistantMessage.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
@@ -1464,27 +1457,20 @@ curl -X POST http://localhost:5000/chat \
                                         
                                         // Scroll immediately
                                         chatMessages.scrollTop = chatMessages.scrollHeight;
-                                        console.log('[CLIENT DEBUG] About to hide typingIndicator');
-                                        typingIndicator.style.display = 'none';
-                                        console.log('[CLIENT DEBUG] typingIndicator hidden, computed style:', window.getComputedStyle(typingIndicator).display);
                                     }
                                 } else if (data.done) {
-                                    console.log('[CLIENT DEBUG] done');
-                                    typingIndicator.style.display = 'none';
+                                    // Done
                                 } else if (data.error) {
-                                    console.log('[CLIENT DEBUG] error:', data.error);
                                     contentDiv.innerHTML = `<span style="color: #ef4444">Error: ${data.error}</span>`;
-                                    typingIndicator.style.display = 'none';
                                 }
                             } catch (e) {
-                                console.log('[CLIENT DEBUG] parse error:', e);
+                                // Ignore parse errors
                             }
                         }
                     }
                 }
 
             } catch (error) {
-                typingIndicator.style.display = 'none';
                 appendMessage('assistant', `<span style="color: #ef4444">Failed to connect to the agent.</span>`);
             } finally {
                 userInput.disabled = false;

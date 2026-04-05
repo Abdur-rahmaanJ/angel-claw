@@ -20,6 +20,7 @@ import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 try:
     from sqlalchemy.exc import LegacyAPIWarning, SAWarning
+
     warnings.filterwarnings("ignore", category=LegacyAPIWarning)
     warnings.filterwarnings("ignore", category=SAWarning)
 except ImportError:
@@ -82,6 +83,7 @@ def create_app(config_name="development"):
     from shopyo_auth import ShopyoAuth
     from shopyo_appadmin import ShopyoAppAdmin
     from shopyo_dashboard import ShopyoDashboard
+
     # from shopyo_page import ShopyoPage
     # from shopyo_i18n import Shopyoi18n
     from shopyo_settings import ShopyoSettings
@@ -118,6 +120,7 @@ def create_app(config_name="development"):
     @app.before_request
     def make_session_permanent():
         from flask import session
+
         if current_user.is_authenticated:
             session.permanent = True
 
@@ -212,10 +215,17 @@ def load_config_from_instance(app, config_name):
 def setup_flask_admin(app):
     admin = Admin(
         app,
-        name="My App",
+        name="Angel Claw Admin",
         index_view=MyAdminIndexView(),
     )
-    # admin.add_view(DefaultModelView(Settings, db.session))
+    from shopyo_admin import DefaultModelView
+    from modules.agent.models import UserCredit, CreditTransaction, CreditAction
+    from init import db
+
+    admin.add_view(DefaultModelView(UserCredit, db.session, category="Credits"))
+    admin.add_view(DefaultModelView(CreditTransaction, db.session, category="Credits"))
+    admin.add_view(DefaultModelView(CreditAction, db.session, category="Credits"))
+
     admin.add_link(MenuLink(name="Logout", category="", url="/auth/logout?next=/admin"))
 
 
@@ -279,12 +289,17 @@ def custom_commands(db, app):
         import modules.agent.models
         import importlib
         from init import modules_path, root_path
-        
+
         # Ensure all models are loaded manually into the current app context
         # to ensure db.create_all() picks them up.
-        
+
         # Core Shopyo modules often have models in their .models
-        core_packages = ["shopyo_auth", "shopyo_settings", "shopyo_theme", "shopyo_dashboard"]
+        core_packages = [
+            "shopyo_auth",
+            "shopyo_settings",
+            "shopyo_theme",
+            "shopyo_dashboard",
+        ]
         for pkg in core_packages:
             try:
                 importlib.import_module(f"{pkg}.models")
@@ -293,15 +308,16 @@ def custom_commands(db, app):
 
         # Our local modules
         from shopyo.api.module import iter_modules
+
         for module_name, _ in iter_modules(root_path):
             try:
                 importlib.import_module(f"{module_name}.models")
             except Exception:
                 pass
-        
+
         # Ensure all tables exist
         db.create_all()
-        
+
         # 1. Standard Shopyo Upload (initializes modules)
         for ext in app.extensions:
             if ext.startswith("shopyo_"):
@@ -312,24 +328,24 @@ def custom_commands(db, app):
                     logger.debug("Uploaded for " + ext)
                 except AttributeError:
                     pass
-        
+
         # 2. Ensure default roles exist
         admin_role = Role.query.filter_by(name="admin").first()
         if not admin_role:
             admin_role = Role(name="admin")
             db.session.add(admin_role)
-        
+
         user_role = Role.query.filter_by(name="user").first()
         if not user_role:
             user_role = Role(name="user")
             db.session.add(user_role)
-        
+
         db.session.commit()
 
         # 3. Create or Update Seed Admin with Roles
         admin_email = app.config.get("SEED_ADMIN_EMAIL")
         admin_pass = app.config.get("SEED_ADMIN_PASSWORD")
-        
+
         user = User.query.filter_by(email=admin_email).first()
         if not user:
             user = User()
@@ -340,12 +356,12 @@ def custom_commands(db, app):
             db.session.add(user)
             db.session.commit()
             logger.debug(f"Created seed admin: {admin_email}")
-        
+
         if admin_role not in user.roles:
             user.roles.append(admin_role)
         if user_role not in user.roles:
             user.roles.append(user_role)
-            
+
         db.session.commit()
         logger.debug("Roles assigned to seed admin.")
 
@@ -355,19 +371,19 @@ def custom_commands(db, app):
     def shopyo_confirm_user(email):
         from shopyo_auth.models import User, Role
         import datetime
-        
+
         user = User.query.filter_by(email=email).first()
         if not user:
             click.echo(f"User with email {email} not found.")
             return
-            
+
         user.is_email_confirmed = True
         user.email_confirm_date = datetime.datetime.now()
-        
+
         user_role = Role.query.filter_by(name="user").first()
         if user_role and user_role not in user.roles:
             user.roles.append(user_role)
-            
+
         db.session.commit()
         click.echo(f"User {email} confirmed and assigned 'user' role.")
 
@@ -376,18 +392,18 @@ def custom_commands(db, app):
     @with_appcontext
     def shopyo_promote_user(email):
         from shopyo_auth.models import User, Role
-        
+
         user = User.query.filter_by(email=email).first()
         if not user:
             click.echo(f"User with email {email} not found.")
             return
-            
+
         user.is_admin = True
-        
+
         admin_role = Role.query.filter_by(name="admin").first()
         if admin_role and admin_role not in user.roles:
             user.roles.append(admin_role)
-            
+
         db.session.commit()
         click.echo(f"User {email} promoted to admin.")
 
@@ -398,30 +414,30 @@ def custom_commands(db, app):
     def shopyo_create_admin(email, password):
         from shopyo_auth.models import User, Role
         import datetime
-        
+
         user = User.query.filter_by(email=email).first()
         if user:
             click.echo(f"User with email {email} already exists.")
             return
-            
+
         user = User()
         user.email = email
         user.password = password
         user.is_admin = True
         user.is_email_confirmed = True
         user.email_confirm_date = datetime.datetime.now()
-        
+
         db.session.add(user)
         db.session.commit()
-        
+
         admin_role = Role.query.filter_by(name="admin").first()
         if admin_role:
             user.roles.append(admin_role)
-            
+
         user_role = Role.query.filter_by(name="user").first()
         if user_role:
             user.roles.append(user_role)
-            
+
         db.session.commit()
         click.echo(f"Admin user {email} created successfully.")
 
@@ -429,11 +445,14 @@ def custom_commands(db, app):
     @with_appcontext
     def shopyo_list_users():
         from shopyo_auth.models import User
+
         users = User.query.all()
         click.echo(f"{'ID':<4} {'Email':<30} {'Confirmed':<10} {'Admin':<6}")
         click.echo("-" * 55)
         for user in users:
-            click.echo(f"{user.id:<4} {user.email:<30} {str(user.is_email_confirmed):<10} {str(user.is_admin):<6}")
+            click.echo(
+                f"{user.id:<4} {user.email:<30} {str(user.is_email_confirmed):<10} {str(user.is_admin):<6}"
+            )
 
     @click.command("shopyo-update-password")
     @click.argument("email")
@@ -441,12 +460,12 @@ def custom_commands(db, app):
     @with_appcontext
     def shopyo_update_password(email, new_password):
         from shopyo_auth.models import User
-        
+
         user = User.query.filter_by(email=email).first()
         if not user:
             click.echo(f"User with email {email} not found.")
             return
-            
+
         user.password = new_password
         db.session.commit()
         click.echo(f"Password for user {email} updated successfully.")
@@ -457,3 +476,20 @@ def custom_commands(db, app):
     app.cli.add_command(shopyo_create_admin)
     app.cli.add_command(shopyo_list_users)
     app.cli.add_command(shopyo_update_password)
+
+    @click.command("init-credits")
+    @with_appcontext
+    def init_credits():
+        """Initialize credit system tables and default actions."""
+        from angel_claw.credits import init_default_actions
+        from angel_claw.config.settings import settings
+
+        try:
+            # Create tables for credit models
+            db.create_all()
+            init_default_actions()
+            click.echo("Credit system initialized successfully.")
+        except Exception as e:
+            click.echo(f"Error initializing credit system: {e}")
+
+    app.cli.add_command(init_credits)

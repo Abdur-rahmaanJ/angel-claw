@@ -186,6 +186,28 @@ class AngelClawEngine:
                 except Exception as e:
                     logger.error(f"Error ensuring channel: {e}")
 
+    async def _check_credits(self, user_id: str, action: str) -> tuple[bool, str]:
+        from .credits import credits_enabled, check_sufficient_credits
+
+        if credits_enabled():
+            has_sufficient, balance = check_sufficient_credits(user_id, action)
+            if not has_sufficient:
+                return (
+                    False,
+                    f"[SYSTEM: Insufficient credits ({balance}). Please purchase more to continue.]",
+                )
+        return True, ""
+
+    def _deduct_credits_sync(self, user_id: str, action: str, metadata: dict = None):
+        from .credits import credits_enabled, deduct_credits
+
+        if credits_enabled():
+            success, msg = deduct_credits(user_id, action, metadata)
+            if not success:
+                logger.warning(f"Credit deduction failed for user {user_id}: {msg}")
+            return success
+        return True
+
     async def execute(self, context: UserContext, message: str) -> EngineResponse:
         self._ensure_channel(context)
 
@@ -197,6 +219,11 @@ class AngelClawEngine:
 
         session_id = context.channel_identifier
         user_id = context.user_id
+
+        # Credit Check
+        allowed, err_msg = await self._check_credits(user_id, "chat_message")
+        if not allowed:
+            return EngineResponse(content=err_msg)
 
         # Get the isolated runtime
         runtime = await runtime_manager.get_runtime(context)
@@ -407,6 +434,19 @@ class AngelClawEngine:
                 except json.JSONDecodeError:
                     function_args = {}
 
+                # Tool credit check
+                allowed, err_msg = await self._check_credits(user_id, "tool_execution")
+                if not allowed:
+                    messages.append(
+                        {
+                            "tool_call_id": tool_call.id,
+                            "role": "tool",
+                            "name": function_name,
+                            "content": err_msg,
+                        }
+                    )
+                    continue
+
                 # Audit: Recursive Workflow Defense - Inject depth into internal messages
                 if function_name == "send_internal_message":
                     # Append depth marker to the content so the recipient's agent can track it
@@ -426,6 +466,11 @@ class AngelClawEngine:
                         "name": function_name,
                         "content": str(function_result),
                     }
+                )
+
+                # Deduct credits for tool execution
+                self._deduct_credits_sync(
+                    user_id, "tool_execution", {"tool": function_name}
                 )
 
         if turns >= MAX_TURNS:
@@ -449,6 +494,9 @@ class AngelClawEngine:
         # Log chat
         chat_logger.log(user_id, session_id, message, assistant_content)
 
+        # Deduct credits for message
+        self._deduct_credits_sync(user_id, "chat_message", {"session_id": session_id})
+
         return EngineResponse(
             content=assistant_content,
             tool_calls=tool_calls_list if tool_calls_list else None,
@@ -466,6 +514,12 @@ class AngelClawEngine:
 
         session_id = context.channel_identifier
         user_id = context.user_id
+
+        # Credit Check
+        allowed, err_msg = await self._check_credits(user_id, "chat_message")
+        if not allowed:
+            yield err_msg
+            return
 
         # Get the isolated runtime
         runtime = await runtime_manager.get_runtime(context)
@@ -580,7 +634,10 @@ class AngelClawEngine:
                                     )
                                 yield f"[TOOL_CALL:{func_name}]"
 
-                break  # Exit loop if no tool calls or after first response
+                # If there are tool calls, we would normally process them,
+                # but streaming here is simplified and doesn't do loops for now.
+                # In a real engine, we'd loop tool calls here.
+                break
 
             except Exception as e:
                 logger.error(f"Error in execute_streaming turn {turns}: {e}")
@@ -602,6 +659,9 @@ class AngelClawEngine:
             )
 
         chat_logger.log(user_id, session_id, message, assistant_content)
+
+        # Deduct credits
+        self._deduct_credits_sync(user_id, "chat_message", {"session_id": session_id})
 
     def get_history(self, context: UserContext) -> List[Message]:
         return self._get_user_history(context.user_id, context.channel_identifier)

@@ -41,12 +41,21 @@ def index():
     history = []
 
     from modules.agent.models import Channel
+    from angel_claw.credits import credits_enabled, get_user_stats, add_credits
+    from angel_claw.config.settings import settings
 
     user_id = str(current_user.id)
     channels = Channel.query.filter_by(user_id=user_id, is_active=True).all()
     channel_types = [c.channel_type for c in channels]
 
-    context.update({"history": history, "channels": channel_types})
+    # Get credit info
+    credit_info = {"balance": 0, "lifetime_spent": 0}
+    if credits_enabled():
+        credit_info = get_user_stats(user_id)
+
+    context.update(
+        {"history": history, "channels": channel_types, "credit_info": credit_info}
+    )
     return render_template("{}/index.html".format(mhelp.info["module_name"]), **context)
 
 

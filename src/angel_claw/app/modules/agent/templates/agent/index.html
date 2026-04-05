@@ -730,6 +730,13 @@
 
             <div class="dashboard-grid">
                 <div class="card span-4">
+                    <div class="stat-label">Credits Balance</div>
+                    <div class="stat-value" style="color: var(--accent-color);">{{ credit_info.balance if credit_info else 0 }}</div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary)">
+                        {{ credit_info.lifetime_spent if credit_info else 0 }} credits spent total
+                    </div>
+                </div>
+                <div class="card span-4">
                     <div class="stat-label">Pending Tasks</div>
                     <div class="stat-value" id="stat-tasks">--</div>
                     <div style="font-size: 0.75rem; color: var(--success-color)">

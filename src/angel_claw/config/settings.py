@@ -25,7 +25,7 @@ class Settings(BaseSettings):
 
     # Data & Persistence Settings
     user_data_root: str = Field("~/.angelclaw", validation_alias="USER_DATA_ROOT")
-    
+
     @property
     def data_dir(self) -> Path:
         p = Path(self.user_data_root).expanduser()
@@ -103,24 +103,36 @@ class Settings(BaseSettings):
     google_client_id: Optional[str] = Field(None, validation_alias="GOOGLE_CLIENT_ID")
 
     # Sandboxing (SaaS Grade)
-    docker_sandboxing_enabled: bool = Field(False, validation_alias="DOCKER_SANDBOXING_ENABLED")
-    docker_runtime: str = Field("runc", validation_alias="DOCKER_RUNTIME") # Use "runsc" for gVisor
+    docker_sandboxing_enabled: bool = Field(
+        False, validation_alias="DOCKER_SANDBOXING_ENABLED"
+    )
+    docker_runtime: str = Field(
+        "runc", validation_alias="DOCKER_RUNTIME"
+    )  # Use "runsc" for gVisor
     docker_image: str = Field("python:3.11-slim", validation_alias="DOCKER_IMAGE")
     docker_timeout: int = Field(30, validation_alias="DOCKER_TIMEOUT")
 
     # Redis Settings (Scalability)
     redis_enabled: bool = Field(False, validation_alias="REDIS_ENABLED")
     redis_url: str = Field("redis://localhost:6379/0", validation_alias="REDIS_URL")
-    redis_queue_name: str = Field("angel_claw_lane_queue", validation_alias="REDIS_QUEUE_NAME")
+    redis_queue_name: str = Field(
+        "angel_claw_lane_queue", validation_alias="REDIS_QUEUE_NAME"
+    )
 
     # Database Settings (Scalability)
     # Optional: Use a single high-performance database (Postgres/MySQL) via SQLAlchemy URI
     # If not provided, defaults to isolated per-user SQLite files.
-    history_database_uri: Optional[str] = Field(None, validation_alias="HISTORY_DATABASE_URI")
+    history_database_uri: Optional[str] = Field(
+        None, validation_alias="HISTORY_DATABASE_URI"
+    )
 
     # Caching Settings (Performance)
     cache_enabled: bool = Field(False, validation_alias="CACHE_ENABLED")
-    cache_ttl: int = Field(3600, validation_alias="CACHE_TTL") # 1 hour default
+    cache_ttl: int = Field(3600, validation_alias="CACHE_TTL")  # 1 hour default
+
+    # Credit System Settings
+    initial_free_credits: int = Field(100, validation_alias="INITIAL_FREE_CREDITS")
+    credits_enabled: bool = Field(True, validation_alias="CREDITS_ENABLED")
 
 
 settings = Settings()

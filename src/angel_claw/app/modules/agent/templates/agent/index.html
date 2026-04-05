@@ -433,6 +433,40 @@
                     <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #3b82f6;" data-color="#3b82f6" title="Blue"></div>
                     <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #64748b;" data-color="#64748b" title="Slate"></div>
                 </div>
+
+                <div class="mt-10 pt-10 border-t border-[var(--border-color)]">
+                    <h3 class="font-bold mb-1">Assistant Icon</h3>
+                    <p class="text-sm text-zinc-500 mb-6">Choose an icon for your Angel Claw agent.</p>
+                    <div class="flex flex-wrap gap-4" id="icon-palette">
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-brain" title="Brain">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-microchip" title="Microchip">
+                            <i class="fas fa-microchip"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-bolt" title="Bolt">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-cube" title="Cube">
+                            <i class="fas fa-cube"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-wand-sparkles" title="Wand">
+                            <i class="fas fa-wand-sparkles"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-gem" title="Gem">
+                            <i class="fas fa-gem"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-compass" title="Compass">
+                            <i class="fas fa-compass"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-atom" title="Atom">
+                            <i class="fas fa-atom"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-shield-halved" title="Shield">
+                            <i class="fas fa-shield-halved"></i>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -491,6 +525,7 @@
         const state = {
             theme: localStorage.getItem('theme') || 'dark',
             accent: localStorage.getItem('accent-color') || '#22c55e',
+            assistantIcon: localStorage.getItem('assistant-icon') || 'fa-brain',
             currentMessageId: null,
             messages: [],
             currentSessionId: localStorage.getItem('current-session-id') || 'Thread 1',
@@ -500,6 +535,7 @@
         function init() {
             applyTheme();
             applyAccent(state.accent);
+            applyAssistantIcon(state.assistantIcon);
             setupEventListeners();
             loadDashboardStats();
             loadChatSessions();
@@ -544,9 +580,26 @@
             });
         }
 
+        function applyAssistantIcon(iconClass) {
+            state.assistantIcon = iconClass;
+            localStorage.setItem('assistant-icon', iconClass);
+            
+            document.querySelectorAll('.icon-option').forEach(el => {
+                if (el.dataset.icon === iconClass) {
+                    el.classList.add('border-accent', 'bg-accent/10');
+                } else {
+                    el.classList.remove('border-accent', 'bg-accent/10');
+                }
+            });
+        }
+
         function setupEventListeners() {
             document.querySelectorAll('.color-option').forEach(el => {
                 el.addEventListener('click', () => applyAccent(el.dataset.color));
+            });
+
+            document.querySelectorAll('.icon-option').forEach(el => {
+                el.addEventListener('click', () => applyAssistantIcon(el.dataset.icon));
             });
 
             const overlay = document.getElementById('sidebar-overlay');
@@ -736,10 +789,11 @@
 
                     container.innerHTML = data.history.map(msg => {
                         const formattedContent = msg.content.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                        const icon = msg.role === 'user' ? 'fa-user' : state.assistantIcon;
                         return `
                             <div class="max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]">
                                 <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white ${msg.role === 'user' ? 'bg-zinc-800' : 'bg-accent'}">
-                                    <i class="fas ${msg.role === 'user' ? 'fa-user' : 'fa-robot'}"></i>
+                                    <i class="fas ${icon}"></i>
                                 </div>
                                 <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words">
                                     ${formattedContent}
@@ -1074,7 +1128,7 @@
                     msgDiv.className = 'max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]';
                     msgDiv.innerHTML = `
                         <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white bg-accent">
-                            <i class="fas fa-robot"></i>
+                            <i class="fas ${state.assistantIcon}"></i>
                         </div>
                         <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words message-content"></div>
                     `;
@@ -1128,9 +1182,10 @@
         function appendMessage(role, content) {
             const div = document.createElement('div');
             div.className = 'max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]';
+            const icon = role === 'user' ? 'fa-user' : state.assistantIcon;
             div.innerHTML = `
                 <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white ${role === 'user' ? 'bg-zinc-800' : 'bg-accent'}">
-                    <i class="fas ${role === 'user' ? 'fa-user' : 'fa-robot'}"></i>
+                    <i class="fas ${icon}"></i>
                 </div>
                 <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words">${content}</div>
             `;

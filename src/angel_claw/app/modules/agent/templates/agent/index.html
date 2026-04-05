@@ -27,9 +27,30 @@
             --card-bg: #ffffff;
             --text-primary: #18181b;
             --text-secondary: #71717a;
-            --accent-color: #4f46e5;
+            --accent-color: #22c55e;
             --border-color: #e4e4e7;
             --success-color: #10b981;
+        }
+
+        [data-theme="dark"] {
+            --accent-color: #22c55e;
+        }
+
+        /* Accent Color Palette */
+        .color-option {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            transition: all 0.2s;
+        }
+        .color-option:hover {
+            transform: scale(1.1);
+        }
+        .color-option.selected {
+            border-color: var(--text-primary);
+            box-shadow: 0 0 0 2px var(--bg-color);
         }
 
         * {
@@ -926,7 +947,21 @@ curl -X POST http://localhost:5000/chat \
                 </div>
             </header>
             <div class="card span-12">
-                <p style="color: var(--text-secondary)">Configuration settings for your Angel Claw instance.</p>
+                <h3 style="margin-bottom: 1rem;">Accent Color</h3>
+                <p style="color: var(--text-secondary); margin-bottom: 1.5rem;">Choose a color for buttons, icons, and highlights.</p>
+                <div style="display: flex; gap: 0.75rem; flex-wrap: wrap;" id="color-palette">
+                    <div class="color-option selected" style="background: #22c55e;" data-color="#22c55e" title="Green"></div>
+                    <div class="color-option" style="background: #4f46e5;" data-color="#4f46e5" title="Indigo"></div>
+                    <div class="color-option" style="background: #7c3aed;" data-color="#7c3aed" title="Violet"></div>
+                    <div class="color-option" style="background: #ec4899;" data-color="#ec4899" title="Pink"></div>
+                    <div class="color-option" style="background: #ef4444;" data-color="#ef4444" title="Red"></div>
+                    <div class="color-option" style="background: #f97316;" data-color="#f97316" title="Orange"></div>
+                    <div class="color-option" style="background: #eab308;" data-color="#eab308" title="Yellow"></div>
+                    <div class="color-option" style="background: #14b8a6;" data-color="#14b8a6" title="Teal"></div>
+                    <div class="color-option" style="background: #06b6d4;" data-color="#06b6d4" title="Cyan"></div>
+                    <div class="color-option" style="background: #3b82f6;" data-color="#3b82f6" title="Blue"></div>
+                    <div class="color-option" style="background: #64748b;" data-color="#64748b" title="Slate"></div>
+                </div>
             </div>
         </div>
 
@@ -993,6 +1028,19 @@ curl -X POST http://localhost:5000/chat \
             themeMeta.content = newTheme === 'light' ? '#f4f4f5' : '#09090b';
         }
 
+        // Accent Color Picker
+        function setAccentColor(color) {
+            document.documentElement.style.setProperty('--accent-color', color);
+            localStorage.setItem('accent-color', color);
+            updateColorSelection(color);
+        }
+
+        function updateColorSelection(selectedColor) {
+            document.querySelectorAll('.color-option').forEach(el => {
+                el.classList.toggle('selected', el.dataset.color === selectedColor);
+            });
+        }
+
         // Load saved theme
         (function() {
             const saved = localStorage.getItem('theme') || 'dark';
@@ -1001,7 +1049,21 @@ curl -X POST http://localhost:5000/chat \
             const themeMeta = document.getElementById('theme-meta');
             if (icon) icon.className = saved === 'light' ? 'fas fa-sun' : 'fas fa-moon';
             if (themeMeta) themeMeta.content = saved === 'light' ? '#f4f4f5' : '#09090b';
+            
+            // Load saved accent color
+            const accentColor = localStorage.getItem('accent-color') || '#22c55e';
+            document.documentElement.style.setProperty('--accent-color', accentColor);
         })();
+
+        // Initialize color picker on load
+        window.addEventListener('DOMContentLoaded', () => {
+            const accentColor = localStorage.getItem('accent-color') || '#22c55e';
+            updateColorSelection(accentColor);
+            
+            document.querySelectorAll('.color-option').forEach(el => {
+                el.addEventListener('click', () => setAccentColor(el.dataset.color));
+            });
+        });
 
         // Sidebar Toggle for Mobile
         function toggleSidebar() {

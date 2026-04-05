@@ -897,12 +897,13 @@ curl -X POST http://localhost:5000/chat \
                     const diffMins = Math.floor(diffMs / 60000);
                     const diffHours = Math.floor(diffMins / 60);
                     let timeAgo = diffMins < 60 ? diffMins + ' minutes ago' : diffHours + ' hour' + (diffHours > 1 ? 's' : '') + ' ago';
+                    const unreadBadge = !msg.is_read ? '<span style="background: var(--accent-color); color: white; font-size: 0.625rem; padding: 2px 6px; border-radius: 4px; margin-left: 8px;">UNREAD</span>' : '';
                     activityHtml += `
                         <div class="list-item">
                             <div style="display: flex; gap: 1rem; align-items: center;">
-                                <i class="fas fa-envelope" style="color: var(--success-color)"></i>
+                                <i class="fas fa-envelope${msg.is_read ? '-open' : ''}" style="color: ${msg.is_read ? 'var(--success-color)' : 'var(--accent-color)'}"></i>
                                 <div>
-                                    <p style="font-size: 0.875rem;">Received message from ${msg.from}</p>
+                                    <p style="font-size: 0.875rem;">Received message from ${msg.from}${unreadBadge}</p>
                                     <p style="font-size: 0.75rem; color: var(--text-secondary)">${timeAgo}</p>
                                 </div>
                             </div>
@@ -985,11 +986,13 @@ curl -X POST http://localhost:5000/chat \
                 container.innerHTML = data.messages.map((msg, index) => {
                     const date = new Date(msg.timestamp).toLocaleDateString();
                     const snippet = msg.content.substring(0, 200) + (msg.content.length > 200 ? '...' : '');
+                    const unreadStyle = !msg.is_read ? 'background: rgba(42, 130, 218, 0.1); border-left: 3px solid var(--accent-color);' : '';
+                    const boldStyle = !msg.is_read ? 'font-weight: 700;' : '';
                     return `
-                        <div class="inbox-row" onclick="openMessage(${index})">
-                            <div class="inbox-from">${msg.from}</div>
-                            <div class="inbox-snippet">${snippet}</div>
-                            <div class="inbox-time">${date}</div>
+                        <div class="inbox-row" onclick="openMessage(${index})" style="${unreadStyle}">
+                            <div class="inbox-from" style="${boldStyle}">${!msg.is_read ? '<i class="fas fa-circle" style="color: var(--accent-color); font-size: 0.5rem; margin-right: 6px;"></i>' : ''}${msg.from}</div>
+                            <div class="inbox-snippet" style="${boldStyle}">${snippet}</div>
+                            <div class="inbox-time" style="${boldStyle}">${date}</div>
                         </div>
                     `;
                 }).join('');
@@ -998,9 +1001,13 @@ curl -X POST http://localhost:5000/chat \
             }
         }
 
+        let _currentMessageId = null;
+        
         function openMessage(index) {
             const msg = window._currentMessages[index];
             if (!msg) return;
+            
+            _currentMessageId = msg.id;
             
             document.getElementById('msg-modal-from').innerText = msg.from;
             document.getElementById('msg-modal-time').innerText = new Date(msg.timestamp).toLocaleString();
@@ -1013,7 +1020,29 @@ curl -X POST http://localhost:5000/chat \
         }
 
         function closeMessageModal() {
-            document.getElementById('message-modal').classList.remove('active');
+            const modal = document.getElementById('message-modal');
+            modal.classList.remove('active');
+            
+            if (_currentMessageId) {
+                const csrfToken = document.getElementById('csrf_token').value;
+                fetch('/messages/mark-read/' + _currentMessageId, { 
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': csrfToken }
+                })
+                    .then(res => res.json())
+                    .then(data => {
+                        console.log('Marked as read:', data);
+                    })
+                    .catch(err => console.error('Error:', err))
+                    .finally(() => {
+                        _currentMessageId = null;
+                        loadDashboardStats();
+                        loadMessages();
+                    });
+            } else {
+                loadDashboardStats();
+                loadMessages();
+            }
         }
 
         async function deleteMessage(messageId) {

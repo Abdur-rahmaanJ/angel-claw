@@ -15,6 +15,7 @@ blueprint = mhelp.blueprint
 # Shared engine instance
 engine = AngelClawEngine()
 
+
 def _build_context():
     # In Shopyo, current_user.id is usually what we need
     # We use session_id from request or a default for web
@@ -22,10 +23,13 @@ def _build_context():
     return UserContext(
         user_id=str(current_user.id),
         email=current_user.email,
-        roles=[r.name for r in current_user.roles] if hasattr(current_user, "roles") else [],
+        roles=[r.name for r in current_user.roles]
+        if hasattr(current_user, "roles")
+        else [],
         channel_type="web",
-        channel_identifier=session_id
+        channel_identifier=session_id,
     )
+
 
 @blueprint.route("/")
 @login_required
@@ -34,19 +38,16 @@ def index():
     user_context = _build_context()
     # history = engine.get_history(user_context) # Cleared on reload per request
     history = []
-    
+
     from modules.agent.models import Channel
+
     user_id = str(current_user.id)
     channels = Channel.query.filter_by(user_id=user_id, is_active=True).all()
     channel_types = [c.channel_type for c in channels]
 
-    context.update({
-        "history": history,
-        "channels": channel_types
-    })
-    return render_template(
-        "{}/index.html".format(mhelp.info["module_name"]), **context
-    )
+    context.update({"history": history, "channels": channel_types})
+    return render_template("{}/index.html".format(mhelp.info["module_name"]), **context)
+
 
 @blueprint.route("/chat", methods=["POST"])
 @login_required
@@ -55,21 +56,22 @@ def chat():
     message = data.get("message")
     if not message:
         return jsonify({"error": "No message provided"}), 400
-    
+
     user_context = _build_context()
     try:
         response = async_to_sync(engine.execute)(user_context, message)
-        return jsonify({
-            "response": response.content,
-            "tool_calls": response.tool_calls
-        })
+        return jsonify(
+            {"response": response.content, "tool_calls": response.tool_calls}
+        )
     except Exception as e:
         import traceback
         import logging
+
         logger = logging.getLogger("angel-claw-view")
         logger.error(f"Error in chat view: {e}")
         logger.error(traceback.format_exc())
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
 
 @blueprint.route("/pair-token", methods=["POST"])
 @login_required
@@ -80,7 +82,9 @@ def generate_pair_token():
         return jsonify({"token": token})
     except Exception as e:
         import traceback
+
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
 
 @blueprint.route("/api-key", methods=["POST"])
 @login_required
@@ -94,32 +98,39 @@ def create_api_key():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
 @blueprint.route("/me")
 @login_required
 def me():
     from modules.agent.models import Channel, ApiKey, InternalMessage
+
     user_id = str(current_user.id)
     channels = Channel.query.filter_by(user_id=user_id).all()
     api_keys = ApiKey.query.filter_by(user_id=user_id).all()
-    
-    return jsonify({
-        "user_id": user_id,
-        "email": current_user.email,
-        "channels": [
-            {
-                "type": c.channel_type,
-                "identifier": c.channel_identifier,
-                "last_seen": c.last_seen_at.isoformat() if c.last_seen_at else None
-            } for c in channels
-        ],
-        "api_keys": [
-            {
-                "name": k.name,
-                "prefix": k.prefix,
-                "created_at": k.created_at.isoformat() if k.created_at else None
-            } for k in api_keys
-        ]
-    })
+
+    return jsonify(
+        {
+            "user_id": user_id,
+            "email": current_user.email,
+            "channels": [
+                {
+                    "type": c.channel_type,
+                    "identifier": c.channel_identifier,
+                    "last_seen": c.last_seen_at.isoformat() if c.last_seen_at else None,
+                }
+                for c in channels
+            ],
+            "api_keys": [
+                {
+                    "name": k.name,
+                    "prefix": k.prefix,
+                    "created_at": k.created_at.isoformat() if k.created_at else None,
+                }
+                for k in api_keys
+            ],
+        }
+    )
+
 
 @blueprint.route("/todos")
 @login_required
@@ -128,41 +139,71 @@ def get_todos():
     # Use the skill directly but we need to parse it if it returns string
     # For prototype, we will fetch from the skill manager
     from angel_claw.skills.todo import list_todos
-    result = list_todos(session_id=user_context.channel_identifier, user_id=user_context.user_id)
+
+    result = list_todos(
+        session_id=user_context.channel_identifier, user_id=user_context.user_id
+    )
     return jsonify({"todos": result})
+
 
 @blueprint.route("/calendar")
 @login_required
 def get_calendar():
     user_context = _build_context()
     from angel_claw.skills.calendar import list_calendar_events
-    result = list_calendar_events(session_id=user_context.channel_identifier, user_id=user_context.user_id)
+
+    result = list_calendar_events(
+        session_id=user_context.channel_identifier, user_id=user_context.user_id
+    )
     return jsonify({"events": result})
+
 
 @blueprint.route("/messages")
 @login_required
 def get_messages():
     user_context = _build_context()
     from angel_claw.skills.messaging import list_unread_messages
-    result = list_unread_messages(user_context.user_id)
+
+    result = list_unread_messages(user_context.user_id, include_read=True)
     return jsonify({"messages": result})
+
 
 @blueprint.route("/messages/delete/<int:message_id>", methods=["POST"])
 @login_required
 def delete_message(message_id):
     user_context = _build_context()
     from angel_claw.skills.messaging import delete_internal_message
-    result = delete_internal_message(message_id=message_id, user_id=user_context.user_id)
+
+    result = delete_internal_message(
+        message_id=message_id, user_id=user_context.user_id
+    )
     return jsonify({"result": result})
+
+
+@blueprint.route("/messages/mark-read/<int:message_id>", methods=["POST"])
+@login_required
+def mark_message_read(message_id):
+    user_context = _build_context()
+    try:
+        from angel_claw.skills.messaging import mark_message_as_read
+
+        result = mark_message_as_read(
+            message_id=message_id, user_id=user_context.user_id
+        )
+        return jsonify({"result": result})
+    except Exception as e:
+        import traceback
+
+        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
 
 @blueprint.route("/skills")
 @login_required
 def get_skills():
     # Use the registry to get skills including user-specific ones
     from angel_claw.runtime.registry import TieredSkillRegistry
+
     user_context = _build_context()
     registry = TieredSkillRegistry(user_context)
     skills = registry.manager.get_skill_details()
     return jsonify({"skills": skills})
-
-

@@ -173,20 +173,20 @@ class TelegramBridge:
             # Try to find in DB
             if settings.auth_mode == "shopyo":
                 try:
-                    from modules.agent.models import Channel
-                    from init import db
-
-                    # Note: this needs app context!
-                    channel = Channel.query.filter_by(
-                        channel_type="telegram", channel_identifier=chat_id
-                    ).first()
-                    if channel:
-                        user_id = channel.user_id
-                        async with self._pairings_lock:
-                            self.pairings[chat_id] = user_id
-                        await self._save_pairings()
-                except:
-                    pass
+                    ctx = self.engine._app_context()
+                    if ctx:
+                        with ctx:
+                            from modules.agent.models import Channel
+                            channel = Channel.query.filter_by(
+                                channel_type="telegram", channel_identifier=chat_id
+                            ).first()
+                            if channel:
+                                user_id = channel.user_id
+                                async with self._pairings_lock:
+                                    self.pairings[chat_id] = user_id
+                                await self._save_pairings()
+                except Exception as e:
+                    logger.error(f"Error checking pairing in DB: {e}")
 
         if not user_id:
             await update.message.reply_text(

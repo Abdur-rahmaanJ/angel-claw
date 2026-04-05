@@ -24,6 +24,7 @@ csrf = CSRFProtect()
 @login_manager.user_loader
 def load_user(user_id):
     from shopyo_auth.models import User
+
     return User.query.get(user_id)
 
 
@@ -36,20 +37,3 @@ def load_extensions(app):
     mail.init_app(app)
     login_manager.init_app(app)
     csrf.init_app(app)
-
-    with app.app_context():
-        # Ensure models from core shopyo packages are loaded
-        for plugin in app.extensions:
-            if plugin.startswith("shopyo_"):
-                try:
-                    module = importlib.import_module(f"{plugin}.models")
-                except Exception:
-                    pass
-
-        # Ensure models from our modules are loaded
-        from shopyo.api.module import iter_modules
-        for module_name, _ in iter_modules(root_path):
-            try:
-                importlib.import_module(f"{module_name}.models")
-            except Exception:
-                pass

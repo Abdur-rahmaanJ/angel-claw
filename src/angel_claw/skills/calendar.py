@@ -4,10 +4,13 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from angel_claw.skills.manager import skill
 from angel_claw.config import settings
+from angel_claw.utils import get_user_root
 
 
-def _get_calendar_dir() -> str:
+
+def _get_calendar_dir(user_id: Optional[str] = None) -> str:
     """Get the directory for storing calendar events."""
+    if user_id: return str(get_user_root(user_id) / "calendar")
     base_dir = os.path.join(os.getcwd(), ".angelclaw")
     cal_dir = os.path.join(base_dir, "calendar")
     if not os.path.exists(cal_dir):
@@ -15,14 +18,14 @@ def _get_calendar_dir() -> str:
     return cal_dir
 
 
-def _get_calendar_file(session_id: str) -> str:
+def _get_calendar_file(session_id: str, user_id: Optional[str] = None) -> str:
     """Get the calendar file path for a session."""
-    return os.path.join(_get_calendar_dir(), f"{session_id}.json")
+    return os.path.join(_get_calendar_dir(user_id), f"{session_id}.json")
 
 
-def _load_events(session_id: str) -> List[dict]:
+def _load_events(session_id: str, user_id: Optional[str] = None) -> List[dict]:
     """Load events for a session."""
-    filepath = _get_calendar_file(session_id)
+    filepath = _get_calendar_file(session_id, user_id)
     if os.path.exists(filepath):
         try:
             with open(filepath, "r") as f:
@@ -32,9 +35,9 @@ def _load_events(session_id: str) -> List[dict]:
     return []
 
 
-def _save_events(session_id: str, events: List[dict]):
+def _save_events(session_id: str, events: List[dict], user_id: Optional[str] = None):
     """Save events for a session."""
-    filepath = _get_calendar_file(session_id)
+    filepath = _get_calendar_file(session_id, user_id)
     with open(filepath, "w") as f:
         json.dump(events, f, indent=2)
 
@@ -74,7 +77,7 @@ def create_calendar_event(
     duration_minutes: int = 60,
     description: str = "",
     location: str = "",
-    session_id: str = "cli-default",
+    session_id: str = "cli-default", user_id: Optional[str] = None,
 ) -> str:
     """
     Creates a calendar event.
@@ -92,7 +95,7 @@ def create_calendar_event(
     except ValueError as e:
         return f"Error: Invalid date/time format. Use YYYY-MM-DD or DD/MM/YYYY. {e}"
 
-    events = _load_events(session_id)
+    events = _load_events(session_id, user_id)
 
     event = {
         "id": len(events) + 1,
@@ -105,22 +108,22 @@ def create_calendar_event(
     }
 
     events.append(event)
-    _save_events(session_id, events)
+    _save_events(session_id, events, user_id)
 
     return f"✅ Event created: '{title}' on {_format_datetime(start_dt)} - {_format_datetime(end_dt)}"
 
 
 @skill
-def list_calendar_events(days: int = 7, session_id: str = "cli-default") -> str:
+def list_calendar_events(days: int = 365, session_id: str = "cli-default", user_id: Optional[str] = None) -> List[dict]:
     """
     Lists upcoming calendar events.
-    - days: Number of days to look ahead (default 7)
+    - days: Number of days to look ahead (default 365)
     - session_id: The session to list events for
     """
-    events = _load_events(session_id)
+    events = _load_events(session_id, user_id)
 
     if not events:
-        return "No events found."
+        return []
 
     now = datetime.now()
     future = now + timedelta(days=days)
@@ -130,44 +133,22 @@ def list_calendar_events(days: int = 7, session_id: str = "cli-default") -> str:
         try:
             event_start = datetime.fromisoformat(event["start"])
             if now <= event_start <= future:
-                upcoming.append((event_start, event))
+                upcoming.append(event)
         except (KeyError, ValueError):
             continue
 
-    if not upcoming:
-        return f"No events in the next {days} days."
-
-    upcoming.sort()
-
-    lines = [f"## Upcoming Events (next {days} days)\n"]
-    for event_start, event in upcoming:
-        end_str = ""
-        try:
-            end_dt = datetime.fromisoformat(event["end"])
-            end_str = f" - {_format_datetime(end_dt)}"
-        except (KeyError, ValueError):
-            pass
-
-        location = f" 📍 {event['location']}" if event.get("location") else ""
-        lines.append(
-            f"📅 **{event_start.strftime('%a, %b %d')}** at {_format_datetime(event_start)}{end_str}"
-        )
-        lines.append(f"   {event['title']}{location}")
-        if event.get("description"):
-            lines.append(f"   {event['description']}")
-        lines.append("")
-
-    return "\n".join(lines)
+    upcoming.sort(key=lambda x: x["start"])
+    return upcoming
 
 
 @skill
-def delete_calendar_event(event_id: int, session_id: str = "cli-default") -> str:
+def delete_calendar_event(event_id: int, session_id: str = "cli-default", user_id: Optional[str] = None) -> str:
     """
     Deletes a calendar event.
     - event_id: The ID of the event to delete
     - session_id: The session the event belongs to
     """
-    events = _load_events(session_id)
+    events = _load_events(session_id, user_id)
 
     original_count = len(events)
     events = [e for e in events if e["id"] != event_id]
@@ -179,7 +160,7 @@ def delete_calendar_event(event_id: int, session_id: str = "cli-default") -> str
     for i, event in enumerate(events, 1):
         event["id"] = i
 
-    _save_events(session_id, events)
+    _save_events(session_id, events, user_id)
     return f"🗑️ Deleted event {event_id}."
 
 
@@ -192,7 +173,7 @@ def update_calendar_event(
     duration_minutes: Optional[int] = None,
     description: Optional[str] = None,
     location: Optional[str] = None,
-    session_id: str = "cli-default",
+    session_id: str = "cli-default", user_id: Optional[str] = None,
 ) -> str:
     """
     Updates a calendar event.
@@ -205,7 +186,7 @@ def update_calendar_event(
     - location: New location
     - session_id: The session the event belongs to
     """
-    events = _load_events(session_id)
+    events = _load_events(session_id, user_id)
 
     for event in events:
         if event["id"] == event_id:
@@ -236,7 +217,7 @@ def update_calendar_event(
                 except (KeyError, ValueError):
                     pass
 
-            _save_events(session_id, events)
+            _save_events(session_id, events, user_id)
             return f"✅ Updated event {event_id}: '{event['title']}'"
 
     return f"Error: Event {event_id} not found."
@@ -247,7 +228,7 @@ def check_availability(
     date: str,
     time: Optional[str] = None,
     duration_minutes: int = 60,
-    session_id: str = "cli-default",
+    session_id: str = "cli-default", user_id: Optional[str] = None,
 ) -> str:
     """
     Checks if a time slot is available.
@@ -262,7 +243,7 @@ def check_availability(
     except ValueError as e:
         return f"Error: Invalid date/time format. {e}"
 
-    events = _load_events(session_id)
+    events = _load_events(session_id, user_id)
 
     conflicts = []
     for event in events:
@@ -288,12 +269,12 @@ def check_availability(
 
 
 @skill
-def get_today_events(session_id: str = "cli-default") -> str:
+def get_today_events(session_id: str = "cli-default", user_id: Optional[str] = None) -> str:
     """
     Gets today's events.
     - session_id: The session to get events for
     """
-    events = _load_events(session_id)
+    events = _load_events(session_id, user_id)
 
     if not events:
         return "No events today."

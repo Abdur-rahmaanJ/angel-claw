@@ -46,6 +46,9 @@ app = FastAPI(title="Angel Claw Gateway", lifespan=lifespan)
 @app.post("/chat", response_model=AgentResponse)
 async def chat(request: AgentRequest, context: UserContext = Depends(get_current_user)):
     try:
+        # Deduct credits for API call before processing
+        engine._deduct_credits_sync(context.user_id, "api_call", {"session_id": request.session_id})
+        
         response_content = await process_chat_request(request, context)
         if response_content.startswith("Error:"):
             raise HTTPException(status_code=500, detail=response_content)
@@ -92,6 +95,9 @@ async def handle_webhook(payload: Dict[str, Any], request: Request):
             channel_identifier=session_id,
             is_admin=False, # Webhooks are not admin by default
         )
+        # Deduct credits for API call (webhook)
+        engine._deduct_credits_sync(user_id, "api_call", {"session_id": session_id, "source": "webhook"})
+
         # We wrap the webhook message with context
         context_message = f"[Webhook Trigger]: {message}"
         response = await engine.execute(context, context_message)

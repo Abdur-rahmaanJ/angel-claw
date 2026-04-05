@@ -712,6 +712,16 @@ class AngelClawEngine:
     def get_history(self, context: UserContext) -> List[Message]:
         return self._get_user_history(context.user_id, context.channel_identifier)
 
+    def get_chat_sessions(self, context: UserContext) -> List[Dict[str, str]]:
+        from .runtime.persistence import PersistentHistory
+        history = PersistentHistory(context)
+        return history.get_sessions()
+
+    def delete_chat_session(self, context: UserContext, session_id: str):
+        from .runtime.persistence import PersistentHistory
+        history = PersistentHistory(context)
+        history.delete_session(session_id)
+
     def list_todos(self, context: UserContext) -> List[Todo]:
         # Currently using _load_todos which expects session_id.
         # Using channel_identifier as session_id for now, but passing user_id for isolation.

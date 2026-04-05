@@ -142,6 +142,37 @@ class PersistentHistory:
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("DELETE FROM messages WHERE session_id = ?", (session_id,))
 
+    def get_sessions(self) -> List[Dict[str, str]]:
+        if self._is_shared:
+            import sqlalchemy
+            engine = sqlalchemy.create_engine(self.db_uri)
+            with engine.connect() as conn:
+                # Get distinct session_ids and their first user message
+                cursor = conn.execute(
+                    sqlalchemy.text("""
+                        SELECT DISTINCT ON (session_id) session_id, content 
+                        FROM history 
+                        WHERE user_id = :u AND role = 'user' 
+                        ORDER BY session_id, timestamp ASC
+                    """),
+                    {"u": self.context.user_id}
+                )
+                rows = cursor.fetchall()
+        else:
+            with sqlite3.connect(self.db_path) as conn:
+                cursor = conn.execute("""
+                    SELECT session_id, content FROM messages 
+                    WHERE role = 'user' 
+                    GROUP BY session_id 
+                    HAVING MIN(timestamp)
+                    ORDER BY timestamp DESC
+                """)
+                rows = cursor.fetchall()
+        return [{"id": row[0], "preview": row[1]} for row in rows]
+
+    def delete_session(self, session_id: str):
+        self.clear_history(session_id)
+
 class UserVault:
     """Encrypted key-value store for user secrets."""
     def __init__(self, context: UserContext):

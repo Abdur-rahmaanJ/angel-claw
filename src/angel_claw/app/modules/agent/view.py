@@ -17,10 +17,11 @@ blueprint = mhelp.blueprint
 engine = AngelClawEngine()
 
 
-def _build_context():
+def _build_context(session_id=None):
     # In Shopyo, current_user.id is usually what we need
     # We use session_id from request or a default for web
-    session_id = request.args.get("session_id", "web-default")
+    if session_id is None:
+        session_id = request.args.get("session_id", "web-default")
     return UserContext(
         user_id=str(current_user.id),
         email=current_user.email,
@@ -111,6 +112,30 @@ def chat():
         yield from run_async_streaming(user_context, message)
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+
+@blueprint.route("/chat/sessions")
+@login_required
+def chat_sessions():
+    user_context = _build_context()
+    sessions = engine.get_chat_sessions(user_context)
+    return jsonify({"sessions": sessions})
+
+
+@blueprint.route("/chat/history/<session_id>")
+@login_required
+def chat_history(session_id):
+    user_context = _build_context(session_id=session_id)
+    history = engine.get_history(user_context)
+    return jsonify({"history": [m.model_dump() for m in history]})
+
+
+@blueprint.route("/chat/delete/<session_id>", methods=["POST"])
+@login_required
+def delete_chat_session(session_id):
+    user_context = _build_context()
+    engine.delete_chat_session(user_context, session_id)
+    return jsonify({"result": "success"})
 
 
 @blueprint.route("/pair-token", methods=["POST"])

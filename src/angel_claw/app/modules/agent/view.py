@@ -1,6 +1,8 @@
 from flask import render_template
 from flask import request
 from flask import jsonify
+from flask import Response
+from flask import stream_with_context
 from flask_login import login_required
 from flask_login import current_user
 from shopyo.api.module import ModuleHelp
@@ -12,7 +14,6 @@ from angel_claw.models import UserContext
 mhelp = ModuleHelp(__file__, __name__)
 blueprint = mhelp.blueprint
 
-# Shared engine instance
 engine = AngelClawEngine()
 
 
@@ -49,6 +50,44 @@ def index():
     return render_template("{}/index.html".format(mhelp.info["module_name"]), **context)
 
 
+import json
+
+
+import json
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+
+executor = ThreadPoolExecutor(max_workers=2)
+
+
+def run_async_streaming(user_context, message):
+    """Run async generator in thread and yield chunks."""
+    loop = asyncio.new_event_loop()
+    try:
+        asyncio.set_event_loop(loop)
+        async_gen = engine.execute_streaming(user_context, message)
+
+        while True:
+            try:
+                chunk = loop.run_until_complete(async_gen.__anext__())
+                if chunk is not None:
+                    yield f"data: {json.dumps({'chunk': chunk})}\n\n"
+            except StopAsyncIteration:
+                yield f"data: {json.dumps({'done': True})}\n\n"
+                break
+    except Exception as e:
+        import traceback
+        import logging
+
+        logger = logging.getLogger("angel-claw-view")
+        logger.error(f"Error in streaming chat: {e}")
+        logger.error(traceback.format_exc())
+        yield f"data: {json.dumps({'error': str(e)})}\n\n"
+    finally:
+        loop.run_until_complete(asyncio.sleep(0))
+        loop.close()
+
+
 @blueprint.route("/chat", methods=["POST"])
 @login_required
 def chat():
@@ -58,19 +97,11 @@ def chat():
         return jsonify({"error": "No message provided"}), 400
 
     user_context = _build_context()
-    try:
-        response = async_to_sync(engine.execute)(user_context, message)
-        return jsonify(
-            {"response": response.content, "tool_calls": response.tool_calls}
-        )
-    except Exception as e:
-        import traceback
-        import logging
 
-        logger = logging.getLogger("angel-claw-view")
-        logger.error(f"Error in chat view: {e}")
-        logger.error(traceback.format_exc())
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+    def generate():
+        yield from run_async_streaming(user_context, message)
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
 @blueprint.route("/pair-token", methods=["POST"])

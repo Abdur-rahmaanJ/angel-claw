@@ -1418,14 +1418,52 @@ curl -X POST http://localhost:5000/chat \
                     body: JSON.stringify({ message: message })
                 });
 
-                const data = await response.json();
-                typingIndicator.style.display = 'none';
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let assistantMessage = '';
+                let buffer = '';
 
-                if (data.response) {
-                    appendMessage('assistant', data.response);
-                } else if (data.error) {
-                    appendMessage('assistant', `<span style="color: #ef4444">Error: ${data.error}</span>`);
+                // Create placeholder for streaming response
+                const assistantDiv = document.createElement('div');
+                assistantDiv.className = 'chat-message assistant view-animate';
+                assistantDiv.innerHTML = `
+                    <div class="message-avatar">
+                        <i class="fas fa-robot"></i>
+                    </div>
+                    <div class="message-content"></div>
+                `;
+                chatMessages.appendChild(assistantDiv);
+                const contentDiv = assistantDiv.querySelector('.message-content');
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop() || '';
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+                                if (data.chunk) {
+                                    if (!data.chunk.startsWith('[TOOL_CALL:')) {
+                                        assistantMessage += data.chunk;
+                                        contentDiv.innerHTML = assistantMessage.replace(/\n/g, '<br>');
+                                        chatMessages.scrollTop = chatMessages.scrollHeight;
+                                    }
+                                } else if (data.done) {
+                                    typingIndicator.style.display = 'none';
+                                } else if (data.error) {
+                                    contentDiv.innerHTML = `<span style="color: #ef4444">Error: ${data.error}</span>`;
+                                    typingIndicator.style.display = 'none';
+                                }
+                            } catch (e) {}
+                        }
+                    }
                 }
+
             } catch (error) {
                 typingIndicator.style.display = 'none';
                 appendMessage('assistant', `<span style="color: #ef4444">Failed to connect to the agent.</span>`);

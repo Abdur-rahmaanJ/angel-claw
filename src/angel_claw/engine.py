@@ -811,21 +811,11 @@ class AngelClawEngine:
             session_id, Message(role=Role.ASSISTANT, content=assistant_content)
         )
         # Store in memory
-        mem_res = memos.process(message, user=context.email, response=assistant_content)
-
-        # Log chat
-
-        chat_logger.log(user_id, session_id, message, assistant_content)
-
-        # Deduct credits for message based on tokens
-        from .credits import calculate_token_cost
-
-        credit_amount = calculate_token_cost(total_tokens)
-        self._deduct_credits_sync(
-            user_id,
-            "chat_message",
-            {"session_id": session_id, "tokens": total_tokens},
-            amount=credit_amount,
+        mem_res = memos.process(
+            message,
+            user=context.email,
+            response=assistant_content,
+            namespace=session_id,
         )
 
     def get_history(self, context: UserContext) -> List[Message]:
@@ -846,8 +836,14 @@ class AngelClawEngine:
     def get_memories(self, context: UserContext) -> List[Dict[str, Any]]:
         runtime = async_to_sync(runtime_manager.get_runtime)(context)
         memos = runtime.get_memos(context.channel_identifier)
-        # List by namespace to maintain thread isolation in UI
-        all_ids = memos.vault.namespaces.get(context.channel_identifier, [])
+        user_namespace = f"user_{context.email}"
+        session_namespace = context.channel_identifier
+
+        all_ids = set()
+        all_ids.update(memos.vault.namespaces.get(user_namespace, set()))
+        all_ids.update(memos.vault.namespaces.get(session_namespace, set()))
+        all_ids.update(memos.vault.namespaces.get("default", set()))
+
         cubes = [memos.vault.get(cid) for cid in all_ids]
         return [c.to_dict() for c in cubes if c and c.owner == context.email]
 

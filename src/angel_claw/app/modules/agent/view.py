@@ -281,6 +281,18 @@ def mark_message_read(message_id):
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 
+@blueprint.route("/skills")
+@login_required
+def get_skills():
+    # Use the registry to get skills including user-specific ones
+    from angel_claw.runtime.registry import TieredSkillRegistry
+
+    user_context = _build_context()
+    registry = TieredSkillRegistry(user_context)
+    skills = registry.manager.get_skill_details()
+    return jsonify({"skills": skills})
+
+
 @blueprint.route("/soul")
 @login_required
 def get_soul():

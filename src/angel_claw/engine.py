@@ -253,15 +253,23 @@ class AngelClawEngine:
 
         # 1. Retrieval
         # Use hybrid_retrieve directly to avoid triggering storage logic during retrieval phase
-        # Search BOTH current session and user's permanent fact namespace
         retrieval_query = message
-        namespaces = [session_id, f"user_{context.email}"]
         if use_global:
-            namespaces = None  # Search all
-
-        retrieved_cubes = memos.operator.hybrid_retrieve(
-            query=retrieval_query, user=context.email, namespace=namespaces, n_results=5
-        )
+            namespaces = None  # Search all namespaces
+            retrieved_cubes = memos.operator.hybrid_retrieve(
+                query=retrieval_query,
+                user=context.email,
+                namespace=namespaces,
+                n_results=5,
+            )
+        else:
+            # Only current session - filter manually since hybrid_retrieve ignores namespace filter
+            session_ids = memos.vault.namespaces.get(session_id, set())
+            session_cubes = [memos.vault.get(cid) for cid in session_ids]
+            # Also check for session_logs namespace (where memories are stored)
+            logs_ids = memos.vault.namespaces.get(f"{session_id}_logs", set())
+            logs_cubes = [memos.vault.get(cid) for cid in logs_ids]
+            retrieved_cubes = [c for c in session_cubes + logs_cubes if c is not None]
 
         if retrieved_cubes:
             snippets = [
@@ -598,15 +606,23 @@ class AngelClawEngine:
 
         # 1. Retrieval
         # Use hybrid_retrieve directly to avoid triggering storage logic during retrieval phase
-        # Search BOTH current session and user's permanent fact namespace
         retrieval_query = message
-        namespaces = [session_id, f"user_{context.email}"]
         if use_global:
-            namespaces = None  # Search all
-
-        retrieved_cubes = memos.operator.hybrid_retrieve(
-            query=retrieval_query, user=context.email, namespace=namespaces, n_results=5
-        )
+            namespaces = None  # Search all namespaces
+            retrieved_cubes = memos.operator.hybrid_retrieve(
+                query=retrieval_query,
+                user=context.email,
+                namespace=namespaces,
+                n_results=5,
+            )
+        else:
+            # Only current session - filter manually since hybrid_retrieve ignores namespace filter
+            session_ids = memos.vault.namespaces.get(session_id, set())
+            session_cubes = [memos.vault.get(cid) for cid in session_ids]
+            # Also check for session_logs namespace (where memories are stored)
+            logs_ids = memos.vault.namespaces.get(f"{session_id}_logs", set())
+            logs_cubes = [memos.vault.get(cid) for cid in logs_ids]
+            retrieved_cubes = [c for c in session_cubes + logs_cubes if c is not None]
 
         if retrieved_cubes:
             snippets = [

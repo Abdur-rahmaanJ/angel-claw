@@ -147,24 +147,31 @@ class PersistentHistory:
             import sqlalchemy
             engine = sqlalchemy.create_engine(self.db_uri)
             with engine.connect() as conn:
-                # Get distinct session_ids and their first user message
+                # Use a subquery to find the first user message for each session
                 cursor = conn.execute(
                     sqlalchemy.text("""
-                        SELECT DISTINCT ON (session_id) session_id, content 
-                        FROM history 
-                        WHERE user_id = :u AND role = 'user' 
-                        ORDER BY session_id, timestamp ASC
+                        SELECT m.session_id, m.content
+                        FROM history m
+                        JOIN (
+                            SELECT session_id, MIN(timestamp) as min_ts
+                            FROM history
+                            WHERE user_id = :u AND role = 'user'
+                            GROUP BY session_id
+                        ) first_msgs ON m.session_id = first_msgs.session_id AND m.timestamp = first_msgs.min_ts
+                        WHERE m.user_id = :u
+                        ORDER BY m.timestamp DESC
                     """),
                     {"u": self.context.user_id}
                 )
                 rows = cursor.fetchall()
         else:
             with sqlite3.connect(self.db_path) as conn:
+                # Standard SQLite way to get the first row per group
                 cursor = conn.execute("""
                     SELECT session_id, content FROM messages 
                     WHERE role = 'user' 
                     GROUP BY session_id 
-                    HAVING MIN(timestamp)
+                    HAVING timestamp = MIN(timestamp)
                     ORDER BY timestamp DESC
                 """)
                 rows = cursor.fetchall()

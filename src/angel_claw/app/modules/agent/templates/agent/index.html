@@ -719,19 +719,18 @@
 
                 threadsList.innerHTML = sessions.map((s, index) => {
                     const isActive = s.id === state.currentSessionId;
-                    const num = s.id.replace('Thread ', '');
                     
-                    // Use preview if available, otherwise use number
-                    let title = num;
+                    // Use preview if available, otherwise "New Conversation"
+                    let title = "New Conversation";
                     if (s.preview) {
-                        title = s.preview.substring(0, 20).trim();
-                        if (s.preview.length > 20) title += '...';
+                        title = s.preview.substring(0, 24).trim();
+                        if (s.preview.length > 24) title += '...';
                     }
                     
                     return `
-                        <div class="group flex items-center justify-between gap-1 pr-2 rounded-md hover:bg-zinc-800/50 ${isActive ? 'bg-accent/10 text-accent' : 'text-zinc-500'}">
-                            <button onclick="switchThread('${s.id}')" class="flex-grow text-left px-3 py-1.5 text-[13px] font-medium truncate" title="${s.preview || s.id}">
-                                <span class="opacity-50 mr-1 text-[10px] font-bold">${num}.</span> ${title}
+                        <div class="group flex items-center justify-between gap-1 pr-2 rounded-md hover:bg-zinc-800/50 ${isActive ? 'bg-accent/10 text-accent font-semibold' : 'text-zinc-500'}">
+                            <button onclick="switchThread('${s.id}')" class="flex-grow text-left px-3 py-2 text-[13px] truncate" title="${s.preview || s.id}">
+                                ${title}
                             </button>
                             ${s.id !== 'Thread 1' ? `
                                 <button onclick="deleteThread('${s.id}')" class="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-all">

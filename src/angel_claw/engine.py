@@ -752,8 +752,12 @@ class AngelClawEngine:
     def get_memories(self, context: UserContext) -> List[Dict[str, Any]]:
         runtime = async_to_sync(runtime_manager.get_runtime)(context)
         memos = runtime.get_memos(context.channel_identifier)
-        cubes = memos.vault.list_namespace("default")
-        return [c.to_dict() for c in cubes]
+        # List all and filter by owner and type (to avoid raw dialogue logs appearing as facts)
+        all_memories = memos.vault.kv_store.values()
+        return [
+            c.to_dict() for c in all_memories 
+            if c.owner == context.email and c.semantic_type.value != "dialogue"
+        ]
 
     def delete_memory(self, context: UserContext, memory_id: str):
         runtime = async_to_sync(runtime_manager.get_runtime)(context)

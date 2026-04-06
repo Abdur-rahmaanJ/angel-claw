@@ -107,7 +107,7 @@
     <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-[40] hidden backdrop-blur-sm lg:hidden transition-opacity duration-300"></div>
     
     <!-- Sidebar -->
-    <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-[280px] lg:w-[260px] bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] flex flex-col p-6 z-[50] -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out overflow-y-auto">
+    <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-[280px] lg:w-[260px] flex-shrink-0 bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] flex flex-col p-6 z-[50] -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out overflow-y-auto">
         <div class="flex items-center gap-3 mb-10 px-2">
             <span class="text-2xl">🪽</span>
             <span class="font-bold text-xl tracking-tight">Angel Claw</span>
@@ -140,6 +140,9 @@
             </a>
             <a class="nav-item" onclick="showView('messages')" id="nav-messages">
                 <i class="fas fa-inbox w-5 text-center"></i> Messages
+            </a>
+            <a class="nav-item" onclick="showView('memory')" id="nav-memory">
+                <i class="fas fa-brain w-5 text-center"></i> Memory
             </a>
         </nav>
 
@@ -470,6 +473,21 @@
             </div>
         </div>
 
+        <!-- View: Memory -->
+        <div id="view-memory" class="workspace hidden">
+            <header class="view-header">
+                <div class="flex items-center gap-4">
+                    <button class="lg:hidden p-2 -ml-2 text-xl" onclick="toggleSidebar()">
+                        <i class="fas fa-bars"></i>
+                    </button>
+                    <h2 class="font-bold text-lg md:text-xl">Long-term Memory</h2>
+                </div>
+            </header>
+            <div class="mt-6 space-y-4" id="memory-list">
+                <p class="text-zinc-500 text-center py-12">Recalling memories from Angel Recall...</p>
+            </div>
+        </div>
+
     </main>
 
     <!-- Modals -->
@@ -679,7 +697,8 @@
                 'skills': loadSkills,
                 'messages': loadMessages,
                 'integrations': loadIntegrations,
-                'api': loadApiInfo
+                'api': loadApiInfo,
+                'memory': loadMemories
             };
             
             if (viewLoaders[viewId]) viewLoaders[viewId]();
@@ -1094,6 +1113,73 @@
                     </div>
                 `).join('') || '<p class="text-zinc-500 text-sm italic">No API keys generated yet.</p>';
             } catch (e) { container.innerText = "Error loading API info."; }
+        }
+
+        async function loadMemories() {
+            const container = document.getElementById('memory-list');
+            if (!container) return;
+            
+            try {
+                const res = await fetch(`/chat/memories?session_id=${encodeURIComponent(state.currentSessionId)}`);
+                const data = await res.json();
+                const memories = data.memories || [];
+
+                if (memories.length === 0) {
+                    container.innerHTML = `
+                        <div class="stat-card text-center py-12">
+                            <i class="fas fa-brain text-4xl text-zinc-800 mb-4"></i>
+                            <p class="text-zinc-500 italic">No long-term memories have been formed in this thread yet.</p>
+                        </div>`;
+                    return;
+                }
+
+                container.innerHTML = memories.map(m => {
+                    const date = new Date(m.timestamp).toLocaleString();
+                    const type = m.semantic_type || 'fact';
+                    const payload = typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload);
+                    
+                    return `
+                        <div class="stat-card hover:border-accent group transition-all relative">
+                            <button onclick="deleteMemory('${m.id}')" class="absolute right-4 top-4 opacity-0 group-hover:opacity-100 p-2 text-zinc-500 hover:text-red-500 transition-all" title="Delete memory">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
+                            <div class="flex justify-between items-start mb-3 pr-8">
+                                <div class="flex items-center gap-2">
+                                    <span class="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
+                                    <span class="text-[10px] font-black uppercase tracking-widest text-accent">${type}</span>
+                                </div>
+                                <span class="text-[10px] text-zinc-500 font-mono">${date}</span>
+                            </div>
+                            <div class="text-sm leading-relaxed text-zinc-300 break-words">
+                                ${payload.replace(/\n/g, '<br>')}
+                            </div>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                ${m.tags ? m.tags.map(t => `<span class="px-2 py-0.5 bg-zinc-800 text-[9px] text-zinc-500 rounded-md border border-zinc-700">#${t}</span>`).join('') : ''}
+                                <span class="ml-auto text-[9px] text-zinc-600 uppercase font-bold tracking-tighter">ID: ${m.id.substring(0, 8)}</span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (e) { 
+                console.error("Memory Load Error:", e);
+                container.innerHTML = `<div class="stat-card text-red-500 text-center py-8">Error loading memories: ${e.message}</div>`;
+            }
+        }
+
+        async function deleteMemory(memoryId) {
+            if (!confirm("Permanently delete this memory?")) return;
+            
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch(`/chat/memories/delete/${memoryId}?session_id=${encodeURIComponent(state.currentSessionId)}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': token }
+                });
+                const data = await res.json();
+                if (data.result === 'success') {
+                    loadMemories();
+                }
+            } catch (e) { alert("Delete failed: " + e.message); }
         }
 
         // Chat Form

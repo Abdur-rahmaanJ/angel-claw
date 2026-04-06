@@ -896,8 +896,8 @@
                     }
                 };
 
-                updateBadge('badge-telegram', channels.includes('telegram'));
-                updateBadge('badge-whatsapp', channels.includes('whatsapp'));
+                updateBadge('badge-telegram', channels.some(c => c.type === 'telegram'));
+                updateBadge('badge-whatsapp', channels.some(c => c.type === 'whatsapp'));
             } catch (e) { console.error("Integrations Load Error:", e); }
         }
 

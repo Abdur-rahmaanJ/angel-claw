@@ -281,6 +281,15 @@ def mark_message_read(message_id):
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 
+@blueprint.route("/soul")
+@login_required
+def get_soul():
+    user_context = _build_context()
+    from angel_claw.runtime.manager import runtime_manager
+    runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
+    return jsonify({"soul": runtime.soul})
+
+
 @blueprint.route("/soul/update", methods=["POST"])
 @login_required
 def update_soul():

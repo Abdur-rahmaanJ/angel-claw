@@ -141,9 +141,13 @@
             <a class="nav-item" onclick="showView('messages')" id="nav-messages">
                 <i class="fas fa-inbox w-5 text-center"></i> Messages
             </a>
+            <a class="nav-item" onclick="showView('soul'); loadSoul()" id="nav-soul">
+                <i class="fas fa-dna w-5 text-center"></i> Soul
+            </a>
             <a class="nav-item" onclick="showView('memory')" id="nav-memory">
                 <i class="fas fa-brain w-5 text-center"></i> Memory
             </a>
+
         </nav>
 
         <nav class="mb-8">
@@ -478,6 +482,19 @@
                             <i class="fas fa-shield-halved"></i>
                         </div>
                     </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- View: Soul -->
+        <div id="view-soul" class="workspace hidden">
+            <header class="view-header">
+                <h2 class="font-bold text-lg md:text-xl">Agent Soul</h2>
+            </header>
+            <div class="mt-6">
+                <textarea id="soul-editor" class="w-full h-[500px] bg-zinc-900 border border-zinc-700 rounded-md p-4 text-zinc-300 font-mono text-sm" placeholder="Define your agent's persona..."></textarea>
+                <div class="mt-4 flex justify-end">
+                    <button onclick="updateSoul()" class="px-4 py-2 bg-accent text-zinc-900 font-bold rounded-md hover:bg-opacity-90 transition-all">Save Soul</button>
                 </div>
             </div>
         </div>
@@ -1198,20 +1215,27 @@
             }
         }
 
-        async function deleteMemory(memoryId) {
-            if (!confirm("Permanently delete this memory?")) return;
-            
+        async function loadSoul() {
+            try {
+                const res = await fetch('/soul');
+                const data = await res.json();
+                document.getElementById('soul-editor').value = data.soul;
+            } catch (e) { console.error("Error loading soul:", e); }
+        }
+
+        async function updateSoul() {
+            const soul = document.getElementById('soul-editor').value;
             try {
                 const token = document.getElementById('csrf_token')?.value;
-                const res = await fetch(`/chat/memories/delete/${memoryId}?session_id=${encodeURIComponent(state.currentSessionId)}`, {
+                const res = await fetch('/soul/update', {
                     method: 'POST',
-                    headers: { 'X-CSRFToken': token }
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+                    body: JSON.stringify({ soul })
                 });
-                const data = await res.json();
-                if (data.result === 'success') {
-                    loadMemories();
+                if ((await res.json()).result === 'success') {
+                    alert("Soul updated successfully!");
                 }
-            } catch (e) { alert("Delete failed: " + e.message); }
+            } catch (e) { alert("Failed to update soul: " + e.message); }
         }
 
         // Chat Form

@@ -107,7 +107,7 @@
     <div id="sidebar-overlay" class="fixed inset-0 bg-black/50 z-[40] hidden backdrop-blur-sm lg:hidden transition-opacity duration-300"></div>
     
     <!-- Sidebar -->
-    <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-[280px] lg:w-[260px] bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] flex flex-col p-6 z-[50] -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out overflow-y-auto">
+    <aside id="sidebar" class="fixed lg:static inset-y-0 left-0 w-[280px] lg:w-[260px] flex-shrink-0 bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] flex flex-col p-6 z-[50] -translate-x-full lg:translate-x-0 transition-transform duration-300 ease-in-out overflow-y-auto">
         <div class="flex items-center gap-3 mb-10 px-2">
             <span class="text-2xl">🪽</span>
             <span class="font-bold text-xl tracking-tight">Angel Claw</span>
@@ -1150,7 +1150,7 @@
                                 </div>
                                 <span class="text-[10px] text-zinc-500 font-mono">${date}</span>
                             </div>
-                            <div class="text-sm leading-relaxed text-zinc-300">
+                            <div class="text-sm leading-relaxed text-zinc-300 break-words">
                                 ${payload.replace(/\n/g, '<br>')}
                             </div>
                             <div class="mt-4 flex flex-wrap gap-2">

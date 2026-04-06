@@ -1139,8 +1139,11 @@
                     const payload = typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload);
                     
                     return `
-                        <div class="stat-card hover:border-accent group transition-all">
-                            <div class="flex justify-between items-start mb-3">
+                        <div class="stat-card hover:border-accent group transition-all relative">
+                            <button onclick="deleteMemory('${m.id}')" class="absolute right-4 top-4 opacity-0 group-hover:opacity-100 p-2 text-zinc-500 hover:text-red-500 transition-all" title="Delete memory">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
+                            <div class="flex justify-between items-start mb-3 pr-8">
                                 <div class="flex items-center gap-2">
                                     <span class="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
                                     <span class="text-[10px] font-black uppercase tracking-widest text-accent">${type}</span>
@@ -1161,6 +1164,22 @@
                 console.error("Memory Load Error:", e);
                 container.innerHTML = `<div class="stat-card text-red-500 text-center py-8">Error loading memories: ${e.message}</div>`;
             }
+        }
+
+        async function deleteMemory(memoryId) {
+            if (!confirm("Permanently delete this memory?")) return;
+            
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch(`/chat/memories/delete/${memoryId}?session_id=${encodeURIComponent(state.currentSessionId)}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': token }
+                });
+                const data = await res.json();
+                if (data.result === 'success') {
+                    loadMemories();
+                }
+            } catch (e) { alert("Delete failed: " + e.message); }
         }
 
         // Chat Form

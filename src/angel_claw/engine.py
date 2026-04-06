@@ -737,6 +737,11 @@ class AngelClawEngine:
         cubes = memos.vault.list_namespace("default")
         return [c.to_dict() for c in cubes]
 
+    def delete_memory(self, context: UserContext, memory_id: str):
+        runtime = async_to_sync(runtime_manager.get_runtime)(context)
+        memos = runtime.get_memos(context.channel_identifier)
+        memos.vault.delete(memory_id)
+
     def list_todos(self, context: UserContext) -> List[Todo]:
         # Currently using _load_todos which expects session_id.
         # Using channel_identifier as session_id for now, but passing user_id for isolation.

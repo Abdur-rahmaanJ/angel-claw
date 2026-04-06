@@ -70,12 +70,12 @@ from concurrent.futures import ThreadPoolExecutor
 executor = ThreadPoolExecutor(max_workers=2)
 
 
-def run_async_streaming(user_context, message):
+def run_async_streaming(user_context, message, use_global=False):
     """Run async generator in thread and yield chunks."""
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)
-        async_gen = engine.execute_streaming(user_context, message)
+        async_gen = engine.execute_streaming(user_context, message, use_global=use_global)
 
         while True:
             try:
@@ -103,13 +103,14 @@ def run_async_streaming(user_context, message):
 def chat():
     data = request.get_json()
     message = data.get("message")
+    use_global = data.get("use_global", False)
     if not message:
         return jsonify({"error": "No message provided"}), 400
 
     user_context = _build_context()
 
     def generate():
-        yield from run_async_streaming(user_context, message)
+        yield from run_async_streaming(user_context, message, use_global=use_global)
 
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 

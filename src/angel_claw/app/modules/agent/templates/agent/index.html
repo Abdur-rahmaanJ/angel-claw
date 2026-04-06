@@ -248,6 +248,15 @@
                     </button>
                     <h2 class="font-bold text-lg md:text-xl">Conversation</h2>
                 </div>
+                <div class="flex items-center gap-3">
+                    <label class="flex items-center cursor-pointer group">
+                        <span class="mr-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest group-hover:text-accent transition-colors">Global Memory</span>
+                        <div class="relative">
+                            <input type="checkbox" id="global-memory-toggle" class="sr-only peer" onchange="toggleGlobalMemory()">
+                            <div class="w-8 h-4 bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-accent peer-checked:after:bg-white"></div>
+                        </div>
+                    </label>
+                </div>
             </header>
             
             <div class="flex-grow overflow-y-auto px-4 md:px-8 py-8 space-y-6" id="chat-messages">
@@ -544,6 +553,7 @@
             theme: localStorage.getItem('theme') || 'dark',
             accent: localStorage.getItem('accent-color') || '#22c55e',
             assistantIcon: localStorage.getItem('assistant-icon') || 'fa-brain',
+            useGlobalMemory: localStorage.getItem('use-global-memory') === 'true',
             currentMessageId: null,
             messages: [],
             currentSessionId: localStorage.getItem('current-session-id') || 'Thread 1',
@@ -554,6 +564,11 @@
             applyTheme();
             applyAccent(state.accent);
             applyAssistantIcon(state.assistantIcon);
+            
+            // Set toggle state
+            const globalToggle = document.getElementById('global-memory-toggle');
+            if (globalToggle) globalToggle.checked = state.useGlobalMemory;
+
             setupEventListeners();
             loadDashboardStats();
             loadChatSessions();
@@ -583,6 +598,14 @@
         function toggleTheme() {
             state.theme = state.theme === 'light' ? 'dark' : 'light';
             applyTheme();
+        }
+
+        function toggleGlobalMemory() {
+            const toggle = document.getElementById('global-memory-toggle');
+            if (toggle) {
+                state.useGlobalMemory = toggle.checked;
+                localStorage.setItem('use-global-memory', state.useGlobalMemory);
+            }
         }
 
         function applyAccent(color) {
@@ -758,6 +781,13 @@
                 });
 
                 const newSessionId = `Thread ${nextNum}`;
+                
+                // Enable global memory by default for new chats to provide full context
+                state.useGlobalMemory = true;
+                localStorage.setItem('use-global-memory', true);
+                const toggle = document.getElementById('global-memory-toggle');
+                if (toggle) toggle.checked = true;
+
                 switchThread(newSessionId);
             } catch (e) { switchThread(`Thread ${Date.now()}`); }
         }
@@ -1136,16 +1166,19 @@
                     const date = new Date(m.timestamp).toLocaleString();
                     const type = m.semantic_type || 'fact';
                     const payload = typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload);
+                    const isDialogue = type === 'dialogue';
+                    const accentClass = isDialogue ? 'bg-zinc-500/10 text-zinc-500' : 'bg-accent/10 text-accent';
+                    const dotClass = isDialogue ? 'bg-zinc-500' : 'bg-accent animate-pulse';
                     
                     return `
-                        <div class="stat-card hover:border-accent group transition-all relative">
+                        <div class="stat-card hover:border-accent group transition-all relative ${isDialogue ? 'opacity-70 grayscale-[0.5]' : ''}">
                             <button onclick="deleteMemory('${m.id}')" class="absolute right-4 top-4 opacity-0 group-hover:opacity-100 p-2 text-zinc-500 hover:text-red-500 transition-all" title="Delete memory">
                                 <i class="fas fa-trash-alt text-xs"></i>
                             </button>
                             <div class="flex justify-between items-start mb-3 pr-8">
                                 <div class="flex items-center gap-2">
-                                    <span class="w-2 h-2 rounded-full bg-accent animate-pulse"></span>
-                                    <span class="text-[10px] font-black uppercase tracking-widest text-accent">${type}</span>
+                                    <span class="w-2 h-2 rounded-full ${dotClass}"></span>
+                                    <span class="text-[10px] font-black uppercase tracking-widest ${accentClass} px-2 py-0.5 rounded-md">${type}</span>
                                 </div>
                                 <span class="text-[10px] text-zinc-500 font-mono">${date}</span>
                             </div>
@@ -1203,7 +1236,10 @@
                     const res = await fetch(`/chat?session_id=${encodeURIComponent(state.currentSessionId)}`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
-                        body: JSON.stringify({ message })
+                        body: JSON.stringify({ 
+                            message,
+                            use_global: state.useGlobalMemory
+                        })
                     });
                     const reader = res.body.getReader();
                     const decoder = new TextDecoder();

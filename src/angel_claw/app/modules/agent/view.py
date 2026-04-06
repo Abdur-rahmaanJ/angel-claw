@@ -130,6 +130,15 @@ def chat_history(session_id):
     return jsonify({"history": [m.model_dump() for m in history]})
 
 
+@blueprint.route("/chat/memories")
+@login_required
+def chat_memories():
+    session_id = request.args.get("session_id", "Thread 1")
+    user_context = _build_context(session_id=session_id)
+    memories = engine.get_memories(user_context)
+    return jsonify({"memories": memories})
+
+
 @blueprint.route("/chat/delete/<session_id>", methods=["POST"])
 @login_required
 def delete_chat_session(session_id):

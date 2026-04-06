@@ -18,6 +18,7 @@ from .skills.todo import _load_todos
 
 from .utils import get_user_root
 from .runtime.manager import runtime_manager
+from asgiref.sync import async_to_sync
 from .runtime.cache import cache
 
 logger = logging.getLogger("angel-claw-engine")
@@ -502,12 +503,9 @@ class AngelClawEngine:
         )
 
         # 5. Store in memory (Isolated)
-        mem_res = memos.process(message, user=context.email)
-        if mem_res.get("parsed", {}).get("operation") not in ["store", "update"]:
-            memos.process(
-                f"Remember: User said '{message}' and Assistant replied '{assistant_content}'",
-                user=context.email,
-            )
+        mem_res = memos.process(
+            message, user=context.email, response=assistant_content
+        )
 
         # Log chat
         chat_logger.log(user_id, session_id, message, assistant_content)
@@ -701,14 +699,12 @@ class AngelClawEngine:
         runtime.add_message(
             session_id, Message(role=Role.ASSISTANT, content=assistant_content)
         )
-
         # Store in memory
-        mem_res = memos.process(message, user=context.email)
-        if mem_res.get("parsed", {}).get("operation") not in ["store", "update"]:
-            memos.process(
-                f"Remember: User said '{message}' and Assistant replied '{assistant_content}'",
-                user=context.email,
-            )
+        mem_res = memos.process(
+            message, user=context.email, response=assistant_content
+        )
+
+        # Log chat
 
         chat_logger.log(user_id, session_id, message, assistant_content)
 
@@ -734,6 +730,12 @@ class AngelClawEngine:
         from .runtime.persistence import PersistentHistory
         history = PersistentHistory(context)
         history.delete_session(session_id)
+
+    def get_memories(self, context: UserContext) -> List[Dict[str, Any]]:
+        runtime = async_to_sync(runtime_manager.get_runtime)(context)
+        memos = runtime.get_memos(context.channel_identifier)
+        cubes = memos.vault.list_namespace("default")
+        return [c.to_dict() for c in cubes]
 
     def list_todos(self, context: UserContext) -> List[Todo]:
         # Currently using _load_todos which expects session_id.

@@ -281,13 +281,16 @@ def mark_message_read(message_id):
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 
-@blueprint.route("/skills")
+@blueprint.route("/soul/update", methods=["POST"])
 @login_required
-def get_skills():
-    # Use the registry to get skills including user-specific ones
-    from angel_claw.runtime.registry import TieredSkillRegistry
-
+def update_soul():
+    data = request.get_json()
+    new_soul = data.get("soul")
+    if new_soul is None:
+        return jsonify({"error": "No soul content provided"}), 400
+    
     user_context = _build_context()
-    registry = TieredSkillRegistry(user_context)
-    skills = registry.manager.get_skill_details()
-    return jsonify({"skills": skills})
+    from angel_claw.runtime.manager import runtime_manager
+    runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
+    runtime.update_soul(new_soul)
+    return jsonify({"result": "success"})

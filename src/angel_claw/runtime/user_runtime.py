@@ -66,6 +66,14 @@ class UserRuntime:
 
         return "# Angel Claw Soul\nDefault soul content..."
 
+    def update_soul(self, content: str):
+        from ..utils import get_user_root
+        user_root = get_user_root(self.context.user_id)
+        user_soul = user_root / "SOUL.md"
+        with open(user_soul, "w") as f:
+            f.write(content)
+        self.soul = content
+
     def mark_active(self):
         from datetime import datetime, UTC
         self.last_active = datetime.now(UTC)

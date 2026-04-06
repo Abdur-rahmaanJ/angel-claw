@@ -52,6 +52,7 @@ class BaseConfig:
     REMEMBER_COOKIE_REFRESH_EACH_REQUEST = True
     SESSION_PROTECTION = "basic"
     SHOPYO_AUTH_LOGIN_TEMPLATE = "agent/login.html"
+    SHOPYO_AUTH_REGISTER_TEMPLATE = "agent/register.html"
 
 
 class ProductionConfig(BaseConfig):

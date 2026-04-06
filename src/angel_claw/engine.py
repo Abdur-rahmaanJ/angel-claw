@@ -263,13 +263,27 @@ class AngelClawEngine:
                 n_results=5,
             )
         else:
-            # Only current session - filter manually since hybrid_retrieve ignores namespace filter
-            session_ids = memos.vault.namespaces.get(session_id, set())
-            session_cubes = [memos.vault.get(cid) for cid in session_ids]
-            # Also check for session_logs namespace (where memories are stored)
-            logs_ids = memos.vault.namespaces.get(f"{session_id}_logs", set())
-            logs_cubes = [memos.vault.get(cid) for cid in logs_ids]
-            retrieved_cubes = [c for c in session_cubes + logs_cubes if c is not None]
+            # Only current session and user-specific - filter manually since hybrid_retrieve ignores namespace filter
+            user_namespace = f"user_{context.email}"
+            
+            ns_to_check = [
+                session_id, 
+                f"{session_id}_logs",
+                user_namespace,
+                f"{user_namespace}_logs",
+                "default"
+            ]
+            
+            all_collected_ids = set()
+            for ns in ns_to_check:
+                all_collected_ids.update(memos.vault.namespaces.get(ns, set()))
+            
+            retrieved_cubes = [memos.vault.get(cid) for cid in all_collected_ids]
+            # Basic filter by owner and presence
+            retrieved_cubes = [c for c in retrieved_cubes if c and c.owner == context.email]
+            # Simple retrieval: Sort by similarity if we had it, but for now by timestamp
+            retrieved_cubes.sort(key=lambda c: c.timestamp, reverse=True)
+            retrieved_cubes = retrieved_cubes[:5]
 
         if retrieved_cubes:
             snippets = [
@@ -616,13 +630,27 @@ class AngelClawEngine:
                 n_results=5,
             )
         else:
-            # Only current session - filter manually since hybrid_retrieve ignores namespace filter
-            session_ids = memos.vault.namespaces.get(session_id, set())
-            session_cubes = [memos.vault.get(cid) for cid in session_ids]
-            # Also check for session_logs namespace (where memories are stored)
-            logs_ids = memos.vault.namespaces.get(f"{session_id}_logs", set())
-            logs_cubes = [memos.vault.get(cid) for cid in logs_ids]
-            retrieved_cubes = [c for c in session_cubes + logs_cubes if c is not None]
+            # Only current session and user-specific - filter manually since hybrid_retrieve ignores namespace filter
+            user_namespace = f"user_{context.email}"
+            
+            ns_to_check = [
+                session_id, 
+                f"{session_id}_logs",
+                user_namespace,
+                f"{user_namespace}_logs",
+                "default"
+            ]
+            
+            all_collected_ids = set()
+            for ns in ns_to_check:
+                all_collected_ids.update(memos.vault.namespaces.get(ns, set()))
+            
+            retrieved_cubes = [memos.vault.get(cid) for cid in all_collected_ids]
+            # Basic filter by owner and presence
+            retrieved_cubes = [c for c in retrieved_cubes if c and c.owner == context.email]
+            # Simple retrieval: Sort by similarity if we had it, but for now by timestamp
+            retrieved_cubes.sort(key=lambda c: c.timestamp, reverse=True)
+            retrieved_cubes = retrieved_cubes[:5]
 
         if retrieved_cubes:
             snippets = [
@@ -857,7 +885,9 @@ class AngelClawEngine:
 
         all_ids = set()
         all_ids.update(memos.vault.namespaces.get(user_namespace, set()))
+        all_ids.update(memos.vault.namespaces.get(f"{user_namespace}_logs", set()))
         all_ids.update(memos.vault.namespaces.get(session_namespace, set()))
+        all_ids.update(memos.vault.namespaces.get(f"{session_namespace}_logs", set()))
         all_ids.update(memos.vault.namespaces.get("default", set()))
 
         cubes = [memos.vault.get(cid) for cid in all_ids]

@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🪽 Angel Claw | Register</title>
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#09090b">
+    <link rel="icon" type="image/png" href="/static/wing.png">
+    <link rel="apple-touch-icon" href="/static/wing.png">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.0/css/bulma.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/static/sw.js')
+                    .then(reg => console.log('Service Worker registered', reg))
+                    .catch(err => console.error('Service Worker registration failed', err));
+            });
+        }
+    </script>
+    <style>
+        body {
+            background-color: #f5f7fa;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .register-card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            padding: 2.5rem;
+            width: 100%;
+            max-width: 400px;
+        }
+        .brand-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        .brand-logo {
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="register-card">
+        <div class="brand-header">
+            <div class="brand-logo">🪽</div>
+            <h1 class="title is-4">Angel Claw</h1>
+            <p class="subtitle is-6">Create your account</p>
+        </div>
+
+        {% with messages = get_flashed_messages() %}
+          {% if messages %}
+            {% for message in messages %}
+              <div class="notification is-danger is-light py-2 px-4 mb-4" style="font-size: 0.9rem;">
+                {{ message|safe }}
+              </div>
+            {% endfor %}
+          {% endif %}
+        {% endwith %}
+
+        {% if form.errors %}
+            {% for field, errors in form.errors.items() %}
+                {% for error in errors %}
+                    <div class="notification is-danger is-light py-2 px-4 mb-4" style="font-size: 0.85rem;">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            {% endfor %}
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('shopyo_auth.register') }}">
+            {{ form.hidden_tag() }}
+            
+            <div class="field">
+                <label class="label">Email</label>
+                <div class="control has-icons-left">
+                    {{ form.email(class="input", placeholder="e.g. user@example.com") }}
+                    <span class="icon is-small is-left">
+                        <i class="fas fa-envelope"></i>
+                    </span>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label">Password</label>
+                <div class="control has-icons-left">
+                    {{ form.password(class="input", placeholder="Your password") }}
+                    <span class="icon is-small is-left">
+                        <i class="fas fa-lock"></i>
+                    </span>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label">Confirm Password</label>
+                <div class="control has-icons-left">
+                    {{ form.confirm(class="input", placeholder="Confirm your password") }}
+                    <span class="icon is-small is-left">
+                        <i class="fas fa-lock"></i>
+                    </span>
+                </div>
+            </div>
+
+            <div class="field mt-5">
+                <div class="control">
+                    <button type="submit" class="button is-primary is-fullwidth">
+                        <strong>Register</strong>
+                    </button>
+                </div>
+            </div>
+
+            <div class="has-text-centered mt-4">
+                <p class="is-size-7">Already have an account? <a href="{{ url_for('shopyo_auth.login') }}">Login</a></p>
+            </div>
+        </form>
+    </div>
+</body>
+</html>

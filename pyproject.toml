@@ -66,3 +66,6 @@ angel_claw = [".env.example"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.uv.sources]
+angel-recall = { path = "../angel-recall", editable = true }

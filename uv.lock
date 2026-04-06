@@ -249,7 +249,7 @@ test = [
 [package.metadata]
 requires-dist = [
     { name = "aiohttp" },
-    { name = "angel-recall" },
+    { name = "angel-recall", editable = "../angel-recall" },
     { name = "asgiref", specifier = ">=3.11.1" },
     { name = "croniter" },
     { name = "fastapi" },
@@ -290,7 +290,7 @@ provides-extras = ["test", "file-handler", "google-calendar"]
 [[package]]
 name = "angel-recall"
 version = "0.4.1"
-source = { registry = "https://pypi.org/simple" }
+source = { editable = "../angel-recall" }
 dependencies = [
     { name = "agentor" },
     { name = "chromadb" },
@@ -305,9 +305,20 @@ dependencies = [
     { name = "pytest-asyncio" },
     { name = "python-dotenv" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/96/ca/736764e9cfa694de5969aacb95d7013e5f0b9b443f387e2cb86f279397ac/angel_recall-0.4.1.tar.gz", hash = "sha256:3c908e7c5634c618d8da5657cab590d7ae93837b9c208a0320bdf31aaa44970c", size = 26322, upload-time = "2026-02-24T10:17:55.214Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/cc/36/9e9b9681fdfd48f89ccbea4d5862e0640347e230940a5a533d066f271025/angel_recall-0.4.1-py3-none-any.whl", hash = "sha256:a150b09c5412b5f98586227fcfe283fa0d97988a9803aa65946b950b806634d9", size = 21870, upload-time = "2026-02-24T10:17:49.774Z" },
+
+[package.metadata]
+requires-dist = [
+    { name = "agentor", specifier = ">=0.0.21" },
+    { name = "chromadb", specifier = ">=1.5.0" },
+    { name = "flask", specifier = ">=3.0.0" },
+    { name = "langchain", specifier = ">=1.2.10" },
+    { name = "langchain-litellm", specifier = ">=0.5.1" },
+    { name = "langgraph", specifier = ">=1.0.8" },
+    { name = "litellm", specifier = ">=1.81.10" },
+    { name = "networkx", specifier = ">=3.4.2" },
+    { name = "pytest", specifier = ">=8.0.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23.0" },
+    { name = "python-dotenv", specifier = ">=1.0.0" },
 ]
 
 [[package]]

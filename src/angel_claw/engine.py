@@ -247,14 +247,23 @@ class AngelClawEngine:
             retrieval_query = f"{last_turn} -> {message}"
 
         recent_history = history[-4:] if len(history) >= 4 else history
-
-        memory_context = memos.process(
-            f"Retrieve context for: {retrieval_query}", user=context.email
+        # 1. Retrieval
+        # Use hybrid_retrieve directly to avoid triggering storage logic during retrieval phase
+        retrieved_cubes = memos.operator.hybrid_retrieve(
+            query=retrieval_query, 
+            user=context.email,
+            n_results=3
         )
 
+        if retrieved_cubes:
+            snippets = [f"• [{c.timestamp.strftime('%Y-%m-%d %H:%M')}] [{c.semantic_type.value.upper()}] {memos.api._format_payload(c.payload, 100)}" for c in retrieved_cubes]
+            raw_memory = "Memory Context (Prioritized & Newest First):\n" + "\n".join(snippets)
+        else:
+            raw_memory = "No relevant memory found."
+
         # Audit: Memory Poisoning Defense - Strip delimiters to prevent escape attacks
-        raw_memory = memory_context.get("response", "No relevant memory found.")
         safe_memory = raw_memory.replace("---", " - ")
+
 
         # 2. Build messages
         # Use dynamic soul from runtime
@@ -568,11 +577,20 @@ class AngelClawEngine:
 
         recent_history = history[-4:] if len(history) >= 4 else history
 
-        memory_context = memos.process(
-            f"Retrieve context for: {retrieval_query}", user=context.email
+        # 1. Retrieval
+        # Use hybrid_retrieve directly to avoid triggering storage logic during retrieval phase
+        retrieved_cubes = memos.operator.hybrid_retrieve(
+            query=retrieval_query, 
+            user=context.email,
+            n_results=3
         )
 
-        raw_memory = memory_context.get("response", "No relevant memory found.")
+        if retrieved_cubes:
+            snippets = [f"• [{c.timestamp.strftime('%Y-%m-%d %H:%M')}] [{c.semantic_type.value.upper()}] {memos.api._format_payload(c.payload, 100)}" for c in retrieved_cubes]
+            raw_memory = "Memory Context (Prioritized & Newest First):\n" + "\n".join(snippets)
+        else:
+            raw_memory = "No relevant memory found."
+
         safe_memory = raw_memory.replace("---", " - ")
 
         # 2. Build messages

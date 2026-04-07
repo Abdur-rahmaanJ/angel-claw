@@ -18,6 +18,8 @@
 
 ---
 
+<img width="1869" height="922" alt="image" src="https://github.com/user-attachments/assets/571d3650-4153-4a8f-b61f-52e4e75dfa6a" />
+
 ## 🚀 The Agent OS Vision
 
 **Angel Claw** is a high-density **Agent Operating System**. Built for both personal productivity and enterprise multi-tenancy, it provides a "Shared-Nothing" architecture where every user operates within a fully isolated, secure environment.

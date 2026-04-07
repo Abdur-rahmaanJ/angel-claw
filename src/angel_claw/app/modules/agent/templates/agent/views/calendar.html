@@ -1,0 +1,15 @@
+<header class="view-header">
+    <div class="flex items-center gap-4">
+        <button class="lg:hidden p-2 -ml-2 text-xl" @click="toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h2 class="font-bold text-lg md:text-xl">Calendar Events</h2>
+    </div>
+</header>
+<div class="workspace">
+    <div class="max-w-4xl mx-auto w-full">
+        <div class="stat-card" hx-get="/calendar?format=html" hx-trigger="load">
+            <div class="flex justify-center py-12"><i class="fas fa-spinner fa-spin text-accent text-2xl"></i></div>
+        </div>
+    </div>
+</div>

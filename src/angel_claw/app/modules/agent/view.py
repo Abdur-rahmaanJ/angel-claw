@@ -115,11 +115,35 @@ def chat():
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
+@blueprint.route("/view/<view_name>")
+@login_required
+def get_view(view_name):
+    context = mhelp.context()
+    # Add view-specific context if needed
+    if view_name == "dashboard":
+        pass # Dashboard uses HTMX to load its subcomponents
+    
+    template = f"agent/views/{view_name}.html"
+    if request.headers.get("HX-Request"):
+        return render_template(template, **context)
+    else:
+        # For non-HTMX requests, return the full index which includes this view as initial
+        return render_template("agent/index.html", active_view=view_name, **context)
+
+
 @blueprint.route("/chat/sessions")
 @login_required
 def chat_sessions():
     user_context = _build_context()
     sessions = engine.get_chat_sessions(user_context)
+    
+    if request.headers.get("HX-Request"):
+        current_session_id = request.args.get("current_session_id", "Thread 1")
+        return render_template(
+            "agent/partials/_thread_list.html", 
+            sessions=sessions, 
+            current_session_id=current_session_id
+        )
     return jsonify({"sessions": sessions})
 
 
@@ -137,6 +161,8 @@ def chat_memories():
     session_id = request.args.get("session_id", "Thread 1")
     user_context = _build_context(session_id=session_id)
     memories = engine.get_memories(user_context)
+    if request.args.get("format") == "html":
+        return render_template("agent/partials/_memory_list.html", memories=memories)
     return jsonify({"memories": memories})
 
 
@@ -173,6 +199,8 @@ def delete_memory(memory_id):
     session_id = request.args.get("session_id", "Thread 1")
     user_context = _build_context(session_id=session_id)
     engine.delete_memory(user_context, memory_id)
+    if request.headers.get("HX-Request"):
+        return "", 204
     return jsonify({"result": "success"})
 
 
@@ -181,6 +209,8 @@ def delete_memory(memory_id):
 def delete_chat_session(session_id):
     user_context = _build_context()
     engine.delete_chat_session(user_context, session_id)
+    if request.headers.get("HX-Request"):
+        return "", 204
     return jsonify({"result": "success"})
 
 
@@ -242,6 +272,11 @@ def me():
     except Exception:
         pass
 
+    if request.args.get("format") == "api_keys":
+        return render_template("agent/partials/_api_keys_list.html", api_keys=api_keys)
+    elif request.args.get("format") == "integrations":
+        return render_template("agent/partials/_integrations_list.html", bridge_online=bridge_online, channels=channels)
+
     return jsonify(
         {
             "user_id": user_id,
@@ -272,13 +307,12 @@ def me():
 @login_required
 def get_todos():
     user_context = _build_context()
-    # Use the skill directly but we need to parse it if it returns string
-    # For prototype, we will fetch from the skill manager
     from angel_claw.skills.todo import list_todos
-
     result = list_todos(
         session_id=user_context.channel_identifier, user_id=user_context.user_id
     )
+    if request.args.get("format") == "html":
+        return render_template("agent/partials/_todo_list.html", todos=result)
     return jsonify({"todos": result})
 
 
@@ -291,6 +325,8 @@ def get_calendar():
     result = list_calendar_events(
         session_id=user_context.channel_identifier, user_id=user_context.user_id
     )
+    if request.args.get("format") == "html":
+        return render_template("agent/partials/_calendar_list.html", events=result)
     return jsonify({"events": result})
 
 
@@ -301,6 +337,8 @@ def get_messages():
     from angel_claw.skills.messaging import list_unread_messages
 
     result = list_unread_messages(user_context.user_id, include_read=True)
+    if request.args.get("format") == "html":
+        return render_template("agent/partials/_message_list.html", messages=result)
     return jsonify({"messages": result})
 
 
@@ -342,6 +380,8 @@ def get_skills():
     user_context = _build_context()
     registry = TieredSkillRegistry(user_context)
     skills = registry.manager.get_skill_details()
+    if request.args.get("format") == "html":
+        return render_template("agent/partials/_skills_list.html", skills=skills)
     return jsonify({"skills": skills})
 
 
@@ -381,6 +421,8 @@ def get_soul():
     user_context = _build_context()
     from angel_claw.runtime.manager import runtime_manager
     runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
+    if request.args.get("format") == "html":
+        return render_template("agent/partials/_soul_form.html", soul=runtime.soul)
     return jsonify({"soul": runtime.soul})
 
 
@@ -409,8 +451,12 @@ def change_password():
 @blueprint.route("/soul/update", methods=["POST"])
 @login_required
 def update_soul():
-    data = request.get_json()
-    new_soul = data.get("soul")
+    if request.is_json:
+        data = request.get_json()
+        new_soul = data.get("soul")
+    else:
+        new_soul = request.form.get("soul")
+        
     if new_soul is None:
         return jsonify({"error": "No soul content provided"}), 400
     

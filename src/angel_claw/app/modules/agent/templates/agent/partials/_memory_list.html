@@ -1,0 +1,26 @@
+<div class="space-y-4">
+    {% if memories %}
+        {% for m in memories %}
+            <div class="stat-card group relative">
+                <div class="flex justify-between items-start mb-2">
+                    <span class="text-[10px] font-bold text-accent uppercase tracking-[0.2em]">{{ m.semantic_type }}</span>
+                    <span class="text-[9px] text-zinc-600">{{ m.timestamp[:16] }}</span>
+                </div>
+                <p class="text-sm text-zinc-300 leading-relaxed">{{ m.payload }}</p>
+                <div class="mt-4 flex gap-4 text-[10px] text-zinc-500 font-bold uppercase tracking-widest">
+                    <span>Namespace: {{ m.namespace }}</span>
+                </div>
+                <button 
+                    hx-post="/chat/memories/delete/{{ m.id }}" 
+                    hx-confirm="Delete this memory?"
+                    hx-target="closest .stat-card" 
+                    hx-swap="outerHTML"
+                    class="absolute top-4 right-4 opacity-0 group-hover:opacity-100 p-2 hover:text-red-500 transition-all">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            </div>
+        {% endfor %}
+    {% else %}
+        <div class="text-center py-20 text-zinc-700 italic">No memories stored in this context.</div>
+    {% endif %}
+</div>

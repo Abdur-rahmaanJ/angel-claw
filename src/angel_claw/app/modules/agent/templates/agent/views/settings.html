@@ -1,0 +1,67 @@
+<header class="view-header">
+    <div class="flex items-center gap-4">
+        <button class="lg:hidden p-2 -ml-2 text-xl" @click="toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h2 class="font-bold text-lg md:text-xl">Settings</h2>
+    </div>
+</header>
+<div class="workspace">
+    <div class="max-w-4xl mx-auto w-full space-y-6">
+        <div class="stat-card">
+            <h3 class="font-bold mb-6">Interface Customization</h3>
+            
+            <div class="mb-8">
+                <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 block">Accent Color</label>
+                <div class="flex flex-wrap gap-4">
+                    <template x-for="color in ['#22c55e', '#3b82f6', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#71717a']">
+                        <div 
+                            @click="applyAccent(color)"
+                            :style="`background-color: ${color}`"
+                            class="w-12 h-12 rounded-xl cursor-pointer border-2 transition-all hover:scale-110"
+                            :class="accent === color ? 'border-white scale-110' : 'border-transparent'">
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <div>
+                <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 block">Assistant Icon</label>
+                <div class="flex flex-wrap gap-4">
+                    <template x-for="icon in ['fa-brain', 'fa-robot', 'fa-dna', 'fa-ghost', 'fa-bolt', 'fa-user-ninja']">
+                        <div 
+                            @click="assistantIcon = icon; localStorage.setItem('assistant-icon', icon)"
+                            class="w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 transition-all hover:border-accent"
+                            :class="assistantIcon === icon ? 'border-accent bg-accent/10' : 'border-transparent'">
+                            <i class="fas" :class="icon"></i>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+
+        <div class="stat-card" x-data="{ passwordForm: false }">
+            <h3 class="font-bold mb-4">Security</h3>
+            <button class="btn btn-secondary w-full md:w-auto" @click="passwordForm = !passwordForm" x-show="!passwordForm">Change Password</button>
+            
+            <form x-show="passwordForm" 
+                  hx-post="/auth/change-password" 
+                  hx-swap="none"
+                  @htmx:after-request="passwordForm = false; alert('Password updated successfully!'); $el.reset()"
+                  class="space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-zinc-500 mb-1">Current Password</label>
+                    <input type="password" name="old_password" required class="w-full bg-black/20 border border-zinc-800 rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none">
+                </div>
+                <div>
+                    <label class="block text-xs font-bold text-zinc-500 mb-1">New Password</label>
+                    <input type="password" name="new_password" required class="w-full bg-black/20 border border-zinc-800 rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none">
+                </div>
+                <div class="flex gap-3">
+                    <button type="submit" class="btn btn-primary">Update Password</button>
+                    <button type="button" class="btn btn-secondary" @click="passwordForm = false">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

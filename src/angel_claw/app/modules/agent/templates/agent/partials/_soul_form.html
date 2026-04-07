@@ -1,0 +1,9 @@
+<form hx-post="/soul/update" hx-trigger="submit" hx-swap="none" @htmx:after-request="alert('Soul updated successfully!')">
+    <textarea 
+        name="soul"
+        class="w-full h-96 bg-black/40 border border-zinc-800 rounded-xl p-4 font-mono text-xs text-zinc-400 focus:border-accent outline-none"
+    >{{ soul }}</textarea>
+    <div class="mt-4 flex justify-end">
+        <button type="submit" class="btn btn-primary">Save Soul</button>
+    </div>
+</form>

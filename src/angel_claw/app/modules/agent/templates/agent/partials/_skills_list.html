@@ -1,0 +1,19 @@
+{% if skills %}
+    {% for name, details in skills.items() %}
+        <div class="stat-card cursor-pointer hover:border-accent group">
+            <div class="flex items-center gap-3 mb-3">
+                <div class="w-8 h-8 rounded-lg bg-accent/10 flex items-center justify-center text-accent">
+                    <i class="fas fa-bolt text-xs"></i>
+                </div>
+                <h4 class="font-bold text-sm">{{ name }}</h4>
+            </div>
+            <p class="text-[11px] text-zinc-500 line-clamp-2 leading-relaxed">{{ details.description or 'No description available.' }}</p>
+            <div class="mt-4 flex justify-between items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                <span class="text-[9px] uppercase font-black text-zinc-600 tracking-widest">Active</span>
+                <i class="fas fa-arrow-right text-[10px] text-accent"></i>
+            </div>
+        </div>
+    {% endfor %}
+{% else %}
+    <div class="col-span-full text-center py-20 text-zinc-600 italic">No skills registered.</div>
+{% endif %}

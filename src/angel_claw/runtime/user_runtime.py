@@ -74,6 +74,22 @@ class UserRuntime:
             f.write(content)
         self.soul = content
 
+    def get_soul_templates(self) -> Dict[str, str]:
+        return {
+            "Default": "# Angel Claw Soul\nYou are a helpful AI assistant...",
+            "Life Coach": "# Life Coach Soul\nYou are an empathetic and motivating life coach. You help the user set goals, stay accountable, and maintain a positive mindset.",
+            "Developer": "# Developer Soul\nYou are a senior software engineer. You provide technical, concise, and efficient solutions. You always consider edge cases and security.",
+            "Creative Writer": "# Creative Writer Soul\nYou are a brilliant storyteller and poet. Your language is descriptive and evocative. You help the user brainstorm and refine creative ideas.",
+            "Personal Assistant": "# Personal Assistant Soul\nYou are a highly organized executive assistant. You focus on efficiency, scheduling, and ensuring no detail is missed."
+        }
+
+    def apply_soul_template(self, template_name: str):
+        templates = self.get_soul_templates()
+        if template_name in templates:
+            self.update_soul(templates[template_name])
+            return True
+        return False
+
     def mark_active(self):
         from datetime import datetime, UTC
         self.last_active = datetime.now(UTC)

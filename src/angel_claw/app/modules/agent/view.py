@@ -419,3 +419,36 @@ def update_soul():
     runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
     runtime.update_soul(new_soul)
     return jsonify({"result": "success"})
+
+
+@blueprint.route("/soul/templates")
+@login_required
+def get_soul_templates():
+    user_context = _build_context()
+    from angel_claw.runtime.manager import runtime_manager
+    runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
+    return jsonify({"templates": list(runtime.get_soul_templates().keys())})
+
+
+@blueprint.route("/soul/templates/apply", methods=["POST"])
+@login_required
+def apply_soul_template():
+    data = request.get_json()
+    template_name = data.get("template")
+    if not template_name:
+        return jsonify({"error": "No template name provided"}), 400
+    
+    user_context = _build_context()
+    from angel_claw.runtime.manager import runtime_manager
+    runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
+    if runtime.apply_soul_template(template_name):
+        return jsonify({"result": "success", "soul": runtime.soul})
+    
+    return jsonify({"error": "Template not found"}), 404
+
+
+@blueprint.route("/system/mcp")
+@login_required
+def get_mcp_status():
+    from angel_claw.mcp_manager import mcp_manager
+    return jsonify({"servers": mcp_manager.get_diagnostics()})

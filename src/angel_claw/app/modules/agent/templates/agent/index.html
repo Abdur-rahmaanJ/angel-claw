@@ -510,18 +510,56 @@
             </header>
             <div class="stat-card mt-6">
                 <h3 class="font-bold mb-1">Accent Color</h3>
+                <p class="text-sm text-zinc-500 mb-6">Choose a color for buttons, icons, and highlights.</p>
                 <div class="flex flex-wrap gap-3 mt-4" id="color-palette">
-                    <div class="color-option w-8 h-8 rounded-full cursor-pointer" style="background: #22c55e;" data-color="#22c55e"></div>
-                    <div class="color-option w-8 h-8 rounded-full cursor-pointer" style="background: #3b82f6;" data-color="#3b82f6"></div>
-                    <div class="color-option w-8 h-8 rounded-full cursor-pointer" style="background: #ef4444;" data-color="#ef4444"></div>
-                    <div class="color-option w-8 h-8 rounded-full cursor-pointer" style="background: #eab308;" data-color="#eab308"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #22c55e;" data-color="#22c55e" title="Green"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #4f46e5;" data-color="#4f46e5" title="Indigo"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #7c3aed;" data-color="#7c3aed" title="Violet"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #ec4899;" data-color="#ec4899" title="Pink"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #ef4444;" data-color="#ef4444" title="Red"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #f97316;" data-color="#f97316" title="Orange"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #eab308;" data-color="#eab308" title="Yellow"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #14b8a6;" data-color="#14b8a6" title="Teal"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #06b6d4;" data-color="#06b6d4" title="Cyan"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #3b82f6;" data-color="#3b82f6" title="Blue"></div>
+                    <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #64748b;" data-color="#64748b" title="Slate"></div>
                 </div>
+
                 <div class="mt-10 pt-10 border-t border-[var(--border-color)]">
                     <h3 class="font-bold mb-1">Security</h3>
+                    <p class="text-sm text-zinc-500 mb-6">Change your account password.</p>
                     <div class="flex flex-col gap-3 max-w-sm mt-4">
-                        <input type="password" id="old-password" placeholder="Current Password" class="bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-lg outline-none">
-                        <input type="password" id="new-password" placeholder="New Password" class="bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-lg outline-none">
+                        <input type="password" id="old-password" placeholder="Current Password" class="bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-lg outline-none focus:border-accent">
+                        <input type="password" id="new-password" placeholder="New Password" class="bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-lg outline-none focus:border-accent">
                         <button onclick="updatePassword()" class="btn btn-primary">Update Password</button>
+                    </div>
+                </div>
+
+                <div class="mt-10 pt-10 border-t border-[var(--border-color)]">
+                    <h3 class="font-bold mb-1">Assistant Icon</h3>
+                    <p class="text-sm text-zinc-500 mb-6">Choose an icon for your Angel Claw agent.</p>
+                    <div class="flex flex-wrap gap-4" id="icon-palette">
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-brain" title="Brain">
+                            <i class="fas fa-brain"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-microchip" title="Microchip">
+                            <i class="fas fa-microchip"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-bolt" title="Bolt">
+                            <i class="fas fa-bolt"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-cube" title="Cube">
+                            <i class="fas fa-cube"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-robot" title="Robot">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-dna" title="Core">
+                            <i class="fas fa-dna"></i>
+                        </div>
+                        <div class="icon-option w-12 h-12 bg-zinc-800 rounded-xl flex items-center justify-center cursor-pointer border-2 border-transparent hover:border-accent transition-all" data-icon="fa-ghost" title="Ghost">
+                            <i class="fas fa-ghost"></i>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -801,17 +839,77 @@
             } catch (e) {}
         }
 
+        function applyAccent(color) {
+            document.documentElement.style.setProperty('--accent-color', color);
+            document.documentElement.style.setProperty('--accent-rgb', hexToRgb(color));
+            localStorage.setItem('accent-color', color);
+            state.accent = color;
+            
+            document.querySelectorAll('.color-option').forEach(el => {
+                if (el.dataset.color === color) el.classList.add('border-white', 'scale-110');
+                else el.classList.remove('border-white', 'scale-110');
+            });
+        }
+
+        function applyAssistantIcon(iconClass) {
+            state.assistantIcon = iconClass;
+            localStorage.setItem('assistant-icon', iconClass);
+            
+            document.querySelectorAll('.icon-option').forEach(el => {
+                if (el.dataset.icon === iconClass) el.classList.add('border-accent', 'bg-accent/10');
+                else el.classList.remove('border-accent', 'bg-accent/10');
+            });
+        }
+
+        function setupEventListeners() {
+            document.querySelectorAll('.color-option').forEach(el => {
+                el.addEventListener('click', () => applyAccent(el.dataset.color));
+            });
+
+            document.querySelectorAll('.icon-option').forEach(el => {
+                el.addEventListener('click', () => applyAssistantIcon(el.dataset.icon));
+            });
+
+            const overlay = document.getElementById('sidebar-overlay');
+            if (overlay) overlay.addEventListener('click', toggleSidebar);
+
+            const userInput = document.getElementById('user-input');
+            if (userInput) {
+                userInput.addEventListener('input', function() {
+                    this.style.height = 'auto';
+                    this.style.height = (this.scrollHeight) + 'px';
+                });
+            }
+        }
+
         function init() {
-            applyTheme(); applyAccent(state.accent); 
+            applyTheme(); 
+            applyAccent(state.accent); 
+            applyAssistantIcon(state.assistantIcon);
+            
             const globalToggle = document.getElementById('global-memory-toggle');
             if (globalToggle) globalToggle.checked = state.useGlobalMemory;
+            
+            setupEventListeners();
             showView('dashboard');
         }
 
-        function applyTheme() { document.documentElement.className = state.theme; localStorage.setItem('theme', state.theme); }
-        function toggleTheme() { state.theme = state.theme === 'light' ? 'dark' : 'light'; applyTheme(); }
-        function hexToRgb(hex) { const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16); return `${r} ${g} ${b}`; }
-        function applyAccent(c) { document.documentElement.style.setProperty('--accent-color', c); document.documentElement.style.setProperty('--accent-rgb', hexToRgb(c)); localStorage.setItem('accent-color', c); state.accent = c; }
+        function applyTheme() { 
+            document.documentElement.className = state.theme; 
+            const icon = document.getElementById('theme-icon');
+            if (icon) icon.className = state.theme === 'light' ? 'fas fa-sun' : 'fas fa-moon';
+            localStorage.setItem('theme', state.theme); 
+        }
+
+        function toggleTheme() { 
+            state.theme = state.theme === 'light' ? 'dark' : 'light'; 
+            applyTheme(); 
+        }
+
+        function hexToRgb(hex) { 
+            const r = parseInt(hex.slice(1,3),16), g = parseInt(hex.slice(3,5),16), b = parseInt(hex.slice(5,7),16); 
+            return `${r} ${g} ${b}`; 
+        }
         
         async function loadApiInfo() {
             try {

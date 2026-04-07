@@ -177,3 +177,24 @@ class CreditAction(PkModel):
     def get_cost(action_name: str) -> int:
         action = CreditAction.query.filter_by(name=action_name, is_active=True).first()
         return action.cost if action else 1
+
+
+class SystemHeartbeat(PkModel):
+    __tablename__ = "system_heartbeats"
+    __table_args__ = {"extend_existing": True}
+
+    service_name = db.Column(db.String(100), nullable=False, unique=True)
+    last_heartbeat = db.Column(db.DateTime, default=lambda: datetime.now())
+    status = db.Column(db.String(50), default="active")
+    version = db.Column(db.String(50), nullable=True)
+
+    @staticmethod
+    def pulse(service_name: str, status: str = "active"):
+        hb = SystemHeartbeat.query.filter_by(service_name=service_name).first()
+        if not hb:
+            hb = SystemHeartbeat(service_name=service_name)
+            db.session.add(hb)
+        
+        hb.last_heartbeat = datetime.now()
+        hb.status = status
+        db.session.commit()

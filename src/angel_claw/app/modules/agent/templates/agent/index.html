@@ -101,6 +101,16 @@
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { @apply bg-zinc-800 rounded-full; }
         ::-webkit-scrollbar-thumb:hover { @apply bg-zinc-700; }
+
+        select {
+            -webkit-appearance: none !important;
+            -moz-appearance: none !important;
+            appearance: none !important;
+        }
+        option {
+            background-color: #18181b !important;
+            color: #fafafa !important;
+        }
     </style>
 </head>
 <body class="h-screen overflow-hidden flex">
@@ -266,7 +276,7 @@
             <div class="flex-grow overflow-y-auto px-4 md:px-8 py-8 space-y-6" id="chat-messages">
                 {% for msg in history %}
                 <div class="max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]">
-                    <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white {{ 'bg-zinc-800' if msg.role == 'user' else 'bg-accent' }}">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white {{ 'bg-zinc-800' if msg.role == 'user' else 'bg-accent' }}">
                         <i class="fas {{ 'fa-user' if msg.role == 'user' else 'fa-robot' }}"></i>
                     </div>
                     <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words">
@@ -349,9 +359,12 @@
                     </button>
                     <h2 class="font-bold text-lg md:text-xl">Agent Skills</h2>
                 </div>
-                <button class="btn btn-secondary text-sm flex items-center gap-2">
-                    <i class="fas fa-upload"></i> Upload Python Skill
-                </button>
+                <div>
+                    <input type="file" id="skill-upload-input" class="hidden" accept=".py" onchange="handleSkillUpload(this)">
+                    <button onclick="document.getElementById('skill-upload-input').click()" class="btn btn-secondary text-sm flex items-center gap-2">
+                        <i class="fas fa-upload"></i> Upload Python Skill
+                    </button>
+                </div>
             </header>
             <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mt-6" id="skills-grid">
                 <!-- Skill cards -->
@@ -408,6 +421,14 @@
                 </div>
             </header>
             <div class="stat-card mt-6">
+                <div class="flex flex-col md:flex-row md:items-end gap-4 mb-8 pb-8 border-b border-[var(--border-color)]">
+                    <div class="flex-grow">
+                        <label class="block text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">New API Key Name</label>
+                        <input type="text" id="new-api-key-name" placeholder="e.g. My Python Script" class="w-full bg-black/40 border border-[var(--border-color)] px-4 py-2.5 rounded-xl outline-none focus:border-accent">
+                    </div>
+                    <button onclick="generateApiKey()" class="btn btn-primary whitespace-nowrap">Generate Key</button>
+                </div>
+
                 <h4 class="font-bold mb-4">Your API Keys</h4>
                 <div id="api-keys-list" class="space-y-2 mb-8">
                     <!-- API Keys -->
@@ -448,6 +469,16 @@
                     <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #06b6d4;" data-color="#06b6d4" title="Cyan"></div>
                     <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #3b82f6;" data-color="#3b82f6" title="Blue"></div>
                     <div class="color-option w-10 h-10 rounded-xl cursor-pointer border-4 border-transparent transition-all hover:scale-110 active:scale-95" style="background: #64748b;" data-color="#64748b" title="Slate"></div>
+                </div>
+
+                <div class="mt-10 pt-10 border-t border-[var(--border-color)]">
+                    <h3 class="font-bold mb-1">Security</h3>
+                    <p class="text-sm text-zinc-500 mb-6">Change your account password.</p>
+                    <div class="flex flex-col gap-3 max-w-sm">
+                        <input type="password" id="old-password" placeholder="Current Password" class="bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-lg outline-none focus:border-accent">
+                        <input type="password" id="new-password" placeholder="New Password" class="bg-zinc-800 border border-zinc-700 px-4 py-2 rounded-lg outline-none focus:border-accent">
+                        <button onclick="updatePassword()" class="bg-accent text-zinc-900 font-bold py-2 px-4 rounded-lg hover:bg-opacity-90 transition-all">Update Password</button>
+                    </div>
                 </div>
 
                 <div class="mt-10 pt-10 border-t border-[var(--border-color)]">
@@ -514,6 +545,30 @@
                     <h2 class="font-bold text-lg md:text-xl">Long-term Memory</h2>
                 </div>
             </header>
+            
+            <div class="stat-card mt-6 mb-8">
+                <h3 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-4">Inject New Fact</h3>
+                <div class="flex flex-col md:flex-row gap-3">
+                    <input type="text" id="new-memory-content" placeholder="e.g. User prefers dark chocolate over milk chocolate." class="flex-grow bg-black/40 border border-[var(--border-color)] px-4 py-2.5 rounded-xl outline-none focus:border-accent">
+                    <div class="relative">
+                        <select id="new-memory-type" class="w-full md:w-40 bg-zinc-900 border border-zinc-700 px-4 py-2.5 rounded-xl outline-none text-zinc-300 text-sm cursor-pointer focus:border-accent transition-all pr-10">
+                            <option value="fact">Fact</option>
+                            <option value="preference">Preference</option>
+                            <option value="insight">Insight</option>
+                        </select>
+                        <i class="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 text-[10px] pointer-events-none"></i>
+                    </div>
+                    <button onclick="addManualMemory()" class="btn btn-primary whitespace-nowrap">Add Memory</button>
+                </div>
+            </div>
+
+            <div class="flex flex-col md:flex-row gap-4 mb-6">
+                <div class="relative flex-grow">
+                    <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 text-xs"></i>
+                    <input type="text" id="memory-search" oninput="filterMemories()" placeholder="Search through your agent's long-term memory..." class="w-full bg-black/20 border border-[var(--border-color)] pl-10 pr-4 py-2.5 rounded-xl outline-none focus:border-accent text-sm">
+                </div>
+            </div>
+
             <div class="mt-6 space-y-4" id="memory-list">
                 <p class="text-zinc-500 text-center py-12">Recalling memories from Angel Recall...</p>
             </div>
@@ -559,8 +614,14 @@
                 </button>
             </div>
             <div class="bg-zinc-800/30 p-5 rounded-2xl text-[13px] border border-[var(--border-color)]">
-                <p class="mb-2 opacity-80">1. Open your bot on Telegram or WhatsApp.</p>
-                <p class="opacity-80">2. Send: <code class="text-white bg-zinc-700 px-2 py-0.5 rounded ml-1">/pair <span id="pairing-code-hint" class="font-bold text-accent">TOKEN</span></code></p>
+                <p class="mb-3 opacity-80">1. Go to <a href="https://t.me/abdur_angelclaw_bot" target="_blank" class="text-accent hover:underline font-bold">@abdur_angelclaw_bot</a> on Telegram.</p>
+                <p class="mb-3 opacity-80">2. Send the following command:</p>
+                <div class="flex items-center gap-2 bg-black/40 p-3 rounded-lg border border-zinc-700">
+                    <code id="pairing-cmd" class="text-white font-mono break-all text-sm">/pair <span id="pairing-code-hint" class="font-bold text-accent">TOKEN</span></code>
+                    <button onclick="copyPairingCmd()" class="w-8 h-8 flex-shrink-0 bg-zinc-700 text-zinc-400 rounded hover:text-white hover:bg-zinc-600 transition-all ml-auto" title="Copy command">
+                        <i class="fas fa-copy"></i>
+                    </button>
+                </div>
             </div>
             <div class="mt-10 flex gap-4 justify-end">
                 <button class="btn btn-secondary" onclick="closePairingModal()">Close</button>
@@ -862,7 +923,7 @@
                         const icon = msg.role === 'user' ? 'fa-user' : state.assistantIcon;
                         return `
                             <div class="max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]">
-                                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white ${msg.role === 'user' ? 'bg-zinc-800' : 'bg-accent'}">
+                                <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white ${msg.role === 'user' ? 'bg-zinc-800' : 'bg-accent'}">
                                     <i class="fas ${icon}"></i>
                                 </div>
                                 <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words">
@@ -905,13 +966,17 @@
                 const res = await fetch('/me');
                 const data = await res.json();
                 const channels = data.channels || [];
+                const bridgeOnline = data.bridge_online;
                 
                 const updateBadge = (id, connected) => {
                     const el = document.getElementById(id);
                     if (!el) return;
-                    if (connected) {
+                    if (connected && bridgeOnline) {
                         el.innerText = 'CONNECTED';
                         el.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest bg-green-500/10 text-green-500';
+                    } else if (connected && !bridgeOnline) {
+                        el.innerText = 'PAIRED (BRIDGE DOWN)';
+                        el.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest bg-yellow-500/10 text-yellow-500';
                     } else {
                         el.innerText = 'OFFLINE';
                         el.className = 'px-2.5 py-1 rounded-md text-[10px] font-bold tracking-widest bg-red-500/10 text-red-500';
@@ -1094,7 +1159,9 @@
 
         function closeMessageModal() {
             const modal = document.getElementById('message-modal');
+            const delBtn = document.getElementById('msg-modal-delete-btn');
             if (modal) modal.classList.replace('flex', 'hidden');
+            if (delBtn) delBtn.style.display = 'flex'; // Reset visibility
             
             if (state.currentMessageId) {
                 const token = document.getElementById('csrf_token')?.value;
@@ -1134,18 +1201,122 @@
             try {
                 const res = await fetch('/skills');
                 const data = await res.json();
-                container.innerHTML = Object.entries(data.skills).map(([name, doc]) => `
-                    <div class="stat-card flex items-center gap-4 hover:border-accent group">
-                        <div class="w-12 h-12 rounded-2xl bg-accent text-white flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
-                            <i class="fas fa-puzzle-piece"></i>
+                state.skills = data.skills; // Save to state
+                container.innerHTML = Object.entries(data.skills).map(([name, doc]) => {
+                    const description = typeof doc === 'string' ? doc : (doc.description || "No description provided.");
+                    return `
+                        <div onclick="showSkillDetails('${name}')" class="stat-card flex items-center gap-4 hover:border-accent group cursor-pointer">
+                            <div class="w-12 h-12 rounded-2xl bg-accent text-white flex items-center justify-center text-xl group-hover:scale-110 transition-transform">
+                                <i class="fas fa-puzzle-piece"></i>
+                            </div>
+                            <div class="min-w-0">
+                                <h4 class="font-bold truncate text-[15px]">${name}</h4>
+                                <p class="text-[10px] text-zinc-500 truncate">${description.substring(0, 30)}...</p>
+                            </div>
                         </div>
-                        <div class="min-w-0">
-                            <h4 class="font-bold truncate text-[15px]">${name}</h4>
-                            <span class="text-[10px] font-bold text-accent uppercase tracking-widest opacity-80">Platform Native</span>
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
             } catch (e) { container.innerText = "Error loading skills."; }
+        }
+
+        function showSkillDetails(name) {
+            const skill = state.skills[name];
+            if (!skill) return;
+
+            const modal = document.getElementById('message-modal'); // Reusing message modal for now
+            const fromEl = document.getElementById('msg-modal-from');
+            const timeEl = document.getElementById('msg-modal-time');
+            const contentEl = document.getElementById('msg-modal-content');
+            const delBtn = document.getElementById('msg-modal-delete-btn');
+
+            if (fromEl) fromEl.innerText = `Skill: ${name}`;
+            if (timeEl) timeEl.innerText = "Platform Native / Custom";
+            
+            let content = `<div class="space-y-4">`;
+            if (typeof skill === 'string') {
+                content += `<p class="text-zinc-300">${skill}</p>`;
+            } else {
+                content += `<p class="text-zinc-300 font-medium">${skill.description || "No description."}</p>`;
+                if (skill.parameters) {
+                    content += `
+                        <div class="mt-4">
+                            <h5 class="text-xs font-bold text-zinc-500 uppercase tracking-widest mb-2">Parameters</h5>
+                            <pre class="bg-black/40 p-3 rounded-lg text-xs font-mono text-accent overflow-x-auto">${JSON.stringify(skill.parameters, null, 2)}</pre>
+                        </div>`;
+                }
+            }
+            content += `</div>`;
+            
+            if (contentEl) contentEl.innerHTML = content;
+            if (delBtn) delBtn.style.display = 'none'; // Hide delete for skills
+            
+            if (modal) modal.classList.replace('hidden', 'flex');
+        }
+
+        async function handleSkillUpload(input) {
+            if (!input.files || !input.files[0]) return;
+            const file = input.files[0];
+            const formData = new FormData();
+            formData.append('skill_file', file);
+
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch('/skills/upload', {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': token },
+                    body: formData
+                });
+                const data = await res.json();
+                if (data.result === 'success') {
+                    alert(`Skill "${data.filename}" uploaded successfully!`);
+                    loadSkills();
+                } else {
+                    alert("Upload failed: " + (data.error || "Unknown error"));
+                }
+            } catch (e) { alert("Error: " + e.message); }
+            input.value = ''; // Reset
+        }
+
+        async function generateApiKey() {
+            const nameInput = document.getElementById('new-api-key-name');
+            const name = nameInput.value.trim();
+            if (!name) {
+                alert("Please enter a name for the API key.");
+                return;
+            }
+
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch('/api-key', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+                
+                if (data.key) {
+                    nameInput.value = '';
+                    // Temporary modal or prompt to show the key
+                    prompt("CRITICAL: Copy this key now! It will not be shown again:", data.key);
+                    loadApiInfo();
+                } else {
+                    alert("Failed to generate key: " + (data.error || "Unknown error"));
+                }
+            } catch (e) { alert("Error: " + e.message); }
+        }
+
+        async function revokeApiKey(keyId) {
+            if (!confirm("Permanently revoke this API key?")) return;
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch(`/api-key/revoke/${keyId}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': token }
+                });
+                if ((await res.json()).result === 'success') {
+                    loadApiInfo();
+                }
+            } catch (e) { alert("Revocation failed"); }
         }
 
         async function loadApiInfo() {
@@ -1155,12 +1326,17 @@
                 const res = await fetch('/me');
                 const data = await res.json();
                 container.innerHTML = data.api_keys.map(k => `
-                    <div class="flex items-center justify-between p-4 bg-black/20 rounded-xl border border-[var(--border-color)]">
-                        <div>
-                            <p class="font-bold text-sm">${k.name}</p>
+                    <div class="flex items-center justify-between p-4 bg-black/20 rounded-xl border border-[var(--border-color)] group">
+                        <div class="min-w-0">
+                            <p class="font-bold text-sm truncate">${k.name}</p>
                             <p class="text-[11px] text-zinc-500 mt-0.5 font-mono">Prefix: ${k.prefix}... • Created: ${new Date(k.created_at).toLocaleDateString()}</p>
                         </div>
-                        <span class="bg-green-500/10 text-green-500 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter">Active</span>
+                        <div class="flex items-center gap-3">
+                            <span class="bg-green-500/10 text-green-500 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-tighter">Active</span>
+                            <button onclick="revokeApiKey('${k.id}')" class="p-2 text-zinc-500 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all">
+                                <i class="fas fa-trash-alt text-xs"></i>
+                            </button>
+                        </div>
                     </div>
                 `).join('') || '<p class="text-zinc-500 text-sm italic">No API keys generated yet.</p>';
             } catch (e) { container.innerText = "Error loading API info."; }
@@ -1173,51 +1349,106 @@
             try {
                 const res = await fetch(`/chat/memories?session_id=${encodeURIComponent(state.currentSessionId)}`);
                 const data = await res.json();
-                const memories = data.memories || [];
-
-                if (memories.length === 0) {
-                    container.innerHTML = `
-                        <div class="stat-card text-center py-12">
-                            <i class="fas fa-brain text-4xl text-zinc-800 mb-4"></i>
-                            <p class="text-zinc-500 italic">No long-term memories have been formed in this thread yet.</p>
-                        </div>`;
-                    return;
-                }
-
-                container.innerHTML = memories.map(m => {
-                    const date = new Date(m.timestamp).toLocaleString();
-                    const type = m.semantic_type || 'fact';
-                    const payload = typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload);
-                    const isDialogue = type === 'dialogue';
-                    const accentClass = isDialogue ? 'bg-zinc-500/10 text-zinc-500' : 'bg-accent/10 text-accent';
-                    const dotClass = isDialogue ? 'bg-zinc-500' : 'bg-accent animate-pulse';
-                    
-                    return `
-                        <div class="stat-card hover:border-accent group transition-all relative ${isDialogue ? 'opacity-70 grayscale-[0.5]' : ''}">
-                            <button onclick="deleteMemory('${m.id}')" class="absolute right-4 top-4 opacity-0 group-hover:opacity-100 p-2 text-zinc-500 hover:text-red-500 transition-all" title="Delete memory">
-                                <i class="fas fa-trash-alt text-xs"></i>
-                            </button>
-                            <div class="flex justify-between items-start mb-3 pr-8">
-                                <div class="flex items-center gap-2">
-                                    <span class="w-2 h-2 rounded-full ${dotClass}"></span>
-                                    <span class="text-[10px] font-black uppercase tracking-widest ${accentClass} px-2 py-0.5 rounded-md">${type}</span>
-                                </div>
-                                <span class="text-[10px] text-zinc-500 font-mono">${date}</span>
-                            </div>
-                            <div class="text-sm leading-relaxed text-zinc-300 break-words">
-                                ${payload.replace(/\n/g, '<br>')}
-                            </div>
-                            <div class="mt-4 flex flex-wrap gap-2">
-                                ${m.tags ? m.tags.map(t => `<span class="px-2 py-0.5 bg-zinc-800 text-[9px] text-zinc-500 rounded-md border border-zinc-700">#${t}</span>`).join('') : ''}
-                                <span class="ml-auto text-[9px] text-zinc-600 uppercase font-bold tracking-tighter">ID: ${m.id.substring(0, 8)}</span>
-                            </div>
-                        </div>
-                    `;
-                }).join('');
+                state.memories = data.memories || []; // Save to state
+                renderMemories(state.memories);
             } catch (e) { 
                 console.error("Memory Load Error:", e);
                 container.innerHTML = `<div class="stat-card text-red-500 text-center py-8">Error loading memories: ${e.message}</div>`;
             }
+        }
+
+        function filterMemories() {
+            const query = document.getElementById('memory-search').value.toLowerCase();
+            const filtered = state.memories.filter(m => {
+                const payload = typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload);
+                return payload.toLowerCase().includes(query) || 
+                       (m.semantic_type && m.semantic_type.toLowerCase().includes(query)) ||
+                       (m.tags && m.tags.some(t => t.toLowerCase().includes(query)));
+            });
+            renderMemories(filtered);
+        }
+
+        function renderMemories(memories) {
+            const container = document.getElementById('memory-list');
+            if (!container) return;
+
+            if (memories.length === 0) {
+                container.innerHTML = `
+                    <div class="stat-card text-center py-12">
+                        <i class="fas fa-brain text-4xl text-zinc-800 mb-4"></i>
+                        <p class="text-zinc-500 italic">No matching long-term memories found.</p>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = memories.map(m => {
+                const date = new Date(m.timestamp).toLocaleString();
+                const type = m.semantic_type || 'fact';
+                const payload = typeof m.payload === 'string' ? m.payload : JSON.stringify(m.payload);
+                const isDialogue = type === 'dialogue';
+                const accentClass = isDialogue ? 'bg-zinc-500/10 text-zinc-500' : 'bg-accent/10 text-accent';
+                const dotClass = isDialogue ? 'bg-zinc-500' : 'bg-accent animate-pulse';
+                
+                return `
+                    <div class="stat-card hover:border-accent group transition-all relative ${isDialogue ? 'opacity-70 grayscale-[0.5]' : ''}">
+                        <button onclick="deleteMemory('${m.id}')" class="absolute right-4 top-4 opacity-0 group-hover:opacity-100 p-2 text-zinc-500 hover:text-red-500 transition-all" title="Delete memory">
+                            <i class="fas fa-trash-alt text-xs"></i>
+                        </button>
+                        <div class="flex justify-between items-start mb-3 pr-8">
+                            <div class="flex items-center gap-2">
+                                <span class="w-2 h-2 rounded-full ${dotClass}"></span>
+                                <span class="text-[10px] font-black uppercase tracking-widest ${accentClass} px-2 py-0.5 rounded-md">${type}</span>
+                            </div>
+                            <span class="text-[10px] text-zinc-500 font-mono">${date}</span>
+                        </div>
+                        <div class="text-sm leading-relaxed text-zinc-300 break-words">
+                            ${payload.replace(/\n/g, '<br>')}
+                        </div>
+                        <div class="mt-4 flex flex-wrap gap-2">
+                            ${m.tags ? m.tags.map(t => `<span class="px-2 py-0.5 bg-zinc-800 text-[9px] text-zinc-500 rounded-md border border-zinc-700">#${t}</span>`).join('') : ''}
+                            <span class="ml-auto text-[9px] text-zinc-600 uppercase font-bold tracking-tighter">ID: ${m.id.substring(0, 8)}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        async function deleteMemory(memoryId) {
+            if (!confirm("Permanently delete this memory?")) return;
+            
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch(`/chat/memories/delete/${memoryId}?session_id=${encodeURIComponent(state.currentSessionId)}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': token }
+                });
+                const data = await res.json();
+                if (data.result === 'success') {
+                    loadMemories();
+                }
+            } catch (e) { alert("Delete failed: " + e.message); }
+        }
+
+        async function addManualMemory() {
+            const contentInput = document.getElementById('new-memory-content');
+            const typeSelect = document.getElementById('new-memory-type');
+            const content = contentInput.value.trim();
+            const type = typeSelect.value;
+
+            if (!content) return;
+
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch('/chat/memories/add', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+                    body: JSON.stringify({ content, type })
+                });
+                if ((await res.json()).result === 'success') {
+                    contentInput.value = '';
+                    loadMemories();
+                }
+            } catch (e) { alert("Memory injection failed: " + e.message); }
         }
 
         async function loadSoul() {
@@ -1277,7 +1508,7 @@
                     const msgDiv = document.createElement('div');
                     msgDiv.className = 'max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]';
                     msgDiv.innerHTML = `
-                        <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white bg-accent">
+                        <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white bg-accent">
                             <i class="fas ${state.assistantIcon}"></i>
                         </div>
                         <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words message-content"></div>
@@ -1334,7 +1565,7 @@
             div.className = 'max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]';
             const icon = role === 'user' ? 'fa-user' : state.assistantIcon;
             div.innerHTML = `
-                <div class="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 text-white ${role === 'user' ? 'bg-zinc-800' : 'bg-accent'}">
+                <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white ${role === 'user' ? 'bg-zinc-800' : 'bg-accent'}">
                     <i class="fas ${icon}"></i>
                 </div>
                 <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words">${content}</div>
@@ -1381,7 +1612,7 @@
             const display = document.getElementById('pairing-token-display');
             const icon = document.getElementById('copy-token-icon');
             if (!display || !display.value || display.value === '...' || display.value === 'ERROR') return;
-
+            
             navigator.clipboard.writeText(display.value).then(() => {
                 const originalClass = icon.className;
                 icon.className = 'fas fa-check text-green-500';
@@ -1389,6 +1620,37 @@
                     icon.className = originalClass;
                 }, 2000);
             });
+        }
+
+        function copyPairingCmd() {
+            const cmd = document.getElementById('pairing-code-hint').innerText;
+            navigator.clipboard.writeText(`/pair ${cmd}`);
+            alert("Command copied to clipboard!");
+        }
+
+        async function updatePassword() {
+            const oldPassword = document.getElementById('old-password').value;
+            const newPassword = document.getElementById('new-password').value;
+            if (!oldPassword || !newPassword) {
+                alert("Please fill in both password fields.");
+                return;
+            }
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch('/auth/change-password', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+                    body: JSON.stringify({ old_password: oldPassword, new_password: newPassword })
+                });
+                const data = await res.json();
+                if (data.result === 'success') {
+                    alert("Password updated successfully!");
+                    document.getElementById('old-password').value = '';
+                    document.getElementById('new-password').value = '';
+                } else {
+                    alert("Failed to update password: " + (data.error || "Unknown error"));
+                }
+            } catch (e) { alert("Error: " + e.message); }
         }
 
         // Start

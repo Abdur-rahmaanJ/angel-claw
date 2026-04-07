@@ -140,6 +140,33 @@ def chat_memories():
     return jsonify({"memories": memories})
 
 
+@blueprint.route("/chat/memories/add", methods=["POST"])
+@login_required
+def add_memory():
+    data = request.get_json()
+    content = data.get("content")
+    semantic_type = data.get("type", "fact")
+    
+    if not content:
+        return jsonify({"error": "Content is required"}), 400
+        
+    user_context = _build_context()
+    from angel_recall import create_plaintext, SemanticType
+    from angel_claw.runtime.manager import runtime_manager
+    
+    runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
+    memos = runtime.get_memos(user_context.channel_identifier)
+    
+    cube = create_plaintext(
+        text=content,
+        semantic_type=SemanticType(semantic_type),
+        owner=user_context.email
+    )
+    memos.api.create(cube, namespace=f"user_{user_context.email}")
+    
+    return jsonify({"result": "success"})
+
+
 @blueprint.route("/chat/memories/delete/<memory_id>", methods=["POST"])
 @login_required
 def delete_memory(memory_id):
@@ -166,7 +193,6 @@ def generate_pair_token():
         return jsonify({"token": token})
     except Exception as e:
         import traceback
-
         return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
 
 
@@ -174,11 +200,25 @@ def generate_pair_token():
 @login_required
 def create_api_key():
     data = request.get_json()
-    name = data.get("name", "Default Key")
+    name = data.get("name")
+    if not name:
+        return jsonify({"error": "Key name is required"}), 400
+
     user_context = _build_context()
     try:
         raw_key = engine.create_api_key(user_context, name)
-        return jsonify({"api_key": raw_key})
+        return jsonify({"key": raw_key})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@blueprint.route("/api-key/revoke/<key_id>", methods=["POST"])
+@login_required
+def revoke_api_key(key_id):
+    user_context = _build_context()
+    try:
+        engine.revoke_api_key(user_context, key_id)
+        return jsonify({"result": "success"})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -187,15 +227,26 @@ def create_api_key():
 @login_required
 def me():
     from modules.agent.models import Channel, ApiKey, InternalMessage
+    import subprocess
 
     user_id = str(current_user.id)
     channels = Channel.query.filter_by(user_id=user_id).all()
     api_keys = ApiKey.query.filter_by(user_id=user_id).all()
 
+    # Check if the bridge service is running
+    bridge_online = False
+    try:
+        # systemctl is-active returns 'active' and exit code 0 if running
+        res = subprocess.run(["systemctl", "is-active", "angel-claw-bridge.service"], capture_output=True, text=True)
+        bridge_online = res.stdout.strip() == "active"
+    except Exception:
+        pass
+
     return jsonify(
         {
             "user_id": user_id,
             "email": current_user.email,
+            "bridge_online": bridge_online,
             "channels": [
                 {
                     "type": c.channel_type,
@@ -206,6 +257,7 @@ def me():
             ],
             "api_keys": [
                 {
+                    "id": k.id,
                     "name": k.name,
                     "prefix": k.prefix,
                     "created_at": k.created_at.isoformat() if k.created_at else None,
@@ -293,6 +345,36 @@ def get_skills():
     return jsonify({"skills": skills})
 
 
+@blueprint.route("/skills/upload", methods=["POST"])
+@login_required
+def upload_skill():
+    if "skill_file" not in request.files:
+        return jsonify({"error": "No file part"}), 400
+    
+    file = request.files["skill_file"]
+    if file.filename == "":
+        return jsonify({"error": "No selected file"}), 400
+    
+    if file and file.filename.endswith(".py"):
+        user_context = _build_context()
+        from angel_claw.utils import get_user_root
+        user_root = get_user_root(user_context.user_id)
+        skills_dir = user_root / "skills"
+        skills_dir.mkdir(parents=True, exist_ok=True)
+        
+        file_path = skills_dir / file.filename
+        file.save(str(file_path))
+        
+        # Force reload the registry for this user
+        from angel_claw.runtime.manager import runtime_manager
+        runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
+        runtime.skills.reload()
+        
+        return jsonify({"result": "success", "filename": file.filename})
+    
+    return jsonify({"error": "Only .py files are allowed"}), 400
+
+
 @blueprint.route("/soul")
 @login_required
 def get_soul():
@@ -300,6 +382,28 @@ def get_soul():
     from angel_claw.runtime.manager import runtime_manager
     runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
     return jsonify({"soul": runtime.soul})
+
+
+@blueprint.route("/auth/change-password", methods=["POST"])
+@login_required
+def change_password():
+    data = request.get_json()
+    old_password = data.get("old_password")
+    new_password = data.get("new_password")
+
+    if not old_password or not new_password:
+        return jsonify({"error": "Missing password fields"}), 400
+
+    from shopyo_auth.models import User
+    from init import db
+
+    user = User.query.get(current_user.id)
+    if user and user.check_hash(old_password):
+        user.set_hash(new_password)
+        db.session.commit()
+        return jsonify({"result": "success"})
+    
+    return jsonify({"error": "Invalid current password"}), 401
 
 
 @blueprint.route("/soul/update", methods=["POST"])

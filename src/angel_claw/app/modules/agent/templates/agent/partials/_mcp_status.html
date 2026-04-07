@@ -1,0 +1,17 @@
+<div class="space-y-3">
+    {% if servers %}
+        {% for name, info in servers.items() %}
+            <div class="p-4 bg-black/20 border border-zinc-800 rounded-xl flex items-center justify-between">
+                <div>
+                    <h4 class="text-sm font-bold text-zinc-300 tracking-tight">{{ name }}</h4>
+                    <p class="text-[9px] text-zinc-600 uppercase tracking-widest mt-1">{{ info.type }}</p>
+                </div>
+                <span class="px-2 py-1 rounded text-[10px] font-black uppercase tracking-widest {{ 'bg-green-500/10 text-green-500' if info.status == 'active' else 'bg-red-500/10 text-red-500' }}">
+                    {{ info.status }}
+                </span>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="text-zinc-600 text-sm italic py-8 text-center">No MCP servers configured.</p>
+    {% endif %}
+</div>

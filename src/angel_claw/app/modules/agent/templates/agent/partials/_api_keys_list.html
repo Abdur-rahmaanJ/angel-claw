@@ -1,0 +1,23 @@
+<div class="space-y-3">
+    {% if api_keys %}
+        {% for k in api_keys %}
+            <div class="p-4 bg-black/20 border border-zinc-800 rounded-xl flex justify-between items-center group hover:border-accent/30 transition-all">
+                <div>
+                    <p class="text-sm font-bold text-zinc-300">{{ k.name }}</p>
+                    <p class="text-[10px] text-zinc-600 font-mono mt-1">Prefix: {{ k.prefix }} ({{ k.created_at[:10] }})</p>
+                </div>
+                <button 
+                    hx-post="/api-key/revoke/{{ k.id }}" 
+                    hx-confirm="Revoke this API Key?"
+                    hx-target="closest div" 
+                    hx-swap="outerHTML"
+                    class="text-zinc-600 hover:text-red-500 transition-colors">
+                    <i class="fas fa-trash-alt text-xs"></i>
+                </button>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="text-zinc-600 text-sm italic py-8 text-center">No active API keys.</p>
+    {% endif %}
+    <button class="btn btn-primary w-full text-xs mt-4">Generate New Key</button>
+</div>

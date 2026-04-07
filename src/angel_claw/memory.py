@@ -11,9 +11,10 @@ class MemoryManager:
             os.makedirs(settings.memory_persist_dir)
             
     def get_memos(self, user_id: str, session_id: str) -> MemOS:
-        # Use user-isolated paths as per plan: ~/.angelclaw/users/{user_id}/memory/{session_id}
+        # Use user-isolated root: ~/.angelclaw/users/{user_id}/memory
+        # We use namespaces within this shared directory for thread isolation
         user_root = get_user_root(user_id)
-        persist_dir = user_root / "memory" / session_id
+        persist_dir = user_root / "memory"
         persist_dir.mkdir(parents=True, exist_ok=True)
         
         return MemOS(

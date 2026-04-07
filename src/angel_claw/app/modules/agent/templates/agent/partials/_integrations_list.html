@@ -1,0 +1,45 @@
+<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <!-- Telegram -->
+    <div class="stat-card">
+        <div class="flex items-center gap-4 mb-6">
+            <div class="w-12 h-12 rounded-2xl bg-[#0088cc]/10 flex items-center justify-center text-[#0088cc]">
+                <i class="fab fa-telegram-plane text-2xl"></i>
+            </div>
+            <div>
+                <h4 class="font-bold">Telegram Bridge</h4>
+                <p class="text-xs text-zinc-500">Connect your bot to chat via Telegram</p>
+            </div>
+        </div>
+        
+        {% set tg_paired = channels|selectattr('type', 'equalto', 'telegram')|list|length > 0 %}
+        <div class="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-zinc-800">
+            <span class="text-xs font-bold uppercase tracking-widest text-zinc-500">Status</span>
+            {% if tg_paired and bridge_online %}
+                <span class="text-[10px] font-black uppercase text-green-500">CONNECTED</span>
+            {% elif tg_paired %}
+                <span class="text-[10px] font-black uppercase text-yellow-500">PAIRED (DOWN)</span>
+            {% else %}
+                <span class="text-[10px] font-black uppercase text-red-500">OFFLINE</span>
+            {% endif %}
+        </div>
+        <button class="btn btn-secondary w-full mt-4 text-xs" @click="openPairingModal('telegram')">Configure Telegram</button>
+    </div>
+
+    <!-- WhatsApp -->
+    <div class="stat-card opacity-50">
+        <div class="flex items-center gap-4 mb-6">
+            <div class="w-12 h-12 rounded-2xl bg-[#25D366]/10 flex items-center justify-center text-[#25D366]">
+                <i class="fab fa-whatsapp text-2xl"></i>
+            </div>
+            <div>
+                <h4 class="font-bold">WhatsApp Bridge</h4>
+                <p class="text-xs text-zinc-500">Coming Soon</p>
+            </div>
+        </div>
+        <div class="flex items-center justify-between p-3 bg-black/20 rounded-xl border border-zinc-800">
+            <span class="text-xs font-bold uppercase tracking-widest text-zinc-500">Status</span>
+            <span class="text-[10px] font-black uppercase text-zinc-600">UNAVAILABLE</span>
+        </div>
+        <button class="btn btn-secondary w-full mt-4 text-xs disabled" disabled>WhatsApp Coming Soon</button>
+    </div>
+</div>

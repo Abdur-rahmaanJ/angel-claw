@@ -1,0 +1,24 @@
+<header class="view-header">
+    <div class="flex items-center gap-4">
+        <button class="lg:hidden p-2 -ml-2 text-xl" @click="toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h2 class="font-bold text-lg md:text-xl">API Keys & MCP Servers</h2>
+    </div>
+</header>
+<div class="workspace">
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-7xl mx-auto w-full">
+        <div class="stat-card">
+            <h3 class="font-bold mb-4">API Keys</h3>
+            <div id="api-keys-list" hx-get="/me?format=api_keys" hx-trigger="load">
+                <div class="flex justify-center py-8"><i class="fas fa-spinner fa-spin text-accent"></i></div>
+            </div>
+        </div>
+        <div class="stat-card">
+            <h3 class="font-bold mb-4">MCP Servers</h3>
+            <div id="mcp-servers-list" hx-get="/system/mcp?format=html" hx-trigger="load">
+                <div class="flex justify-center py-8"><i class="fas fa-spinner fa-spin text-accent"></i></div>
+            </div>
+        </div>
+    </div>
+</div>

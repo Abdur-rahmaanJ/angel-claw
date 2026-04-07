@@ -1,0 +1,200 @@
+<div class="flex flex-col h-full overflow-hidden" 
+     x-data="chatInterface()" 
+     @refresh-chat.window="loadHistory()"
+     x-init="loadHistory()">
+    
+    <header class="view-header">
+        <div class="flex items-center gap-4">
+            <button class="lg:hidden p-2 -ml-2 text-xl" @click="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+            <h2 class="font-bold text-lg md:text-xl">Conversation</h2>
+        </div>
+        <div class="flex items-center gap-3">
+            <button @click="toggleDevLog()" class="p-2 text-zinc-500 hover:text-accent transition-colors" title="Toggle Developer Log">
+                <i class="fas fa-terminal text-[10px]"></i>
+            </button>
+            <label class="flex items-center cursor-pointer group">
+                <span class="mr-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest group-hover:text-accent transition-colors">Global Memory</span>
+                <div class="relative">
+                    <input type="checkbox" id="global-memory-toggle" class="sr-only peer" x-model="useGlobalMemory" @change="localStorage.setItem('use-global-memory', useGlobalMemory)">
+                    <div class="w-8 h-4 bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-accent peer-checked:after:bg-white"></div>
+                </div>
+            </label>
+        </div>
+    </header>
+
+    <div class="flex-grow flex flex-col min-h-0 relative">
+        <!-- Dev Log -->
+        <div x-show="devLogOpen" x-transition class="absolute inset-x-0 top-0 h-40 bg-black/90 border-b border-zinc-800 z-20 font-mono text-[9px] p-4 overflow-y-auto">
+            <div class="flex justify-between items-center mb-2 border-b border-zinc-800 pb-1">
+                <span class="text-zinc-500 uppercase font-black tracking-widest">Live Tool Execution Log</span>
+                <button @click="devLogOpen = false" class="text-zinc-500 hover:text-white">CLOSE</button>
+            </div>
+            <div id="dev-log-content" class="space-y-1 text-zinc-400">
+                <template x-for="log in logs">
+                    <div x-html="log"></div>
+                </template>
+            </div>
+        </div>
+
+        <!-- Messages Container -->
+        <div class="flex-grow overflow-y-auto px-4 md:px-8 py-8 space-y-6" id="chat-messages" x-ref="messageContainer">
+            <template x-if="loadingHistory">
+                <div class="flex justify-center py-20"><i class="fas fa-spinner fa-spin text-accent text-2xl"></i></div>
+            </template>
+            
+            <template x-if="!loadingHistory && messages.length === 0">
+                <div class="text-center py-20 text-zinc-700 italic">Empty conversation.</div>
+            </template>
+
+            <template x-for="(msg, index) in messages" :key="index">
+                <div class="max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]">
+                    <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white"
+                         :class="msg.role === 'user' ? 'bg-zinc-800' : 'bg-accent'">
+                        <i class="fas" :class="msg.role === 'user' ? 'fa-user' : assistantIcon"></i>
+                    </div>
+                    <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words" x-html="formatContent(msg.content)"></div>
+                </div>
+            </template>
+            
+            <!-- Streaming Message -->
+            <template x-if="isStreaming">
+                <div class="max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]">
+                    <div class="w-10 h-10 rounded-full bg-accent flex items-center justify-center flex-shrink-0 text-white">
+                        <i class="fas" :class="assistantIcon"></i>
+                    </div>
+                    <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words" x-html="formatContent(streamingContent)"></div>
+                </div>
+            </template>
+        </div>
+    </div>
+
+    <!-- Input Area -->
+    <div class="px-4 md:px-8 pb-8 pt-4 border-t border-[var(--border-color)]">
+        <div class="max-w-[850px] mx-auto relative">
+            <form @submit.prevent="sendMessage()">
+                <textarea 
+                    x-model="userInput"
+                    @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
+                    @input="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
+                    class="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 pr-14 py-4 text-[15px] focus:border-accent outline-none resize-none min-h-[60px] max-h-[200px] transition-all" 
+                    placeholder="Ask your agent anything..." 
+                    rows="1"
+                    :disabled="isStreaming"></textarea>
+                <button type="submit" 
+                        class="absolute right-2 bottom-2 w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                        :disabled="!userInput.trim() || isStreaming">
+                    <i class="fas fa-arrow-up" x-show="!isStreaming"></i>
+                    <i class="fas fa-spinner fa-spin" x-show="isStreaming"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        function chatInterface() {
+            return {
+                userInput: '',
+                messages: [],
+                loadingHistory: false,
+                streamingContent: '',
+                devLogOpen: false,
+                logs: [],
+
+                async loadHistory() {
+                    this.loadingHistory = true;
+                    try {
+                        const sid = Alpine.store("viewManager")?.currentSessionId || "Thread 1";
+                        const res = await fetch(`/chat/history/${encodeURIComponent(sid)}`);
+                        const data = await res.json();
+                        this.messages = data.history || [];
+                        this.$nextTick(() => this.scrollToBottom());
+                    } catch (e) {
+                        console.error("History load error", e);
+                    } finally {
+                        this.loadingHistory = false;
+                    }
+                },
+
+                async sendMessage() {
+                    const msg = this.userInput.trim();
+                    if (!msg || this.isStreaming) return;
+
+                    this.messages.push({ role: 'user', content: msg });
+                    this.userInput = '';
+                    this.isStreaming = true;
+                    this.streamingContent = '';
+                    this.$nextTick(() => this.scrollToBottom());
+
+                    try {
+                        const sid = Alpine.store("viewManager")?.currentSessionId || "Thread 1";
+                        const token = document.getElementById('csrf_token')?.value;
+                        const res = await fetch('/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+                            body: JSON.stringify({ 
+                                message: msg, 
+                                session_id: sid,
+                                use_global: this.useGlobalMemory
+                            })
+                        });
+
+                        const reader = res.body.getReader();
+                        const decoder = new TextDecoder();
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+
+                            const chunk = decoder.decode(value);
+                            const lines = chunk.split('\n');
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const data = JSON.parse(line.slice(6));
+                                        if (data.chunk) {
+                                            if (data.chunk.startsWith('[TOOL_CALL:')) {
+                                                this.logs.push(`<span class="text-accent">Executing:</span> ${data.chunk.replace('[TOOL_CALL:', '').replace(']', '')}`);
+                                            } else {
+                                                this.streamingContent += data.chunk;
+                                            }
+                                        }
+                                        if (data.done) {
+                                            // Finish streaming
+                                        }
+                                    } catch (e) {}
+                                }
+                            }
+                            this.$nextTick(() => this.scrollToBottom());
+                        }
+                        
+                        // Move streaming content to messages
+                        this.messages.push({ role: 'assistant', content: this.streamingContent });
+                        this.streamingContent = '';
+                        // Refresh threads in sidebar to update preview
+                        document.body.dispatchEvent(new CustomEvent('refresh-threads'));
+                    } catch (err) {
+                        this.messages.push({ role: 'assistant', content: 'Failed to connect to agent.' });
+                    } finally {
+                        this.isStreaming = false;
+                    }
+                },
+
+                formatContent(text) {
+                    if (!text) return '';
+                    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                },
+
+                scrollToBottom() {
+                    const container = this.$refs.messageContainer;
+                    if (container) container.scrollTop = container.scrollHeight;
+                },
+
+                toggleDevLog() {
+                    this.devLogOpen = !this.devLogOpen;
+                }
+            }
+        }
+    </script>
+</div>

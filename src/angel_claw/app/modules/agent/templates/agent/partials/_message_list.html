@@ -1,0 +1,27 @@
+<div id="stat-messages" hx-swap-oob="innerHTML">
+    {{ messages|length if messages is list else 0 }}
+</div>
+<div id="stat-messages-recipients" hx-swap-oob="innerHTML">
+    {{ messages|map(attribute='sender')|unique|list|length if messages is list else 0 }}
+</div>
+
+<div class="space-y-3 mt-4">
+    {% if messages %}
+        {% for m in messages %}
+            <div class="flex items-start gap-3 p-3 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20 transition-all group">
+                <div class="w-8 h-8 rounded-full bg-zinc-800 flex items-center justify-center text-[10px] font-bold">
+                    {{ m.sender[0].upper() if m.sender else '?' }}
+                </div>
+                <div class="flex-grow min-w-0">
+                    <div class="flex justify-between items-start">
+                        <span class="text-xs font-bold text-zinc-400">{{ m.sender }}</span>
+                        <span class="text-[9px] text-zinc-600">{{ m.timestamp }}</span>
+                    </div>
+                    <p class="text-sm text-zinc-300 truncate">{{ m.content }}</p>
+                </div>
+            </div>
+        {% endfor %}
+    {% else %}
+        <p class="text-zinc-600 italic text-sm text-center py-8">No unread notes.</p>
+    {% endif %}
+</div>

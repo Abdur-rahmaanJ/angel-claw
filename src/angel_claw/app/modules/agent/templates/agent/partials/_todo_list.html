@@ -1,0 +1,39 @@
+<div id="stat-todos" hx-swap-oob="innerHTML">
+    {% if todos is iterable and todos is not string %}
+        {{ todos|length }}
+    {% else %}
+        {{ todos.split('\n')|length - 1 if 'No todos found' not in todos else 0 }}
+    {% endif %}
+</div>
+<div id="stat-todos-total" hx-swap-oob="innerHTML">
+    {% if todos is iterable and todos is not string %}
+        {{ todos|length }}
+    {% else %}
+        {{ todos.split('\n')|length - 1 if 'No todos found' not in todos else 0 }}
+    {% endif %}
+</div>
+
+<div class="space-y-3 mt-4">
+    {% if todos is string %}
+        {% if 'No todos' in todos %}
+            <p class="text-zinc-600 italic text-sm text-center py-8">No pending tasks.</p>
+        {% else %}
+            {% for line in todos.split('\n') %}
+                {% if line.strip() and not line.startswith('##') %}
+                    <div class="flex items-start gap-3 p-3 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20 transition-all group">
+                        <div class="mt-1">
+                            {% if '✅' in line %}
+                                <i class="fas fa-check-circle text-accent"></i>
+                            {% else %}
+                                <i class="far fa-circle text-zinc-600 group-hover:text-accent/50 transition-colors"></i>
+                            {% endif %}
+                        </div>
+                        <div class="text-sm {{ 'text-zinc-500 line-through' if '✅' in line else 'text-zinc-300' }}">
+                            {{ line.replace('✅', '').replace('⬜', '').strip() }}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endif %}
+</div>

@@ -12,7 +12,12 @@ from angel_claw.models import EngineResponse
 @pytest.fixture
 def app():
     from app import create_app
+    import uuid
+    import os
+    db_file = f"testing_{uuid.uuid4().hex}.db"
+    db_path = f"sqlite:///{db_file}"
     app = create_app("testing")
+    app.config["SQLALCHEMY_DATABASE_URI"] = db_path
     with app.app_context():
         # Ensure auth_mode is shopyo for these tests
         from angel_claw.config import settings
@@ -25,6 +30,9 @@ def app():
         yield app
         db.session.remove()
         db.drop_all()
+    
+    if os.path.exists(db_file):
+        os.remove(db_file)
 
 @pytest.fixture
 def client(app):
@@ -124,3 +132,18 @@ def test_api_key_endpoint(client, auth_user, app):
     data = response.get_json()
     assert "api_key" in data
     assert data["api_key"].startswith("ac_v1_")
+
+def test_registration_template(client, app):
+    response = client.get("/auth/register")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Angel Claw" in html
+    assert "Create your account" in html
+    assert "register-card" in html
+
+def test_login_template(client, app):
+    response = client.get("/auth/login")
+    assert response.status_code == 200
+    html = response.get_data(as_text=True)
+    assert "Angel Claw" in html
+    assert "Login" in html

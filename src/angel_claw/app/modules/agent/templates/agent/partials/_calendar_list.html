@@ -1,0 +1,25 @@
+<div id="stat-events" hx-swap-oob="innerHTML">
+    {{ events|length if events is list else (events.split('\n')|length - 1 if 'No events' not in events else 0) }}
+</div>
+<div id="stat-events-days" hx-swap-oob="innerHTML">7</div>
+
+<div class="space-y-3 mt-4">
+    {% if events is string %}
+        {% if 'No events' in events %}
+            <p class="text-zinc-600 italic text-sm text-center py-8">No upcoming events.</p>
+        {% else %}
+            {% for line in events.split('\n') %}
+                {% if line.strip() and not line.startswith('##') %}
+                    <div class="flex items-start gap-3 p-3 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20 transition-all group">
+                        <div class="mt-1">
+                            <i class="fas fa-calendar-day text-accent/60 group-hover:text-accent transition-colors"></i>
+                        </div>
+                        <div class="text-sm text-zinc-300">
+                            {{ line.strip() }}
+                        </div>
+                    </div>
+                {% endif %}
+            {% endfor %}
+        {% endif %}
+    {% endif %}
+</div>

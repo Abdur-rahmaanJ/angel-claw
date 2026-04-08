@@ -17,8 +17,8 @@
                 <template x-for="mem in memories" :key="mem.id">
                     <div class="p-4 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20">
                         <div class="flex justify-between items-start">
-                            <div class="font-medium" x-text="mem.payload"></div>
-                            <button @click="deleteMemory(mem.id)" class="text-zinc-500 hover:text-red-400">
+                            <div class="font-medium flex-grow pr-4" x-text="mem.payload"></div>
+                            <button @click="confirmDelete(mem)" class="text-zinc-500 hover:text-red-400">
                                 <i class="fas fa-trash"></i>
                             </button>
                         </div>
@@ -29,6 +29,18 @@
                 </template>
                 <p x-show="memories.length === 0" class="text-zinc-600 italic text-center py-8">No memories stored.</p>
             </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div x-show="deleteModal" x-cloak class="fixed inset-0 bg-black/80 z-[1000] flex items-center justify-center p-4">
+    <div class="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl p-6 max-w-sm w-full">
+        <h3 class="text-lg font-bold mb-2">Delete Memory?</h3>
+        <p class="text-sm text-zinc-400 mb-6" x-text="deleteTarget?.payload?.substring(0, 50) + '...'"></p>
+        <div class="flex gap-3">
+            <button @click="deleteModal = false" class="flex-1 btn btn-secondary">Cancel</button>
+            <button @click="executeDelete()" class="flex-1 btn btn-danger">Delete</button>
         </div>
     </div>
 </div>

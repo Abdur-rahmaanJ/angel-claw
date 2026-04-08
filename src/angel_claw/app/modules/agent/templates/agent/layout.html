@@ -123,10 +123,11 @@
             }));
 
             Alpine.data('memoryData', () => ({
-                memories: [], loading: true,
+                memories: [], loading: true, deleteModal: false, deleteTarget: null,
                 async init() { await this.loadMemories(); },
-                async loadMemories() { try { const sid = Alpine.store('viewManager')?.currentSessionId || 'Thread 1'; console.log('Loading memories for:', sid); const r = await fetch(`/chat/memories?session_id=${encodeURIComponent(sid)}`); const d = await r.json(); console.log('Memories response:', d); this.memories = d.memories || []; } catch(e) { console.error(e); } finally { this.loading = false; } },
-                async deleteMemory(id) { try { const token = document.getElementById('csrf_token')?.value; await fetch(`/chat/memories/delete/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.memories = this.memories.filter(m => m.id !== id); } catch(e) { console.error(e); } }
+                async loadMemories() { try { const sid = Alpine.store('viewManager')?.currentSessionId || 'Thread 1'; const r = await fetch(`/chat/memories?session_id=${encodeURIComponent(sid)}`); const d = await r.json(); this.memories = d.memories || []; } catch(e) { console.error(e); } finally { this.loading = false; } },
+                confirmDelete(mem) { this.deleteTarget = mem; this.deleteModal = true; },
+                async executeDelete() { if (!this.deleteTarget) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/chat/memories/delete/${this.deleteTarget.id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.memories = this.memories.filter(m => m.id !== this.deleteTarget.id); } catch(e) { console.error(e); } finally { this.deleteModal = false; this.deleteTarget = null; } }
             }));
 
             Alpine.data('threadsData', () => ({
@@ -423,6 +424,9 @@
             }
             .btn-secondary {
                 @apply bg-zinc-800 text-white hover:bg-zinc-700;
+            }
+            .btn-danger {
+                @apply bg-red-600 text-white hover:bg-red-700;
             }
             .view-header {
                 @apply h-16 border-b border-[var(--border-color)] flex items-center justify-between px-4 md:px-8 backdrop-blur-md sticky top-0 z-30;

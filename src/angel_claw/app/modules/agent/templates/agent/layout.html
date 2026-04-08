@@ -11,25 +11,29 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="/static/js/tailwind.min.js"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
     <script>
-        if (window.tailwind) {
-            window.tailwind.config = {
-                darkMode: 'class',
-                theme: {
-                    extend: {
-                        colors: {
-                            accent: 'rgb(var(--accent-rgb) / <alpha-value>)',
-                        }
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        accent: 'var(--accent-color)',
                     }
                 }
-            };
-        }
+            }
+        };
+    </script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        // Ensure CSRF token is added to all HTMX requests
+        document.body.addEventListener('htmx:configRequest', (evt) => {
+            const token = document.getElementById('csrf_token')?.value;
+            if (token) evt.detail.headers['X-CSRFToken'] = token;
+        });
 
-        function viewManager() {
-            return {
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('viewManager', {
                 theme: localStorage.getItem('theme') || 'dark',
                 accent: localStorage.getItem('accent-color') || '#22c55e',
                 assistantIcon: localStorage.getItem('assistant-icon') || 'fa-brain',
@@ -40,13 +44,25 @@
                 isStreaming: false,
                 activeModal: null,
                 pairingToken: '---',
-                
+
+                init() {
+                    document.documentElement.className = this.theme;
+                    this.applyAccent(this.accent);
+                    
+                    document.body.addEventListener('htmx:afterSwap', (evt) => {
+                        if (evt.detail.target.id === 'main-view-container') {
+                            const path = evt.detail.pathInfo.requestPath;
+                            const newView = path.split('/').pop();
+                            if (newView) this.activeView = newView;
+                        }
+                    });
+                },
+
                 async createNewThread() {
                     try {
                         const res = await fetch('/chat/sessions');
                         const data = await res.json();
                         const sessions = data.sessions || [];
-                        
                         let nextNum = 1;
                         sessions.forEach(s => {
                             if (s.id.startsWith('Thread ')) {
@@ -54,62 +70,26 @@
                                 if (!isNaN(num) && num >= nextNum) nextNum = num + 1;
                             }
                         });
-
                         const newId = `Thread ${nextNum}`;
                         this.currentSessionId = newId;
                         localStorage.setItem('current-session-id', newId);
-                        
-                        // Switch view to chat if not already there
+
                         if (this.activeView !== 'chat') {
                             this.activeView = 'chat';
                             htmx.ajax('GET', '/view/chat', '#main-view-container');
                         } else {
                             document.body.dispatchEvent(new CustomEvent('refresh-chat'));
                         }
-                        
-                        // Refresh threads list
                         document.body.dispatchEvent(new CustomEvent('refresh-threads'));
-                    } catch (e) { console.error(e); }
+                    } catch (e) {
+                        console.error("Error creating thread:", e);
+                    }
                 },
 
-                async openPairingModal(channelType) {
-                    this.activeModal = 'pairing';
-                    try {
-                        const token = document.getElementById('csrf_token')?.value;
-                        const res = await fetch('/pair-token', {
-                            method: 'POST',
-                            headers: { 'X-CSRFToken': token }
-                        });
-                        const data = await res.json();
-                        this.pairingToken = data.token || 'ERROR';
-                    } catch (e) { this.pairingToken = 'ERROR'; }
-                },
-                
-                init() {
-                    this.applyAccent(this.accent);
-                    this.$watch('theme', val => {
-                        localStorage.setItem('theme', val);
-                        document.documentElement.className = val;
-                    });
-                    // Initialize HTMX to include CSRF token
-                    document.body.addEventListener('htmx:configRequest', (evt) => {
-                        const token = document.getElementById('csrf_token')?.value;
-                        if (token) evt.detail.headers['X-CSRFToken'] = token;
-                    });
-                    
-                    Alpine.store('viewManager', this);
-                    
-                    // Handle view changes from HTMX to update activeView
-                    document.body.addEventListener('htmx:afterSwap', (evt) => {
-                        if (evt.detail.target.id === 'main-view-container') {
-                            const newView = evt.detail.pathInfo.requestPath.split('/').pop();
-                            if (newView) this.activeView = newView;
-                        }
-                    });
-                },
-
-                toggleTheme() {
-                    this.theme = this.theme === 'dark' ? 'light' : 'dark';
+                toggleTheme() { 
+                    this.theme = this.theme === 'dark' ? 'light' : 'dark'; 
+                    localStorage.setItem('theme', this.theme);
+                    document.documentElement.className = this.theme;
                 },
 
                 applyAccent(color) {
@@ -127,13 +107,14 @@
                     return `${r} ${g} ${b}`;
                 },
 
-                toggleSidebar() {
-                    this.sidebarOpen = !this.sidebarOpen;
-                }
-            }
+                toggleSidebar() { this.sidebarOpen = !this.sidebarOpen; }
+            });
+        });
+
+        function viewManager() {
+            return Alpine.store('viewManager');
         }
     </script>
-    
     <style type="text/tailwindcss">
         @layer base {
             :root {

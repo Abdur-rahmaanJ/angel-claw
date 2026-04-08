@@ -5,7 +5,7 @@
     
     <header class="view-header">
         <div class="flex items-center gap-4">
-            <button class="lg:hidden p-2 -ml-2 text-xl" @click="toggleSidebar()">
+            <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
                 <i class="fas fa-bars"></i>
             </button>
             <h2 class="font-bold text-lg md:text-xl">Conversation</h2>
@@ -128,7 +128,7 @@
                     this.$nextTick(() => this.scrollToBottom());
 
                     try {
-                        const sid = Alpine.store("viewManager")?.currentSessionId || "Thread 1";
+                        const sid = this.currentSessionId || "Thread 1";
                         const token = document.getElementById('csrf_token')?.value;
                         const res = await fetch('/chat', {
                             method: 'POST',
@@ -170,7 +170,8 @@
                         }
                         
                         // Move streaming content to messages
-                        this.messages.push({ role: 'assistant', content: this.streamingContent });
+                        const assistantMsg = this.streamingContent;
+                        this.messages.push({ role: 'assistant', content: assistantMsg });
                         this.streamingContent = '';
                         // Refresh threads in sidebar to update preview
                         document.body.dispatchEvent(new CustomEvent('refresh-threads'));

@@ -106,10 +106,11 @@ def chat():
     data = request.get_json()
     message = data.get("message")
     use_global = data.get("use_global", False)
+    session_id = data.get("session_id", "Thread 1")
     if not message:
         return jsonify({"error": "No message provided"}), 400
 
-    user_context = _build_context()
+    user_context = _build_context(session_id=session_id)
 
     def generate():
         yield from run_async_streaming(user_context, message, use_global=use_global)
@@ -128,7 +129,9 @@ def get_view(view_name):
 @blueprint.route("/chat/sessions")
 @login_required
 def chat_sessions():
-    user_context = _build_context()
+    user_context = _build_context(
+        session_id="Thread 1"
+    )  # Use a valid session for context
     sessions = engine.get_chat_sessions(user_context)
 
     if request.headers.get("HX-Request"):

@@ -13,6 +13,20 @@
             <h3 class="font-bold mb-6">Interface Customization</h3>
             
             <div class="mb-8">
+                <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 block">Theme</label>
+                <div class="flex gap-4">
+                    <button @click="toggleTheme('dark')" class="flex-1 p-4 rounded-xl border-2 transition-all hover:border-accent" :class="theme === 'dark' ? 'border-accent bg-accent/10' : 'border-[var(--border-color)]'">
+                        <i class="fas fa-moon text-xl mb-2 block"></i>
+                        <div class="text-sm">Dark</div>
+                    </button>
+                    <button @click="toggleTheme('light')" class="flex-1 p-4 rounded-xl border-2 transition-all hover:border-accent" :class="theme === 'light' ? 'border-accent bg-accent/10' : 'border-[var(--border-color)]'">
+                        <i class="fas fa-sun text-xl mb-2 block"></i>
+                        <div class="text-sm">Light</div>
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-8">
                 <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 block">Accent Color</label>
                 <div class="flex flex-wrap gap-4">
                     <template x-for="color in ['#22c55e', '#3b82f6', '#ef4444', '#f59e0b', '#8b5cf6', '#ec4899', '#06b6d4', '#71717a']">

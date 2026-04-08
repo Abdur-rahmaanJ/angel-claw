@@ -532,6 +532,19 @@ def apply_soul_template():
     return jsonify({"error": "Template not found"}), 404
 
 
+@blueprint.route("/credits")
+@login_required
+def get_credits():
+    from angel_claw.credits import credits_enabled, get_user_stats
+
+    user_id = str(current_user.id)
+    if credits_enabled():
+        credit_info = get_user_stats(user_id)
+    else:
+        credit_info = {"balance": 0, "limit": 0, "lifetime_spent": 0}
+    return jsonify(credit_info)
+
+
 @blueprint.route("/system/mcp")
 @login_required
 def get_mcp_status():

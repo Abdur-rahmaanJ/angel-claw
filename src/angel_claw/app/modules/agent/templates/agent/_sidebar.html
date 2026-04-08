@@ -84,9 +84,6 @@
                     <p class="text-[13px] font-bold truncate">{{ current_user.email }}</p>
                     <p class="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Connected</p>
                 </div>
-                <button @click="$store.viewManager.toggleTheme()" class="w-8 h-8 rounded-lg hover:bg-white/5 transition-colors text-zinc-500">
-                    <i :class="$store.viewManager.theme === 'light' ? 'fas fa-sun' : 'fas fa-moon'"></i>
-                </button>
             </div>
         </div>
     </div>

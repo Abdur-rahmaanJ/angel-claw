@@ -439,7 +439,7 @@ def get_soul():
     runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
     if request.args.get("format") == "html":
         return render_template("agent/partials/_soul_form.html", soul=runtime.soul)
-    return jsonify({"soul": runtime.soul})
+    return jsonify({"instruction": runtime.soul})
 
 
 @blueprint.route("/auth/change-password", methods=["POST"])

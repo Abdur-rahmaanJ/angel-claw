@@ -125,7 +125,7 @@
             Alpine.data('memoryData', () => ({
                 memories: [], loading: true,
                 async init() { await this.loadMemories(); },
-                async loadMemories() { try { const sid = Alpine.store('viewManager')?.currentSessionId || 'Thread 1'; const r = await fetch(`/chat/memories?session_id=${encodeURIComponent(sid)}`); const d = await r.json(); this.memories = d.memories || []; } catch(e) { console.error(e); } finally { this.loading = false; } },
+                async loadMemories() { try { const sid = Alpine.store('viewManager')?.currentSessionId || 'Thread 1'; console.log('Loading memories for:', sid); const r = await fetch(`/chat/memories?session_id=${encodeURIComponent(sid)}`); const d = await r.json(); console.log('Memories response:', d); this.memories = d.memories || []; } catch(e) { console.error(e); } finally { this.loading = false; } },
                 async deleteMemory(id) { try { const token = document.getElementById('csrf_token')?.value; await fetch(`/chat/memories/delete/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.memories = this.memories.filter(m => m.id !== id); } catch(e) { console.error(e); } }
             }));
 

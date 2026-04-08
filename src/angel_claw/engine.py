@@ -890,18 +890,16 @@ class AngelClawEngine:
     def get_memories(self, context: UserContext) -> List[Dict[str, Any]]:
         runtime = async_to_sync(runtime_manager.get_runtime)(context)
         memos = runtime.get_memos(context.channel_identifier)
-        user_namespace = f"user_{context.email}"
-        session_namespace = context.channel_identifier
 
-        all_ids = set()
-        all_ids.update(memos.vault.namespaces.get(user_namespace, set()))
-        all_ids.update(memos.vault.namespaces.get(f"{user_namespace}_logs", set()))
-        all_ids.update(memos.vault.namespaces.get(session_namespace, set()))
-        all_ids.update(memos.vault.namespaces.get(f"{session_namespace}_logs", set()))
-        all_ids.update(memos.vault.namespaces.get("default", set()))
+        # Get all memories from all namespaces for this user
+        all_memories = []
+        for namespace, ids in memos.vault.namespaces.items():
+            for cid in ids:
+                cube = memos.vault.get(cid)
+                if cube and cube.owner == context.email:
+                    all_memories.append(cube.to_dict())
 
-        cubes = [memos.vault.get(cid) for cid in all_ids]
-        return [c.to_dict() for c in cubes if c and c.owner == context.email]
+        return all_memories
 
     def delete_memory(self, context: UserContext, memory_id: str):
         runtime = async_to_sync(runtime_manager.get_runtime)(context)

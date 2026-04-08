@@ -167,6 +167,27 @@
                         body: JSON.stringify({ skill: this.configSkill.name, fields })
                     });
                     this.configModal = false;
+                },
+                async uploadSkill(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append('skill_file', file);
+                    const token = document.getElementById('csrf_token')?.value;
+                    try {
+                        const r = await fetch('/skills/upload', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': token || '' },
+                            body: formData
+                        });
+                        const d = await r.json();
+                        if (d.result === 'success') {
+                            await this.loadSkills();
+                        } else {
+                            alert(d.error || 'Upload failed');
+                        }
+                    } catch(e) { console.error(e); alert('Upload failed'); }
+                    event.target.value = '';
                 }
             }));
 

@@ -6,6 +6,10 @@
         </button>
         <h2 class="font-bold text-lg md:text-xl">Skills</h2>
     </div>
+    <label class="btn btn-primary cursor-pointer text-sm flex items-center gap-2">
+        <i class="fas fa-upload"></i> Upload Skill
+        <input type="file" accept=".py" class="hidden" @change="uploadSkill($event)">
+    </label>
 </header>
 <div class="workspace">
     <div class="max-w-4xl mx-auto w-full">
@@ -19,7 +23,7 @@
                     <div class="flex items-start justify-between">
                         <div class="flex items-center gap-3">
                             <button @click="toggleSkill(skill.name)" 
-                                    class="w-10 h-10 rounded-lg flex items-center justify-center transition-colors"
+                                    class="w-10 h-10 rounded flex items-center justify-center flex-shrink-0 transition-colors"
                                     :class="skill.enabled ? 'bg-green-500/20 text-green-500' : 'bg-zinc-800 text-zinc-500'">
                                 <i class="fas" :class="skill.enabled ? 'fa-check' : 'fa-times'"></i>
                             </button>

@@ -1,3 +1,4 @@
+<div x-data="tasksData()" x-init="init()">
 <header class="view-header">
     <div class="flex items-center gap-4">
         <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
@@ -9,8 +10,26 @@
 
 <div class="workspace">
     <div class="max-w-4xl mx-auto w-full">
-        <div class="stat-card" hx-get="/todos?format=html" hx-trigger="load">
-            <div class="flex justify-center py-12"><i class="fas fa-spinner fa-spin text-accent text-2xl"></i></div>
+        <div class="stat-card">
+            <div x-show="loading" class="flex justify-center py-12">
+                <i class="fas fa-spinner fa-spin text-accent text-2xl"></i>
+            </div>
+            <div x-show="!loading" class="space-y-3">
+                <template x-for="todo in todos" :key="todo.id">
+                    <div class="flex items-start gap-3 p-3 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20 transition-all group">
+                        <button @click="toggleTodo(todo.id)" class="mt-1">
+                            <i :class="todo.completed ? 'fas fa-check-circle text-accent' : 'far fa-circle text-zinc-600 group-hover:text-accent/50'"></i>
+                        </button>
+                        <div class="flex-grow" :class="todo.completed ? 'text-zinc-500 line-through' : 'text-zinc-300'">
+                            <span x-text="todo.content"></span>
+                            <span x-show="todo.due_date" class="ml-2 text-xs text-zinc-500" x-text="'Due: ' + todo.due_date"></span>
+                        </div>
+                        <span class="text-xs px-2 py-1 rounded" :class="todo.priority === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-zinc-700 text-zinc-400'" x-text="todo.priority"></span>
+                    </div>
+                </template>
+                <p x-show="todos.length === 0" class="text-zinc-600 italic text-sm text-center py-8">No pending tasks.</p>
+            </div>
         </div>
     </div>
 </div>
+

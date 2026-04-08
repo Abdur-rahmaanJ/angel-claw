@@ -1,3 +1,4 @@
+<div x-data="dashboardData()" x-init="init()">
 <header class="view-header">
     <div class="flex items-center gap-4">
         <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
@@ -16,33 +17,38 @@
     </div>
 </header>
 
-<div class="workspace" hx-get="/chat/sessions" hx-trigger="load" hx-swap="none">
+<div class="workspace">
     <div class="grid grid-cols-1 md:grid-cols-12 gap-6 max-w-7xl mx-auto w-full">
-        <!-- Stats Row -->
-        <div class="stat-card md:col-span-4" hx-get="/todos?format=html" hx-trigger="load">
+        <div class="stat-card md:col-span-4">
             <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Pending Tasks</div>
-            <div class="text-3xl font-bold mb-2" id="stat-todos">--</div>
-            <div class="text-xs text-zinc-500">From <span id="stat-todos-total">0</span> total items</div>
+            <div class="text-3xl font-bold mb-2" x-text="todosCount">--</div>
+            <div class="text-xs text-zinc-500">From <span x-text="todosTotal">0</span> total items</div>
         </div>
 
-        <div class="stat-card md:col-span-4" hx-get="/calendar?format=html" hx-trigger="load">
+        <div class="stat-card md:col-span-4">
             <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Upcoming Events</div>
-            <div class="text-3xl font-bold mb-2" id="stat-events">--</div>
-            <div class="text-xs text-zinc-500">Next <span id="stat-events-days">7</span> days window</div>
+            <div class="text-3xl font-bold mb-2" x-text="eventsCount">--</div>
+            <div class="text-xs text-zinc-500">Next <span x-text="eventsDays">7</span> days window</div>
         </div>
 
-        <div class="stat-card md:col-span-4" hx-get="/messages?format=html" hx-trigger="load">
+        <div class="stat-card md:col-span-4">
             <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Unread Notes</div>
-            <div class="text-3xl font-bold mb-2" id="stat-messages">--</div>
-            <div class="text-xs text-accent">From <span id="stat-messages-recipients">0</span> recipients</div>
+            <div class="text-3xl font-bold mb-2" x-text="messagesCount">--</div>
+            <div class="text-xs text-accent">From <span x-text="messagesRecipients">0</span> recipients</div>
         </div>
 
-        <!-- Activity Feed -->
         <div class="stat-card md:col-span-12">
-            <h3 class="font-bold mb-4">Activity Feed</h3>
-            <div id="activity-feed" class="space-y-4">
-                <p class="text-zinc-600 italic text-sm text-center py-8">Activity tracking initialization...</p>
+            <h3 class="font-bold mb-4">Recent Threads</h3>
+            <div class="space-y-2">
+                <template x-for="sess in recentSessions.slice(0, 5)" :key="sess.id">
+                    <div class="flex items-center justify-between p-3 bg-[var(--card-bg)] rounded-lg">
+                        <span class="font-medium" x-text="sess.id"></span>
+                        <span class="text-xs text-zinc-500" x-text="sess.updated_at || 'Just now'"></span>
+                    </div>
+                </template>
+                <p x-show="recentSessions.length === 0" class="text-zinc-600 italic text-sm text-center py-4">No threads yet</p>
             </div>
         </div>
     </div>
 </div>
+

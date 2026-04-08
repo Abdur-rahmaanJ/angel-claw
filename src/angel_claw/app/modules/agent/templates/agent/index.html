@@ -1,13 +1,17 @@
 {% extends "agent/layout.html" %}
 
 {% block content %}
-    <div hx-get="/view/{{ active_view or 'dashboard' }}" 
-         hx-trigger="load" 
-         hx-target="#main-view-container">
+    <div id="main-view-container">
         <div class="flex-grow flex items-center justify-center py-20">
-            <div class="animate-spin h-10 w-10 border-4 border-accent border-t-transparent rounded-full"></div>
+            <i class="fas fa-spinner fa-spin text-accent text-2xl"></i>
         </div>
     </div>
+    <script>
+        // Load initial view after Alpine initializes
+        document.addEventListener('alpine:init', () => {
+            setTimeout(() => loadView('{{ active_view or "dashboard" }}'), 100);
+        });
+    </script>
 {% endblock %}
 
 {% block modals %}

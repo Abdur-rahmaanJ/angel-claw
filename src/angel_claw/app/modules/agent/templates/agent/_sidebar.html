@@ -1,7 +1,7 @@
 <aside 
     id="sidebar" 
     class="fixed lg:static inset-y-0 left-0 w-72 bg-[var(--sidebar-bg)] border-r border-[var(--border-color)] z-[50] transition-transform duration-300 transform lg:translate-x-0"
-    :class="sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
+    :class="$store.viewManager.sidebarOpen ? 'translate-x-0' : '-translate-x-full'"
 >
     <div class="h-full flex flex-col p-6">
         <div class="flex items-center gap-3 mb-10 px-2">
@@ -17,10 +17,7 @@
             <a href="javascript:void(0)" 
                class="nav-item" 
                :class="{ 'active': $store.viewManager.activeView === 'dashboard' }"
-               hx-get="/view/dashboard" 
-               hx-target="#main-view-container"
-               hx-push-url="true"
-               @click="sidebarOpen = false">
+               @click="loadView('dashboard'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-th-large w-5 text-center"></i> Dashboard
             </a>
 
@@ -28,51 +25,44 @@
                 <a href="javascript:void(0)" 
                    class="nav-item" 
                    :class="{ 'active': $store.viewManager.activeView === 'chat' }"
-                   @click="open = !open; sidebarOpen = false"
-                   hx-get="/view/chat"
-                   hx-target="#main-view-container"
-                   hx-push-url="true">
+                   @click="open = !open; loadView('chat'); $store.viewManager.sidebarOpen = false">
                     <i class="fas fa-comment-dots w-5 text-center"></i>
                     <span class="flex-grow">Chat</span>
                     <i class="fas fa-chevron-down text-[10px] opacity-50 transition-all duration-300" :class="{ '-rotate-90': !open }"></i>
                 </a>
 
                 <div x-show="open" x-collapse class="ml-4 mt-2 mb-4 border-l-2 border-zinc-800 pl-4 space-y-1">
-                    <button @click="createNewThread()" class="w-full text-left px-3 py-1.5 rounded-md text-[13px] text-zinc-500 hover:text-accent hover:bg-accent/5 transition-all flex items-center gap-2 mb-2">
+                    <button @click="$store.viewManager.createNewThread()" class="w-full text-left px-3 py-1.5 rounded-md text-[13px] text-zinc-500 hover:text-accent hover:bg-accent/5 transition-all flex items-center gap-2 mb-2">
                         <i class="fas fa-plus-circle"></i> New Thread
                     </button>
-                    <div id="threads-list" 
-                         hx-get="/chat/sessions" 
-                         hx-trigger="load, refresh-threads from:body" 
-                         hx-vals='js:{current_session_id: Alpine.store("viewManager")?.currentSessionId || "Thread 1"}'
-                         class="space-y-1">
-                        <div class="p-4 flex justify-center"><i class="fas fa-spinner fa-spin text-zinc-700"></i></div>
+                    <div id="threads-list" class="space-y-1">
+                        <!-- Threads loaded via JS -->
                     </div>
                 </div>
             </div>
 
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'tasks' }" hx-get="/view/tasks" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'tasks' }" @click="loadView('tasks'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-check-square w-5 text-center"></i> Tasks
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'calendar' }" hx-get="/view/calendar" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'calendar' }" @click="loadView('calendar'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-calendar-alt w-5 text-center"></i> Calendar
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'messages' }" hx-get="/view/messages" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'messages' }" @click="loadView('messages'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-inbox w-5 text-center"></i> Messages
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'soul' }" hx-get="/view/soul" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'soul' }" @click="loadView('soul'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-dna w-5 text-center"></i> Soul
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'memory' }" hx-get="/view/memory" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'memory' }" @click="loadView('memory'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-brain w-5 text-center"></i> Memory
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'api' }" hx-get="/view/api" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'api' }" @click="loadView('api'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-code w-5 text-center"></i> API & MCP
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'integrations' }" hx-get="/view/integrations" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'integrations' }" @click="loadView('integrations'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-plug w-5 text-center"></i> Integrations
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'settings' }" hx-get="/view/settings" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'settings' }" @click="loadView('settings'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-cog w-5 text-center"></i> Settings
             </a>
         </nav>

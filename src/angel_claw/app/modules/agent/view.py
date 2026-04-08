@@ -36,7 +36,12 @@ def _build_context(session_id=None):
 @blueprint.route("/")
 @login_required
 def index():
-    context = mhelp.context()
+    try:
+        context = mhelp.context()
+        # Filter out None values that can't be JSON serialized
+        context = {k: v for k, v in context.items() if v is not None}
+    except:
+        context = {}
     user_context = _build_context()
     # history = engine.get_history(user_context) # Cleared on reload per request
     history = []
@@ -50,12 +55,34 @@ def index():
     channel_types = [c.channel_type for c in channels]
 
     # Get credit info
-    credit_info = {"balance": 0, "lifetime_spent": 0}
+    credit_info = {"balance": 0, "limit": 1000, "lifetime_spent": 0}
     if credits_enabled():
         credit_info = get_user_stats(user_id)
 
+    # Get skill config
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_root = get_user_root(user_id)
+    skill_config_file = user_root / "skill_config.json"
+    skill_config = {}
+    if skill_config_file.exists():
+        try:
+            skill_config = json.load(open(skill_config_file))
+        except:
+            pass
+
+    # Ensure skill_config is a dict
+    if not isinstance(skill_config, dict):
+        skill_config = {}
+
     context.update(
-        {"history": history, "channels": channel_types, "credit_info": credit_info}
+        {
+            "history": history,
+            "channels": channel_types,
+            "credit_info": credit_info,
+            "skill_config": skill_config,
+        }
     )
     return render_template("{}/index.html".format(mhelp.info["module_name"]), **context)
 
@@ -426,9 +453,78 @@ def get_skills():
     user_context = _build_context()
     registry = TieredSkillRegistry(user_context)
     skills = registry.manager.get_skill_details()
+
+    # Get user skill config from file
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_root = get_user_root(user_context.user_id)
+    skill_config_file = user_root / "skill_config.json"
+    skill_config = {}
+    if skill_config_file.exists():
+        try:
+            skill_config = json.load(open(skill_config_file))
+        except:
+            pass
+
     if request.args.get("format") == "html":
         return render_template("agent/partials/_skills_list.html", skills=skills)
-    return jsonify({"skills": skills})
+
+    # Convert dict to array
+    skills_list = [{"name": k, "description": v} for k, v in skills.items()]
+    return jsonify({"skills": skills_list, "skill_config": skill_config})
+
+
+@blueprint.route("/skills/toggle", methods=["POST"])
+@login_required
+def toggle_skill():
+    data = request.get_json()
+    skill_name = data.get("skill")
+    enabled = data.get("enabled", True)
+
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_context = _build_context()
+    user_root = get_user_root(user_context.user_id)
+
+    skill_config_file = user_root / "skill_config.json"
+    skill_config = {}
+    if skill_config_file.exists():
+        skill_config = json.load(open(skill_config_file))
+
+    if skill_name not in skill_config:
+        skill_config[skill_name] = {}
+    skill_config[skill_name]["disabled"] = not enabled
+
+    json.dump(skill_config, open(skill_config_file, "w"))
+    return jsonify({"result": "success"})
+
+
+@blueprint.route("/skills/config", methods=["POST"])
+@login_required
+def save_skill_config():
+    data = request.get_json()
+    skill_name = data.get("skill")
+    fields = data.get("fields", {})
+
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_context = _build_context()
+    user_root = get_user_root(user_context.user_id)
+
+    skill_config_file = user_root / "skill_config.json"
+    skill_config = {}
+    if skill_config_file.exists():
+        skill_config = json.load(open(skill_config_file))
+
+    if skill_name not in skill_config:
+        skill_config[skill_name] = {}
+    skill_config[skill_name]["fields"] = fields
+
+    json.dump(skill_config, open(skill_config_file, "w"))
+    return jsonify({"result": "success"})
 
 
 @blueprint.route("/skills/upload", methods=["POST"])

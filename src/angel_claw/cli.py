@@ -429,13 +429,29 @@ def main():
 
         # 1. Initialize Database
         db_path = os.path.abspath(os.path.expanduser(settings.db_path))
+        do_seed = True
+        
         if os.path.exists(db_path):
             if not force_yes:
                 print(f"⚠️  Database already exists at {db_path}")
-                if not questionary.confirm("Overwrite and re-initialize?", default=False).ask():
+                choice = questionary.select(
+                    "What would you like to do?",
+                    choices=[
+                        "Ensure schema exists (keep existing data)",
+                        "Reset database (delete and start fresh)",
+                        "Abort"
+                    ],
+                    default="Ensure schema exists (keep existing data)"
+                ).ask()
+                
+                if choice == "Abort":
                     print("Aborting setup.")
                     return
-            os.remove(db_path)
+                elif choice == "Reset database (delete and start fresh)":
+                    os.remove(db_path)
+            else:
+                # Force yes means reset
+                os.remove(db_path)
             
         print("⚙️  Step 1/2: Initializing database tables...")
         # shopyo-seed handles db.create_all() and default roles

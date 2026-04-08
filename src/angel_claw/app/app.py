@@ -372,7 +372,14 @@ def custom_commands(db, app):
         from shopyo_auth.models import User, Role
         import datetime
 
-        user = User.query.filter_by(email=email).first()
+        try:
+            user = User.query.filter_by(email=email).first()
+        except Exception as e:
+            if "no such table" in str(e).lower():
+                click.echo("❌ Database tables not found. Run 'angel-claw setup' first.")
+                return
+            raise e
+
         if not user:
             click.echo(f"User with email {email} not found.")
             return
@@ -393,7 +400,14 @@ def custom_commands(db, app):
     def shopyo_promote_user(email):
         from shopyo_auth.models import User, Role
 
-        user = User.query.filter_by(email=email).first()
+        try:
+            user = User.query.filter_by(email=email).first()
+        except Exception as e:
+            if "no such table" in str(e).lower():
+                click.echo("❌ Database tables not found. Run 'angel-claw setup' first.")
+                return
+            raise e
+
         if not user:
             click.echo(f"User with email {email} not found.")
             return
@@ -415,7 +429,15 @@ def custom_commands(db, app):
         from shopyo_auth.models import User, Role
         import datetime
 
-        user = User.query.filter_by(email=email).first()
+        try:
+            user = User.query.filter_by(email=email).first()
+        except Exception as e:
+            if "no such table" in str(e).lower():
+                click.echo("❌ Error: Database tables not found.")
+                click.echo("👉 Please run 'angel-claw setup' to initialize your database correctly.")
+                return
+            raise e
+
         if user:
             click.echo(f"User with email {email} already exists.")
             return
@@ -446,7 +468,14 @@ def custom_commands(db, app):
     def shopyo_list_users():
         from shopyo_auth.models import User
 
-        users = User.query.all()
+        try:
+            users = User.query.all()
+        except Exception as e:
+            if "no such table" in str(e).lower():
+                click.echo("❌ Database tables not found. Run 'angel-claw setup' first.")
+                return
+            raise e
+
         click.echo(f"{'ID':<4} {'Email':<30} {'Confirmed':<10} {'Admin':<6}")
         click.echo("-" * 55)
         for user in users:
@@ -461,7 +490,14 @@ def custom_commands(db, app):
     def shopyo_update_password(email, new_password):
         from shopyo_auth.models import User
 
-        user = User.query.filter_by(email=email).first()
+        try:
+            user = User.query.filter_by(email=email).first()
+        except Exception as e:
+            if "no such table" in str(e).lower():
+                click.echo("❌ Database tables not found. Run 'angel-claw setup' first.")
+                return
+            raise e
+
         if not user:
             click.echo(f"User with email {email} not found.")
             return

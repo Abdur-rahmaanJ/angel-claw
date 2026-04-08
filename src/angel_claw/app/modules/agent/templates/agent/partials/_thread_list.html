@@ -6,7 +6,7 @@
         
         <div class="group flex items-center justify-between gap-1 pr-2 rounded-md hover:bg-zinc-800/50 {{ 'bg-accent/10 text-accent font-semibold' if isActive else 'text-zinc-500' }}">
             <button 
-                @click="$store.viewManager.currentSessionId = '{{ s.id }}'; localStorage.setItem('current-session-id', '{{ s.id }}'); $dispatch('refresh-chat')"
+                @click="$store.viewManager.switchToThread('{{ s.id }}')"
                 class="flex-grow text-left px-3 py-2 text-[13px] truncate" 
                 title="{{ s.preview or s.id }}">
                 {{ title }}

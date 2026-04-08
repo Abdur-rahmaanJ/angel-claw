@@ -28,11 +28,10 @@
                 <a href="javascript:void(0)" 
                    class="nav-item" 
                    :class="{ 'active': $store.viewManager.activeView === 'chat' }"
-                   @click="open = !open; if($store.viewManager.activeView !== 'chat') { $el.dispatchEvent(new CustomEvent('load-chat')) }"
+                   @click="open = !open; sidebarOpen = false"
                    hx-get="/view/chat"
                    hx-target="#main-view-container"
-                   hx-push-url="true"
-                   hx-trigger="load-chat">
+                   hx-push-url="true">
                     <i class="fas fa-comment-dots w-5 text-center"></i>
                     <span class="flex-grow">Chat</span>
                     <i class="fas fa-chevron-down text-[10px] opacity-50 transition-all duration-300" :class="{ '-rotate-90': !open }"></i>

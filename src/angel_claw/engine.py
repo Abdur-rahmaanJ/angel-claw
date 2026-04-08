@@ -881,6 +881,12 @@ class AngelClawEngine:
         history = PersistentHistory(context)
         history.delete_session(session_id)
 
+    def rename_chat_session(self, context: UserContext, old_id: str, new_name: str):
+        from .runtime.persistence import PersistentHistory
+
+        history = PersistentHistory(context)
+        history.rename_session(old_id, new_name)
+
     def get_memories(self, context: UserContext) -> List[Dict[str, Any]]:
         runtime = async_to_sync(runtime_manager.get_runtime)(context)
         memos = runtime.get_memos(context.channel_identifier)

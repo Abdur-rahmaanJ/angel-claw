@@ -40,7 +40,7 @@
                             <div @click="$store.viewManager.switchToThread(sess.id)" 
                                  class="px-3 py-2 rounded-md text-[13px] cursor-pointer transition-all flex items-center justify-between"
                                  :class="$store.viewManager.currentSessionId === sess.id ? 'bg-accent/20 text-accent' : 'text-zinc-500 hover:text-white hover:bg-white/5'">
-                                <span x-text="sess.id"></span>
+                                <span x-text="sess.preview || sess.id"></span>
                                 <i class="fas fa-chevron-right text-[10px] opacity-50" x-show="$store.viewManager.currentSessionId === sess.id"></i>
                             </div>
                         </template>

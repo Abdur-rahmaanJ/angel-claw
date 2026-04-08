@@ -204,10 +204,23 @@ def delete_memory(memory_id):
 @blueprint.route("/chat/delete/<session_id>", methods=["POST"])
 @login_required
 def delete_chat_session(session_id):
-    user_context = _build_context()
+    user_context = _build_context(session_id=session_id)
     engine.delete_chat_session(user_context, session_id)
-    if request.headers.get("HX-Request"):
-        return "", 204
+    return jsonify({"result": "success"})
+
+
+@blueprint.route("/chat/session/rename", methods=["POST"])
+@login_required
+def rename_session():
+    data = request.get_json()
+    old_id = data.get("session_id")
+    new_name = data.get("new_name")
+
+    if not old_id or not new_name:
+        return jsonify({"error": "session_id and new_name required"}), 400
+
+    user_context = _build_context(session_id=old_id)
+    engine.rename_chat_session(user_context, old_id, new_name)
     return jsonify({"result": "success"})
 
 

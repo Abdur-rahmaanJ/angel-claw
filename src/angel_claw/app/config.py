@@ -16,6 +16,12 @@ configs = {
 """
 
 import os
+from pathlib import Path
+
+
+def _get_default_db_path():
+    return f"sqlite:///{Path('~/.angelclaw/angelclaw.db').expanduser()}"
+
 
 base_path = os.path.dirname(os.path.abspath(__file__))
 
@@ -41,9 +47,9 @@ class BaseConfig:
         "CURRENCY": "USD",
     }
 
-    SHOPYO_APPADMIN_URL = '/appadmin'
-    SHOPYO_AUTH_URL = '/auth'
-    SHOPYO_DASHBOARD_URL = '/dashboard'
+    SHOPYO_APPADMIN_URL = "/appadmin"
+    SHOPYO_AUTH_URL = "/auth"
+    SHOPYO_DASHBOARD_URL = "/dashboard"
     EMAIL_CONFIRMATION_DISABLED = True
 
     # Session / Persistent Login
@@ -76,7 +82,7 @@ class ProductionConfig(BaseConfig):
 
     # database configs
     SQLALCHEMY_DATABASE_URI = (
-        os.environ.get("SQLALCHEMY_DATABASE_URI") or "sqlite:///shopyo.db"
+        os.environ.get("SQLALCHEMY_DATABASE_URI") or _get_default_db_path()
     )
 
 
@@ -103,7 +109,7 @@ class DevelopmentConfig(BaseConfig):
 
     # database configs
     SQLALCHEMY_DATABASE_URI = (
-        os.environ.get("SQLALCHEMY_DATABASE_URI") or "sqlite:///shopyo.db"
+        os.environ.get("SQLALCHEMY_DATABASE_URI") or _get_default_db_path()
     )
 
     # unknown configs

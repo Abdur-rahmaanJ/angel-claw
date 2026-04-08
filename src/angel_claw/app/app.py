@@ -375,8 +375,8 @@ def custom_commands(db, app):
         try:
             user = User.query.filter_by(email=email).first()
         except Exception as e:
-            if "no such table" in str(e).lower():
-                click.echo("❌ Database tables not found. Run 'angel-claw setup' first.")
+            if "no such table" in str(e).lower() or "no such column" in str(e).lower():
+                click.echo("❌ Error: Database schema out of sync or missing. Run 'angel-claw setup' or 'angel-claw serve --migrate' first.")
                 return
             raise e
 
@@ -403,8 +403,8 @@ def custom_commands(db, app):
         try:
             user = User.query.filter_by(email=email).first()
         except Exception as e:
-            if "no such table" in str(e).lower():
-                click.echo("❌ Database tables not found. Run 'angel-claw setup' first.")
+            if "no such table" in str(e).lower() or "no such column" in str(e).lower():
+                click.echo("❌ Error: Database schema out of sync or missing. Run 'angel-claw setup' or 'angel-claw serve --migrate' first.")
                 return
             raise e
 
@@ -432,9 +432,9 @@ def custom_commands(db, app):
         try:
             user = User.query.filter_by(email=email).first()
         except Exception as e:
-            if "no such table" in str(e).lower():
-                click.echo("❌ Error: Database tables not found.")
-                click.echo("👉 Please run 'angel-claw setup' to initialize your database correctly.")
+            if "no such table" in str(e).lower() or "no such column" in str(e).lower():
+                click.echo("❌ Error: Database tables not found or schema out of sync.")
+                click.echo("👉 Please run 'angel-claw setup' or 'angel-claw serve --migrate' to initialize/fix your database.")
                 return
             raise e
 
@@ -471,8 +471,8 @@ def custom_commands(db, app):
         try:
             users = User.query.all()
         except Exception as e:
-            if "no such table" in str(e).lower():
-                click.echo("❌ Database tables not found. Run 'angel-claw setup' first.")
+            if "no such table" in str(e).lower() or "no such column" in str(e).lower():
+                click.echo("❌ Error: Database schema out of sync or missing. Run 'angel-claw setup' or 'angel-claw serve --migrate' first.")
                 return
             raise e
 
@@ -493,8 +493,8 @@ def custom_commands(db, app):
         try:
             user = User.query.filter_by(email=email).first()
         except Exception as e:
-            if "no such table" in str(e).lower():
-                click.echo("❌ Database tables not found. Run 'angel-claw setup' first.")
+            if "no such table" in str(e).lower() or "no such column" in str(e).lower():
+                click.echo("❌ Error: Database schema out of sync or missing. Run 'angel-claw setup' or 'angel-claw serve --migrate' first.")
                 return
             raise e
 

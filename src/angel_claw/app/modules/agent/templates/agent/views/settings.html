@@ -48,11 +48,11 @@
             <form x-show="showPasswordForm" x-cloak @submit.prevent="changePassword()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-zinc-500 mb-1">Current Password</label>
-                    <input type="password" x-model="passwords.current" required class="w-full bg-black/20 border border-zinc-800 rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none">
+                    <input type="password" x-model="passwords.current" required class="w-full bg-[#18181b] border border-[#27272a] rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none" style="background-color: #18181b; border-color: #27272a;">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-zinc-500 mb-1">New Password</label>
-                    <input type="password" x-model="passwords.new" required class="w-full bg-black/20 border border-zinc-800 rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none">
+                    <input type="password" x-model="passwords.new" required class="w-full bg-[#18181b] border border-[#27272a] rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none" style="background-color: #18181b; border-color: #27272a;">
                 </div>
                 <div class="flex gap-3">
                     <button type="submit" class="btn btn-primary" :disabled="changing">

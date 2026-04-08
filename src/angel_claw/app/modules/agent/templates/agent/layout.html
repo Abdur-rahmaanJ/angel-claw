@@ -119,14 +119,16 @@
 
             Alpine.data('skillsData', () => ({
                 skills: [], loading: true, configModal: false, configSkill: null, configFields: [],
+                skillFieldDefs: {},
                 config: {{ skill_config | tojson }},
                 async init() { await this.loadSkills(); },
                 async loadSkills() { 
                     try { const r = await fetch('/skills'); const d = await r.json(); 
+                        this.skillFieldDefs = d.skill_field_defs || {};
                         this.skills = (d.skills || []).map(s => ({
                             ...s, 
                             enabled: !this.config[s.name]?.disabled,
-                            has_config: !!this.config[s.name]?.fields
+                            has_config: !!this.skillFieldDefs[s.name]
                         })); 
                     } catch(e) { console.error(e); } 
                     finally { this.loading = false; } 
@@ -145,8 +147,13 @@
                 },
                 openConfig(skill) {
                     this.configSkill = skill;
-                    this.configFields = (this.config[skill.name]?.fields || []).map(f => ({
-                        ...f, value: f.value || ''
+                    const defs = this.skillFieldDefs[skill.name] || [];
+                    const saved = this.config[skill.name]?.fields || {};
+                    this.configFields = defs.map(f => ({
+                        name: f.name,
+                        type: f.type || 'text',
+                        description: f.description || '',
+                        value: saved[f.name] || ''
                     }));
                     this.configModal = true;
                 },

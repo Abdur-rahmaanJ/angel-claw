@@ -48,10 +48,20 @@
             <template x-for="field in configFields" :key="field.name">
                 <div>
                     <label class="block text-xs font-bold text-zinc-500 mb-1" x-text="field.name"></label>
-                    <input :type="field.type || 'text'" 
-                           x-model="field.value"
-                           class="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-sm">
-                    <p class="text-xs text-zinc-500 mt-1" x-text="field.description"></p>
+                    <template x-if="field.type === 'checkbox'">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input type="checkbox" x-model="field.value" class="w-4 h-4 rounded border-[var(--border-color)] bg-[var(--card-bg)]">
+                            <span class="text-sm text-zinc-400" x-text="field.description"></span>
+                        </label>
+                    </template>
+                    <template x-if="field.type !== 'checkbox'">
+                        <div>
+                            <input :type="field.type || 'text'" 
+                                   x-model="field.value"
+                                   class="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-lg px-3 py-2 text-sm">
+                            <p class="text-xs text-zinc-500 mt-1" x-text="field.description"></p>
+                        </div>
+                    </template>
                 </div>
             </template>
         </div>

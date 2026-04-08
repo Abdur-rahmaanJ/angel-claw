@@ -449,6 +449,7 @@ def mark_message_read(message_id):
 def get_skills():
     # Use the registry to get skills including user-specific ones
     from angel_claw.runtime.registry import TieredSkillRegistry
+    import importlib
 
     user_context = _build_context()
     registry = TieredSkillRegistry(user_context)
@@ -467,12 +468,30 @@ def get_skills():
         except:
             pass
 
+    # Get skill field definitions from skill modules
+    skill_field_defs = {}
+    for skill_name in skills.keys():
+        try:
+            # Try to import the skill module and get SKILL_CONFIG
+            mod = importlib.import_module(f"angel_claw.skills.{skill_name}")
+            if hasattr(mod, "SKILL_CONFIG"):
+                # SKILL_CONFIG is {"fields": [...]}, extract the fields array
+                skill_field_defs[skill_name] = mod.SKILL_CONFIG.get("fields", [])
+        except:
+            pass
+
     if request.args.get("format") == "html":
         return render_template("agent/partials/_skills_list.html", skills=skills)
 
     # Convert dict to array
     skills_list = [{"name": k, "description": v} for k, v in skills.items()]
-    return jsonify({"skills": skills_list, "skill_config": skill_config})
+    return jsonify(
+        {
+            "skills": skills_list,
+            "skill_config": skill_config,
+            "skill_field_defs": skill_field_defs,
+        }
+    )
 
 
 @blueprint.route("/skills/toggle", methods=["POST"])

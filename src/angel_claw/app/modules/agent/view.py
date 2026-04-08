@@ -221,7 +221,8 @@ def generate_pair_token():
     except Exception as e:
         import traceback
 
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 @blueprint.route("/api-key", methods=["POST"])
@@ -274,6 +275,21 @@ def me():
     except Exception:
         pass
 
+    # Filter channels for WhatsApp and Telegram only
+    whatsapp = next((c for c in channels if c.channel_type == "whatsapp"), None)
+    telegram = next((c for c in channels if c.channel_type == "telegram"), None)
+
+    integrations = {
+        "whatsapp": {
+            "connected": whatsapp is not None,
+            "identifier": whatsapp.channel_identifier if whatsapp else None,
+        },
+        "telegram": {
+            "connected": telegram is not None,
+            "identifier": telegram.channel_identifier if telegram else None,
+        },
+    }
+
     if request.args.get("format") == "api_keys":
         return render_template("agent/partials/_api_keys_list.html", api_keys=api_keys)
     elif request.args.get("format") == "integrations":
@@ -296,6 +312,7 @@ def me():
                 }
                 for c in channels
             ],
+            "integrations": integrations,
             "api_keys": [
                 {
                     "id": k.id,

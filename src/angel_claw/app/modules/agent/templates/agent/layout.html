@@ -106,8 +106,8 @@
             }));
 
             Alpine.data('integrationsData', () => ({
-                channels: [], bridgeOnline: false, loading: true,
-                async init() { try { const r = await fetch('/me'); const d = await r.json(); this.channels = d.channels || []; this.bridgeOnline = d.bridge_online || false; } catch(e) { console.error(e); } finally { this.loading = false; } }
+                integrations: {}, bridgeOnline: false, loading: true,
+                async init() { try { const r = await fetch('/me'); const d = await r.json(); this.integrations = d.integrations || {}; this.bridgeOnline = d.bridge_online || false; } catch(e) { console.error(e); } finally { this.loading = false; } }
             }));
 
             Alpine.data('skillsData', () => ({
@@ -261,6 +261,24 @@
                 init() {
                     document.documentElement.className = this.theme;
                     this.applyAccent(this.accent);
+                    this.generatePairingToken();
+                },
+
+                async generatePairingToken() {
+                    try {
+                        const token = document.getElementById('csrf_token')?.value;
+                        const res = await fetch('/pair-token', { 
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': token || '' }
+                        });
+                        if (!res.ok) throw new Error('Failed to generate token');
+                        const data = await res.json();
+                        this.pairingToken = data.token || '---';
+                    } catch(e) { console.error('Failed to generate token:', e); }
+                },
+
+                openPairingModal() {
+                    this.generatePairingToken();
                 },
 
                 async createNewThread() {

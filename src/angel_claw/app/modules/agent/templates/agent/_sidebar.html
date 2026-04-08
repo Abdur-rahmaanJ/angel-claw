@@ -5,12 +5,9 @@
 >
     <div class="h-full flex flex-col p-6">
         <div class="flex items-center gap-3 mb-10 px-2">
-            <div class="w-10 h-10 bg-accent rounded-xl flex items-center justify-center text-white shadow-lg shadow-accent/20">
-                <i class="fas fa-feather-pointed text-xl"></i>
-            </div>
+            <img src="/static/wing.png" class="w-10 h-10 object-contain" alt="Angel Claw Icon">
             <div>
                 <h1 class="font-black text-sm tracking-tighter uppercase">Angel Claw</h1>
-                <p class="text-[10px] text-zinc-500 font-bold tracking-widest uppercase opacity-60">Control Panel</p>
             </div>
         </div>
 
@@ -19,7 +16,7 @@
             
             <a href="javascript:void(0)" 
                class="nav-item" 
-               :class="{ 'active': activeView === 'dashboard' }"
+               :class="{ 'active': $store.viewManager.activeView === 'dashboard' }"
                hx-get="/view/dashboard" 
                hx-target="#main-view-container"
                hx-push-url="true"
@@ -30,12 +27,11 @@
             <div x-data="{ open: true }">
                 <a href="javascript:void(0)" 
                    class="nav-item" 
-                   :class="{ 'active': activeView === 'chat' }"
-                   @click="open = !open; if(activeView !== 'chat') { $el.dispatchEvent(new CustomEvent('load-chat')) }"
+                   :class="{ 'active': $store.viewManager.activeView === 'chat' }"
+                   @click="open = !open; sidebarOpen = false"
                    hx-get="/view/chat"
                    hx-target="#main-view-container"
-                   hx-push-url="true"
-                   hx-trigger="load-chat">
+                   hx-push-url="true">
                     <i class="fas fa-comment-dots w-5 text-center"></i>
                     <span class="flex-grow">Chat</span>
                     <i class="fas fa-chevron-down text-[10px] opacity-50 transition-all duration-300" :class="{ '-rotate-90': !open }"></i>
@@ -55,28 +51,28 @@
                 </div>
             </div>
 
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': activeView === 'tasks' }" hx-get="/view/tasks" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'tasks' }" hx-get="/view/tasks" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
                 <i class="fas fa-check-square w-5 text-center"></i> Tasks
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': activeView === 'calendar' }" hx-get="/view/calendar" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'calendar' }" hx-get="/view/calendar" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
                 <i class="fas fa-calendar-alt w-5 text-center"></i> Calendar
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': activeView === 'messages' }" hx-get="/view/messages" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'messages' }" hx-get="/view/messages" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
                 <i class="fas fa-inbox w-5 text-center"></i> Messages
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': activeView === 'soul' }" hx-get="/view/soul" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'soul' }" hx-get="/view/soul" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
                 <i class="fas fa-dna w-5 text-center"></i> Soul
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': activeView === 'memory' }" hx-get="/view/memory" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'memory' }" hx-get="/view/memory" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
                 <i class="fas fa-brain w-5 text-center"></i> Memory
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': activeView === 'api' }" hx-get="/view/api" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'api' }" hx-get="/view/api" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
                 <i class="fas fa-code w-5 text-center"></i> API & MCP
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': activeView === 'integrations' }" hx-get="/view/integrations" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'integrations' }" hx-get="/view/integrations" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
                 <i class="fas fa-plug w-5 text-center"></i> Integrations
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': activeView === 'settings' }" hx-get="/view/settings" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'settings' }" hx-get="/view/settings" hx-target="#main-view-container" hx-push-url="true" @click="sidebarOpen = false">
                 <i class="fas fa-cog w-5 text-center"></i> Settings
             </a>
         </nav>
@@ -90,8 +86,8 @@
                     <p class="text-[13px] font-bold truncate">{{ current_user.email }}</p>
                     <p class="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Connected</p>
                 </div>
-                <button @click="toggleTheme()" class="w-8 h-8 rounded-lg hover:bg-white/5 transition-colors text-zinc-500">
-                    <i :class="theme === 'light' ? 'fas fa-sun' : 'fas fa-moon'"></i>
+                <button @click="$store.viewManager.toggleTheme()" class="w-8 h-8 rounded-lg hover:bg-white/5 transition-colors text-zinc-500">
+                    <i :class="$store.viewManager.theme === 'light' ? 'fas fa-sun' : 'fas fa-moon'"></i>
                 </button>
             </div>
         </div>

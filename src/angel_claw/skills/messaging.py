@@ -80,7 +80,7 @@ def list_unread_messages(user_id: str, include_read: bool = True) -> List[dict]:
             results.append(
                 {
                     "id": msg.id,
-                    "from": sender.email if sender else "Unknown",
+                    "sender": sender.email if sender else "Unknown",
                     "content": msg.content,
                     "timestamp": msg.created_at.isoformat(),
                     "is_read": msg.is_read,

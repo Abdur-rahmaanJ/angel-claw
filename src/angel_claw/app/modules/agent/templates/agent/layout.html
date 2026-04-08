@@ -1,35 +1,39 @@
 <!DOCTYPE html>
-<html lang="en" :class="theme" x-data="viewManager()" x-init="init()">
+<html lang="en" :class="$store.viewManager.theme" x-data x-init="$store.viewManager.init()">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Angel Claw | Control Panel</title>
     <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" id="theme-meta" :content="theme === 'dark' ? '#09090b' : '#f4f4f5'">
+    <meta name="theme-color" id="theme-meta" :content="$store.viewManager.theme === 'dark' ? '#09090b' : '#f4f4f5'">
     <link rel="icon" type="image/png" href="/static/wing.png">
     <link rel="apple-touch-icon" href="/static/wing.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <script src="/static/js/tailwind.min.js"></script>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
-    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    
     <script>
-        if (window.tailwind) {
-            window.tailwind.config = {
-                darkMode: 'class',
-                theme: {
-                    extend: {
-                        colors: {
-                            accent: 'rgb(var(--accent-rgb) / <alpha-value>)',
-                        }
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        accent: 'var(--accent-color)',
                     }
                 }
-            };
-        }
+            }
+        };
+    </script>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    <script>
+        // Ensure CSRF token is added to all HTMX requests
+        document.body.addEventListener('htmx:configRequest', (evt) => {
+            const token = document.getElementById('csrf_token')?.value;
+            if (token) evt.detail.headers['X-CSRFToken'] = token;
+        });
 
-        function viewManager() {
-            return {
+        document.addEventListener('alpine:init', () => {
+            Alpine.store('viewManager', {
                 theme: localStorage.getItem('theme') || 'dark',
                 accent: localStorage.getItem('accent-color') || '#22c55e',
                 assistantIcon: localStorage.getItem('assistant-icon') || 'fa-brain',
@@ -40,13 +44,25 @@
                 isStreaming: false,
                 activeModal: null,
                 pairingToken: '---',
-                
+
+                init() {
+                    document.documentElement.className = this.theme;
+                    this.applyAccent(this.accent);
+                    
+                    document.body.addEventListener('htmx:afterSwap', (evt) => {
+                        if (evt.detail.target.id === 'main-view-container') {
+                            const path = evt.detail.pathInfo.requestPath;
+                            const newView = path.split('/').pop();
+                            if (newView) this.activeView = newView;
+                        }
+                    });
+                },
+
                 async createNewThread() {
                     try {
                         const res = await fetch('/chat/sessions');
                         const data = await res.json();
                         const sessions = data.sessions || [];
-                        
                         let nextNum = 1;
                         sessions.forEach(s => {
                             if (s.id.startsWith('Thread ')) {
@@ -54,62 +70,29 @@
                                 if (!isNaN(num) && num >= nextNum) nextNum = num + 1;
                             }
                         });
-
                         const newId = `Thread ${nextNum}`;
-                        this.currentSessionId = newId;
-                        localStorage.setItem('current-session-id', newId);
-                        
-                        // Switch view to chat if not already there
-                        if (this.activeView !== 'chat') {
-                            this.activeView = 'chat';
-                            htmx.ajax('GET', '/view/chat', '#main-view-container');
-                        } else {
-                            document.body.dispatchEvent(new CustomEvent('refresh-chat'));
-                        }
-                        
-                        // Refresh threads list
-                        document.body.dispatchEvent(new CustomEvent('refresh-threads'));
-                    } catch (e) { console.error(e); }
+                        this.switchToThread(newId);
+                    } catch (e) {
+                        console.error("Error creating thread:", e);
+                    }
                 },
 
-                async openPairingModal(channelType) {
-                    this.activeModal = 'pairing';
-                    try {
-                        const token = document.getElementById('csrf_token')?.value;
-                        const res = await fetch('/pair-token', {
-                            method: 'POST',
-                            headers: { 'X-CSRFToken': token }
-                        });
-                        const data = await res.json();
-                        this.pairingToken = data.token || 'ERROR';
-                    } catch (e) { this.pairingToken = 'ERROR'; }
-                },
-                
-                init() {
-                    this.applyAccent(this.accent);
-                    this.$watch('theme', val => {
-                        localStorage.setItem('theme', val);
-                        document.documentElement.className = val;
-                    });
-                    // Initialize HTMX to include CSRF token
-                    document.body.addEventListener('htmx:configRequest', (evt) => {
-                        const token = document.getElementById('csrf_token')?.value;
-                        if (token) evt.detail.headers['X-CSRFToken'] = token;
-                    });
-                    
-                    Alpine.store('viewManager', this);
-                    
-                    // Handle view changes from HTMX to update activeView
-                    document.body.addEventListener('htmx:afterSwap', (evt) => {
-                        if (evt.detail.target.id === 'main-view-container') {
-                            const newView = evt.detail.pathInfo.requestPath.split('/').pop();
-                            if (newView) this.activeView = newView;
-                        }
-                    });
+                switchToThread(id) {
+                    this.currentSessionId = id;
+                    localStorage.setItem('current-session-id', id);
+                    if (this.activeView !== 'chat') {
+                        this.activeView = 'chat';
+                        htmx.ajax('GET', '/view/chat', '#main-view-container');
+                    } else {
+                        window.dispatchEvent(new CustomEvent('refresh-chat'));
+                    }
+                    document.body.dispatchEvent(new CustomEvent('refresh-threads'));
                 },
 
-                toggleTheme() {
-                    this.theme = this.theme === 'dark' ? 'light' : 'dark';
+                toggleTheme() { 
+                    this.theme = this.theme === 'dark' ? 'light' : 'dark'; 
+                    localStorage.setItem('theme', this.theme);
+                    document.documentElement.className = this.theme;
                 },
 
                 applyAccent(color) {
@@ -127,13 +110,114 @@
                     return `${r} ${g} ${b}`;
                 },
 
-                toggleSidebar() {
-                    this.sidebarOpen = !this.sidebarOpen;
+                toggleSidebar() { this.sidebarOpen = !this.sidebarOpen; }
+            });
+        });
+
+        // Global chat interface function
+        window.chatInterface = function() {
+            return {
+                userInput: '',
+                messages: [],
+                loadingHistory: false,
+                streamingContent: '',
+                devLogOpen: false,
+                logs: [],
+
+                async loadHistory() {
+                    const sid = Alpine.store('viewManager').currentSessionId || "Thread 1";
+                    this.loadingHistory = true;
+                    try {
+                        const res = await fetch(`/chat/history/${encodeURIComponent(sid)}`);
+                        const data = await res.json();
+                        this.messages = data.history || [];
+                        this.$nextTick(() => this.scrollToBottom());
+                    } catch (e) {
+                        console.error("History load error", e);
+                    } finally {
+                        this.loadingHistory = false;
+                    }
+                },
+
+                async sendMessage() {
+                    const msg = this.userInput.trim();
+                    const viewStore = Alpine.store('viewManager');
+                    if (!msg || viewStore.isStreaming) return;
+
+                    this.messages.push({ role: 'user', content: msg });
+                    this.userInput = '';
+                    viewStore.isStreaming = true;
+                    this.streamingContent = '';
+                    this.$nextTick(() => this.scrollToBottom());
+
+                    try {
+                        const sid = viewStore.currentSessionId || "Thread 1";
+                        const token = document.getElementById('csrf_token')?.value;
+                        const res = await fetch('/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+                            body: JSON.stringify({ 
+                                message: msg, 
+                                session_id: sid,
+                                use_global: viewStore.useGlobalMemory
+                            })
+                        });
+
+                        if (!res.ok) throw new Error('Failed to send message');
+
+                        const reader = res.body.getReader();
+                        const decoder = new TextDecoder();
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+
+                            const chunk = decoder.decode(value);
+                            const lines = chunk.split('\n');
+                            for (const line of lines) {
+                                if (line.startsWith('data: ')) {
+                                    try {
+                                        const data = JSON.parse(line.slice(6));
+                                        if (data.chunk) {
+                                            if (data.chunk.startsWith('[TOOL_CALL:')) {
+                                                this.logs.push(`<span class="text-accent">Executing:</span> ${data.chunk.replace('[TOOL_CALL:', '').replace(']', '')}`);
+                                            } else {
+                                                this.streamingContent += data.chunk;
+                                            }
+                                        }
+                                    } catch (e) {}
+                                }
+                            }
+                            this.$nextTick(() => this.scrollToBottom());
+                        }
+                        
+                        this.messages.push({ role: 'assistant', content: this.streamingContent });
+                        this.streamingContent = '';
+                        document.body.dispatchEvent(new CustomEvent('refresh-threads'));
+                    } catch (err) {
+                        this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
+                    } finally {
+                        viewStore.isStreaming = false;
+                        this.$nextTick(() => this.scrollToBottom());
+                    }
+                },
+
+                formatContent(text) {
+                    if (!text) return '';
+                    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                },
+
+                scrollToBottom() {
+                    const container = this.$refs.messageContainer;
+                    if (container) container.scrollTop = container.scrollHeight;
+                },
+
+                toggleDevLog() {
+                    this.devLogOpen = !this.devLogOpen;
                 }
             }
         }
     </script>
-    
     <style type="text/tailwindcss">
         @layer base {
             :root {
@@ -220,8 +304,8 @@
     <main class="flex-grow flex flex-col min-w-0 relative">
         <!-- Sidebar Overlay (Mobile) -->
         <div 
-            x-show="sidebarOpen" 
-            @click="sidebarOpen = false"
+            x-show="$store.viewManager.sidebarOpen" 
+            @click="$store.viewManager.sidebarOpen = false"
             x-transition:enter="transition ease-out duration-300"
             x-transition:enter-start="opacity-0"
             x-transition:enter-end="opacity-100"
@@ -238,26 +322,26 @@
     </main>
 
     {% block modals %}
-        <div x-show="activeModal === 'pairing'" x-cloak class="fixed inset-0 bg-black/80 z-[1000] flex items-center justify-center p-4 backdrop-blur-md">
-            <div @click.away="activeModal = null" class="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl w-full max-w-[500px] p-8 animate-[viewEnter_0.3s_ease-out]">
+        <div x-show="$store.viewManager.activeModal === 'pairing'" x-cloak class="fixed inset-0 bg-black/80 z-[1000] flex items-center justify-center p-4 backdrop-blur-md">
+            <div @click.away="$store.viewManager.activeModal = null" class="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl w-full max-w-[500px] p-8 animate-[viewEnter_0.3s_ease-out]">
                 <div class="flex justify-between items-center mb-6">
                     <h3 class="text-2xl font-bold">Pair a Channel</h3>
-                    <button @click="activeModal = null" class="text-zinc-500 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+                    <button @click="$store.viewManager.activeModal = null" class="text-zinc-500 hover:text-white"><i class="fas fa-times text-xl"></i></button>
                 </div>
                 
                 <div class="text-center">
                     <div class="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600 mb-2">Your Pairing Token</div>
-                    <div x-text="pairingToken" class="w-full bg-black/40 border border-accent/20 text-accent py-5 rounded-2xl font-mono text-center text-3xl tracking-[0.5em] outline-none my-4 shadow-[0_0_30px_rgba(34,197,94,0.1)]">---</div>
+                    <div x-text="$store.viewManager.pairingToken" class="w-full bg-black/40 border border-accent/20 text-accent py-5 rounded-2xl font-mono text-center text-3xl tracking-[0.5em] outline-none my-4 shadow-[0_0_30px_rgba(34,197,94,0.1)]">---</div>
                 </div>
 
                 <div class="bg-zinc-800/30 p-5 rounded-2xl text-[13px] border border-zinc-700/50 mt-6">
                     <p class="mb-3 opacity-80">Go to <a href="https://t.me/abdur_angelclaw_bot" target="_blank" class="text-accent font-bold hover:underline">@abdur_angelclaw_bot</a> on Telegram and send:</p>
-                    <code class="text-white font-mono break-all text-sm bg-black/40 p-3 rounded-lg block">/pair <span x-text="pairingToken" class="font-bold text-accent"></span></code>
+                    <code class="text-white font-mono break-all text-sm bg-black/40 p-3 rounded-lg block">/pair <span x-text="$store.viewManager.pairingToken" class="font-bold text-accent"></span></code>
                 </div>
                 
                 <div class="mt-10 flex gap-4">
-                    <button class="btn btn-secondary flex-grow" @click="activeModal = null">Close</button>
-                    <button class="btn btn-primary flex-grow" @click="openPairingModal()">New Token</button>
+                    <button class="btn btn-secondary flex-grow" @click="$store.viewManager.activeModal = null">Close</button>
+                    <button class="btn btn-primary flex-grow" @click="$store.viewManager.openPairingModal()">New Token</button>
                 </div>
             </div>
         </div>

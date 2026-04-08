@@ -1,8 +1,8 @@
 <div id="stat-messages" hx-swap-oob="innerHTML">
-    {{ messages|length if messages is list else 0 }}
+    {{ messages|length if messages is iterable else 0 }}
 </div>
 <div id="stat-messages-recipients" hx-swap-oob="innerHTML">
-    {{ messages|map(attribute='sender')|unique|list|length if messages is list else 0 }}
+    {{ messages|map(attribute='sender')|unique|list|length if messages is iterable else 0 }}
 </div>
 
 <div class="space-y-3 mt-4">

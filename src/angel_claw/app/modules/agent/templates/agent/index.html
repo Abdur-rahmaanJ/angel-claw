@@ -1,19 +1,15 @@
 {% extends "agent/layout.html" %}
 
 {% block content %}
-    <div id="main-view-container" 
-         class="flex-grow flex flex-col min-h-0"
-         hx-get="/view/{{ active_view or 'dashboard' }}"
-         hx-trigger="load">
-        <div class="flex-grow flex items-center justify-center">
-            <div class="animate-spin h-8 w-8 border-4 border-accent border-t-transparent rounded-full"></div>
+    <div hx-get="/view/{{ active_view or 'dashboard' }}" 
+         hx-trigger="load" 
+         hx-target="#main-view-container">
+        <div class="flex-grow flex items-center justify-center py-20">
+            <div class="animate-spin h-10 w-10 border-4 border-accent border-t-transparent rounded-full"></div>
         </div>
     </div>
 {% endblock %}
 
 {% block modals %}
-    <!-- Modals (Alpine controlled) -->
-    <div x-show="activeModal === 'message'" x-cloak class="fixed inset-0 bg-black/80 z-[1000] flex items-center justify-center p-4 backdrop-blur-md">
-        <!-- Message Modal Content -->
-    </div>
+    {{ super() }}
 {% endblock %}

@@ -21,7 +21,7 @@
                 <i class="fas fa-th-large w-5 text-center"></i> Dashboard
             </a>
 
-            <div x-data="{ open: true }">
+            <div x-data="{ open: false }">
                 <a href="javascript:void(0)" 
                    class="nav-item" 
                    :class="{ 'active': $store.viewManager.activeView === 'chat' }"
@@ -82,8 +82,10 @@
                 </div>
                 <div class="flex-grow min-w-0">
                     <p class="text-[13px] font-bold truncate">{{ current_user.email }}</p>
-                    <p class="text-[10px] text-zinc-500 uppercase tracking-widest font-black">Connected</p>
                 </div>
+                <a href="{{ url_for('shopyo_auth.logout') }}" class="w-8 h-8 rounded-lg hover:bg-white/5 transition-colors text-zinc-500 flex items-center justify-center">
+                    <i class="fas fa-sign-out-alt"></i>
+                </a>
             </div>
         </div>
     </div>

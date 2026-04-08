@@ -41,6 +41,10 @@
                 });
                 if (res.ok) {
                     container.innerHTML = await res.text();
+                    // Update active view in store
+                    if (Alpine.store('viewManager')) {
+                        Alpine.store('viewManager').activeView = viewName;
+                    }
                 }
             } catch (e) {
                 console.error('Failed to load view:', e);

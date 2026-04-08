@@ -265,22 +265,24 @@ class AngelClawEngine:
         else:
             # Only current session and user-specific - filter manually since hybrid_retrieve ignores namespace filter
             user_namespace = f"user_{context.email}"
-            
+
             ns_to_check = [
-                session_id, 
+                session_id,
                 f"{session_id}_logs",
                 user_namespace,
                 f"{user_namespace}_logs",
-                "default"
+                "default",
             ]
-            
+
             all_collected_ids = set()
             for ns in ns_to_check:
                 all_collected_ids.update(memos.vault.namespaces.get(ns, set()))
-            
+
             retrieved_cubes = [memos.vault.get(cid) for cid in all_collected_ids]
             # Basic filter by owner and presence
-            retrieved_cubes = [c for c in retrieved_cubes if c and c.owner == context.email]
+            retrieved_cubes = [
+                c for c in retrieved_cubes if c and c.owner == context.email
+            ]
             # Simple retrieval: Sort by similarity if we had it, but for now by timestamp
             retrieved_cubes.sort(key=lambda c: c.timestamp, reverse=True)
             retrieved_cubes = retrieved_cubes[:5]
@@ -632,22 +634,24 @@ class AngelClawEngine:
         else:
             # Only current session and user-specific - filter manually since hybrid_retrieve ignores namespace filter
             user_namespace = f"user_{context.email}"
-            
+
             ns_to_check = [
-                session_id, 
+                session_id,
                 f"{session_id}_logs",
                 user_namespace,
                 f"{user_namespace}_logs",
-                "default"
+                "default",
             ]
-            
+
             all_collected_ids = set()
             for ns in ns_to_check:
                 all_collected_ids.update(memos.vault.namespaces.get(ns, set()))
-            
+
             retrieved_cubes = [memos.vault.get(cid) for cid in all_collected_ids]
             # Basic filter by owner and presence
-            retrieved_cubes = [c for c in retrieved_cubes if c and c.owner == context.email]
+            retrieved_cubes = [
+                c for c in retrieved_cubes if c and c.owner == context.email
+            ]
             # Simple retrieval: Sort by similarity if we had it, but for now by timestamp
             retrieved_cubes.sort(key=lambda c: c.timestamp, reverse=True)
             retrieved_cubes = retrieved_cubes[:5]
@@ -877,21 +881,25 @@ class AngelClawEngine:
         history = PersistentHistory(context)
         history.delete_session(session_id)
 
+    def rename_chat_session(self, context: UserContext, old_id: str, new_name: str):
+        from .runtime.persistence import PersistentHistory
+
+        history = PersistentHistory(context)
+        history.rename_session(old_id, new_name)
+
     def get_memories(self, context: UserContext) -> List[Dict[str, Any]]:
         runtime = async_to_sync(runtime_manager.get_runtime)(context)
         memos = runtime.get_memos(context.channel_identifier)
-        user_namespace = f"user_{context.email}"
-        session_namespace = context.channel_identifier
 
-        all_ids = set()
-        all_ids.update(memos.vault.namespaces.get(user_namespace, set()))
-        all_ids.update(memos.vault.namespaces.get(f"{user_namespace}_logs", set()))
-        all_ids.update(memos.vault.namespaces.get(session_namespace, set()))
-        all_ids.update(memos.vault.namespaces.get(f"{session_namespace}_logs", set()))
-        all_ids.update(memos.vault.namespaces.get("default", set()))
+        # Get all memories from all namespaces for this user
+        all_memories = []
+        for namespace, ids in memos.vault.namespaces.items():
+            for cid in ids:
+                cube = memos.vault.get(cid)
+                if cube and cube.owner == context.email:
+                    all_memories.append(cube.to_dict())
 
-        cubes = [memos.vault.get(cid) for cid in all_ids]
-        return [c.to_dict() for c in cubes if c and c.owner == context.email]
+        return all_memories
 
     def delete_memory(self, context: UserContext, memory_id: str):
         runtime = async_to_sync(runtime_manager.get_runtime)(context)
@@ -1005,7 +1013,7 @@ class AngelClawEngine:
     def generate_pair_token(self, context: UserContext) -> str:
         if settings.auth_mode == "shopyo":
             ctx = self._app_context()
-            if not ctx:
+            if ctx is None:
                 raise RuntimeError("Could not load app context")
 
             with ctx:

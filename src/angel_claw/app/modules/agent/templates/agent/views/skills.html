@@ -1,6 +1,7 @@
+<div x-data="skillsData()" x-init="init()">
 <header class="view-header">
     <div class="flex items-center gap-4">
-        <button class="lg:hidden p-2 -ml-2 text-xl" @click="toggleSidebar()">
+        <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
             <i class="fas fa-bars"></i>
         </button>
         <h2 class="font-bold text-lg md:text-xl">Available Skills</h2>
@@ -8,8 +9,21 @@
 </header>
 <div class="workspace">
     <div class="max-w-7xl mx-auto w-full">
-        <div id="skills-list" hx-get="/skills?format=html" hx-trigger="load" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            <div class="col-span-full flex justify-center py-20"><i class="fas fa-spinner fa-spin text-accent text-2xl"></i></div>
+        <div x-show="loading" class="flex justify-center py-20">
+            <i class="fas fa-spinner fa-spin text-accent text-2xl"></i>
+        </div>
+        <div x-show="!loading" class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <template x-for="skill in skills" :key="skill.name">
+                <div class="stat-card">
+                    <div class="flex items-center gap-2 mb-2">
+                        <i class="fas fa-cube text-accent"></i>
+                        <h4 class="font-bold" x-text="skill.name"></h4>
+                    </div>
+                    <p class="text-sm text-zinc-400" x-text="skill.description || 'No description'"></p>
+                </div>
+            </template>
+            <p x-show="skills.length === 0" class="col-span-full text-zinc-500 text-center py-8">No skills available.</p>
         </div>
     </div>
 </div>
+

@@ -13,8 +13,10 @@ from ..config import settings
 
 logger = logging.getLogger("angel-claw-runtime")
 
+
 class FairShareScheduler:
     """Isolated scheduler for a single user."""
+
     def __init__(self, context: UserContext):
         self.context = context
         self.lane_key = f"user_{context.user_id}"
@@ -24,39 +26,47 @@ class FairShareScheduler:
             task_id=task_id,
             lane_key=self.lane_key,
             execute_func=execute_func,
-            data=data
+            data=data,
         )
         return await lane_queue.enqueue(task)
 
+
 class UserRuntime:
     """Isolated runtime for a single user."""
+
     def __init__(self, context: UserContext):
         self.context = context
         self.history = PersistentHistory(context)
         self.vault = UserVault(context)
         self.skills = TieredSkillRegistry(context)
         self.scheduler = FairShareScheduler(context)
-        
+
         # Soul Hierarchy: User SOUL.md > Global SOUL.md
         self.soul = self._load_soul()
-        
+
         # Last active timestamp for LRU
         from datetime import datetime, UTC
+
         self.last_active = datetime.now(UTC)
 
     def _load_soul(self) -> str:
         from ..utils import get_user_root
+
         user_root = get_user_root(self.context.user_id)
         user_soul = user_root / "SOUL.md"
-        
+
         if user_soul.exists():
             with open(user_soul, "r") as f:
                 return f.read()
-        
-        # Fallback to global SOUL.md
+
+        # Fallback to global SOUL.md in project root
+        import os
+
+        project_root = Path(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        ).parent
         search_paths = [
-            Path("SOUL.md"),
-            Path(__file__).parent.parent.parent.parent / "SOUL.md",
+            project_root / "SOUL.md",
         ]
 
         for path in search_paths:
@@ -68,6 +78,7 @@ class UserRuntime:
 
     def update_soul(self, content: str):
         from ..utils import get_user_root
+
         user_root = get_user_root(self.context.user_id)
         user_soul = user_root / "SOUL.md"
         with open(user_soul, "w") as f:
@@ -80,7 +91,7 @@ class UserRuntime:
             "Life Coach": "# Life Coach Soul\nYou are an empathetic and motivating life coach. You help the user set goals, stay accountable, and maintain a positive mindset.",
             "Developer": "# Developer Soul\nYou are a senior software engineer. You provide technical, concise, and efficient solutions. You always consider edge cases and security.",
             "Creative Writer": "# Creative Writer Soul\nYou are a brilliant storyteller and poet. Your language is descriptive and evocative. You help the user brainstorm and refine creative ideas.",
-            "Personal Assistant": "# Personal Assistant Soul\nYou are a highly organized executive assistant. You focus on efficiency, scheduling, and ensuring no detail is missed."
+            "Personal Assistant": "# Personal Assistant Soul\nYou are a highly organized executive assistant. You focus on efficiency, scheduling, and ensuring no detail is missed.",
         }
 
     def apply_soul_template(self, template_name: str):
@@ -92,12 +103,15 @@ class UserRuntime:
 
     def mark_active(self):
         from datetime import datetime, UTC
+
         self.last_active = datetime.now(UTC)
 
     async def get_tool_definitions(self) -> List[Dict[str, Any]]:
         return await self.skills.get_tool_definitions()
 
-    async def call_tool(self, name: str, arguments: Dict[str, Any], session_id: str) -> str:
+    async def call_tool(
+        self, name: str, arguments: Dict[str, Any], session_id: str
+    ) -> str:
         return await self.skills.call_tool(name, arguments, session_id)
 
     def get_memos(self, session_id: str):

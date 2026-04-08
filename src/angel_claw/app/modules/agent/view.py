@@ -75,7 +75,9 @@ def run_async_streaming(user_context, message, use_global=False):
     loop = asyncio.new_event_loop()
     try:
         asyncio.set_event_loop(loop)
-        async_gen = engine.execute_streaming(user_context, message, use_global=use_global)
+        async_gen = engine.execute_streaming(
+            user_context, message, use_global=use_global
+        )
 
         while True:
             try:
@@ -104,10 +106,11 @@ def chat():
     data = request.get_json()
     message = data.get("message")
     use_global = data.get("use_global", False)
+    session_id = data.get("session_id", "Thread 1")
     if not message:
         return jsonify({"error": "No message provided"}), 400
 
-    user_context = _build_context()
+    user_context = _build_context(session_id=session_id)
 
     def generate():
         yield from run_async_streaming(user_context, message, use_global=use_global)
@@ -119,30 +122,24 @@ def chat():
 @login_required
 def get_view(view_name):
     context = mhelp.context()
-    # Add view-specific context if needed
-    if view_name == "dashboard":
-        pass # Dashboard uses HTMX to load its subcomponents
-    
     template = f"agent/views/{view_name}.html"
-    if request.headers.get("HX-Request"):
-        return render_template(template, **context)
-    else:
-        # For non-HTMX requests, return the full index which includes this view as initial
-        return render_template("agent/index.html", active_view=view_name, **context)
+    return render_template(template, **context)
 
 
 @blueprint.route("/chat/sessions")
 @login_required
 def chat_sessions():
-    user_context = _build_context()
+    user_context = _build_context(
+        session_id="Thread 1"
+    )  # Use a valid session for context
     sessions = engine.get_chat_sessions(user_context)
-    
+
     if request.headers.get("HX-Request"):
         current_session_id = request.args.get("current_session_id", "Thread 1")
         return render_template(
-            "agent/partials/_thread_list.html", 
-            sessions=sessions, 
-            current_session_id=current_session_id
+            "agent/partials/_thread_list.html",
+            sessions=sessions,
+            current_session_id=current_session_id,
         )
     return jsonify({"sessions": sessions})
 
@@ -172,24 +169,24 @@ def add_memory():
     data = request.get_json()
     content = data.get("content")
     semantic_type = data.get("type", "fact")
-    
+
     if not content:
         return jsonify({"error": "Content is required"}), 400
-        
+
     user_context = _build_context()
     from angel_recall import create_plaintext, SemanticType
     from angel_claw.runtime.manager import runtime_manager
-    
+
     runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
     memos = runtime.get_memos(user_context.channel_identifier)
-    
+
     cube = create_plaintext(
         text=content,
         semantic_type=SemanticType(semantic_type),
-        owner=user_context.email
+        owner=user_context.email,
     )
     memos.api.create(cube, namespace=f"user_{user_context.email}")
-    
+
     return jsonify({"result": "success"})
 
 
@@ -207,10 +204,23 @@ def delete_memory(memory_id):
 @blueprint.route("/chat/delete/<session_id>", methods=["POST"])
 @login_required
 def delete_chat_session(session_id):
-    user_context = _build_context()
+    user_context = _build_context(session_id=session_id)
     engine.delete_chat_session(user_context, session_id)
-    if request.headers.get("HX-Request"):
-        return "", 204
+    return jsonify({"result": "success"})
+
+
+@blueprint.route("/chat/session/rename", methods=["POST"])
+@login_required
+def rename_session():
+    data = request.get_json()
+    old_id = data.get("session_id")
+    new_name = data.get("new_name")
+
+    if not old_id or not new_name:
+        return jsonify({"error": "session_id and new_name required"}), 400
+
+    user_context = _build_context(session_id=old_id)
+    engine.rename_chat_session(user_context, old_id, new_name)
     return jsonify({"result": "success"})
 
 
@@ -223,7 +233,9 @@ def generate_pair_token():
         return jsonify({"token": token})
     except Exception as e:
         import traceback
-        return jsonify({"error": str(e), "traceback": traceback.format_exc()}), 500
+
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
 
 
 @blueprint.route("/api-key", methods=["POST"])
@@ -267,15 +279,38 @@ def me():
     bridge_online = False
     try:
         # systemctl is-active returns 'active' and exit code 0 if running
-        res = subprocess.run(["systemctl", "is-active", "angel-claw-bridge.service"], capture_output=True, text=True)
+        res = subprocess.run(
+            ["systemctl", "is-active", "angel-claw-bridge.service"],
+            capture_output=True,
+            text=True,
+        )
         bridge_online = res.stdout.strip() == "active"
     except Exception:
         pass
 
+    # Filter channels for WhatsApp and Telegram only
+    whatsapp = next((c for c in channels if c.channel_type == "whatsapp"), None)
+    telegram = next((c for c in channels if c.channel_type == "telegram"), None)
+
+    integrations = {
+        "whatsapp": {
+            "connected": whatsapp is not None,
+            "identifier": whatsapp.channel_identifier if whatsapp else None,
+        },
+        "telegram": {
+            "connected": telegram is not None,
+            "identifier": telegram.channel_identifier if telegram else None,
+        },
+    }
+
     if request.args.get("format") == "api_keys":
         return render_template("agent/partials/_api_keys_list.html", api_keys=api_keys)
     elif request.args.get("format") == "integrations":
-        return render_template("agent/partials/_integrations_list.html", bridge_online=bridge_online, channels=channels)
+        return render_template(
+            "agent/partials/_integrations_list.html",
+            bridge_online=bridge_online,
+            channels=channels,
+        )
 
     return jsonify(
         {
@@ -290,6 +325,7 @@ def me():
                 }
                 for c in channels
             ],
+            "integrations": integrations,
             "api_keys": [
                 {
                     "id": k.id,
@@ -308,12 +344,16 @@ def me():
 def get_todos():
     user_context = _build_context()
     from angel_claw.skills.todo import list_todos
+
     result = list_todos(
         session_id=user_context.channel_identifier, user_id=user_context.user_id
     )
     if request.args.get("format") == "html":
         return render_template("agent/partials/_todo_list.html", todos=result)
-    return jsonify({"todos": result})
+    # Return JSON for dashboard
+    pending = result.count("⬜")
+    total = result.count("⬜") + result.count("✅")
+    return jsonify({"pending": pending, "total": max(total, 1)})
 
 
 @blueprint.route("/calendar")
@@ -327,7 +367,10 @@ def get_calendar():
     )
     if request.args.get("format") == "html":
         return render_template("agent/partials/_calendar_list.html", events=result)
-    return jsonify({"events": result})
+    # Return JSON for dashboard
+    lines = result.split("\n") if isinstance(result, str) else result
+    upcoming = len([l for l in lines if l.strip() and not l.startswith("##")])
+    return jsonify({"upcoming": upcoming, "events": result})
 
 
 @blueprint.route("/messages")
@@ -339,7 +382,10 @@ def get_messages():
     result = list_unread_messages(user_context.user_id, include_read=True)
     if request.args.get("format") == "html":
         return render_template("agent/partials/_message_list.html", messages=result)
-    return jsonify({"messages": result})
+    # Return JSON for dashboard
+    messages = result.get("messages", []) if isinstance(result, dict) else []
+    unread = len([m for m in messages if not m.get("read", False)])
+    return jsonify({"unread": unread, "recipients": len(messages), "messages": result})
 
 
 @blueprint.route("/messages/delete/<int:message_id>", methods=["POST"])
@@ -390,28 +436,30 @@ def get_skills():
 def upload_skill():
     if "skill_file" not in request.files:
         return jsonify({"error": "No file part"}), 400
-    
+
     file = request.files["skill_file"]
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
-    
+
     if file and file.filename.endswith(".py"):
         user_context = _build_context()
         from angel_claw.utils import get_user_root
+
         user_root = get_user_root(user_context.user_id)
         skills_dir = user_root / "skills"
         skills_dir.mkdir(parents=True, exist_ok=True)
-        
+
         file_path = skills_dir / file.filename
         file.save(str(file_path))
-        
+
         # Force reload the registry for this user
         from angel_claw.runtime.manager import runtime_manager
+
         runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
         runtime.skills.reload()
-        
+
         return jsonify({"result": "success", "filename": file.filename})
-    
+
     return jsonify({"error": "Only .py files are allowed"}), 400
 
 
@@ -420,10 +468,11 @@ def upload_skill():
 def get_soul():
     user_context = _build_context()
     from angel_claw.runtime.manager import runtime_manager
+
     runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
     if request.args.get("format") == "html":
         return render_template("agent/partials/_soul_form.html", soul=runtime.soul)
-    return jsonify({"soul": runtime.soul})
+    return jsonify({"instruction": runtime.soul})
 
 
 @blueprint.route("/auth/change-password", methods=["POST"])
@@ -444,7 +493,7 @@ def change_password():
         user.set_hash(new_password)
         db.session.commit()
         return jsonify({"result": "success"})
-    
+
     return jsonify({"error": "Invalid current password"}), 401
 
 
@@ -456,12 +505,13 @@ def update_soul():
         new_soul = data.get("soul")
     else:
         new_soul = request.form.get("soul")
-        
+
     if new_soul is None:
         return jsonify({"error": "No soul content provided"}), 400
-    
+
     user_context = _build_context()
     from angel_claw.runtime.manager import runtime_manager
+
     runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
     runtime.update_soul(new_soul)
     return jsonify({"result": "success"})
@@ -472,6 +522,7 @@ def update_soul():
 def get_soul_templates():
     user_context = _build_context()
     from angel_claw.runtime.manager import runtime_manager
+
     runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
     return jsonify({"templates": list(runtime.get_soul_templates().keys())})
 
@@ -483,18 +534,33 @@ def apply_soul_template():
     template_name = data.get("template")
     if not template_name:
         return jsonify({"error": "No template name provided"}), 400
-    
+
     user_context = _build_context()
     from angel_claw.runtime.manager import runtime_manager
+
     runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
     if runtime.apply_soul_template(template_name):
         return jsonify({"result": "success", "soul": runtime.soul})
-    
+
     return jsonify({"error": "Template not found"}), 404
+
+
+@blueprint.route("/credits")
+@login_required
+def get_credits():
+    from angel_claw.credits import credits_enabled, get_user_stats
+
+    user_id = str(current_user.id)
+    if credits_enabled():
+        credit_info = get_user_stats(user_id)
+    else:
+        credit_info = {"balance": 0, "limit": 0, "lifetime_spent": 0}
+    return jsonify(credit_info)
 
 
 @blueprint.route("/system/mcp")
 @login_required
 def get_mcp_status():
     from angel_claw.mcp_manager import mcp_manager
+
     return jsonify({"servers": mcp_manager.get_diagnostics()})

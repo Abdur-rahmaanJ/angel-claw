@@ -1,6 +1,6 @@
 <div class="flex flex-col h-full overflow-hidden" 
      x-data="window.chatInterface()" 
-     @refresh-chat.window="loadHistory()"
+     @refresh-chat.window="loadHistory(); Alpine.store('viewManager').isStreaming = false"
      x-init="loadHistory()">
     
     <header class="view-header">

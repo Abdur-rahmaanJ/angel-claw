@@ -249,7 +249,33 @@ def run_shopyo_command(cmd_list, quiet=False):
     )
 
 
-def start_web_server(port=5000):
+def run_flask_command(cmd_list, quiet=False):
+    """Runs a flask command directly with the same environment as run_shopyo_command."""
+    app_dir = importlib.resources.files("angel_claw").joinpath("app")
+    
+    env = os.environ.copy()
+    package_root = os.path.abspath(os.path.join(str(app_dir), "..", ".."))
+    env["PYTHONPATH"] = f"{package_root}:{env.get('PYTHONPATH', '')}"
+    
+    db_abs_path = os.path.abspath(os.path.expanduser(settings.db_path))
+    env["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_abs_path}"
+    config_name = os.environ.get("FLASK_ENV", "production")
+    env["FLASK_APP"] = f"app:create_app('{config_name}')"
+    env["FLASK_ENV"] = config_name
+    
+    stdout = subprocess.DEVNULL if quiet else None
+    stderr = subprocess.DEVNULL if quiet else None
+
+    subprocess.run(
+        [sys.executable, "-m", "flask"] + cmd_list,
+        cwd=str(app_dir),
+        env=env,
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+
+def start_web_server(port=5000, debug=False, migrate=False):
     """Initializes and starts the Shopyo web application."""
     ensure_env()
 
@@ -268,9 +294,17 @@ def start_web_server(port=5000):
         run_shopyo_command(["initialise", "--no-clear-migration"], quiet=True)
         print("⚙️  Initializing database... Done.")
 
+    if migrate:
+        print("⚙️  Running database migrations...", end="\r", flush=True)
+        # Try to migrate (might fail if no changes, which is fine)
+        run_flask_command(["db", "migrate", "-m", "Auto migration from CLI"], quiet=True)
+        # Always run upgrade
+        run_flask_command(["db", "upgrade"], quiet=True)
+        print("⚙️  Running database migrations... Done.")
+
     print("⚙️  Syncing users and roles... Done.")
 
-    config_name = os.environ.get("FLASK_ENV", "development")
+    config_name = "development" if debug else os.environ.get("FLASK_ENV", "production")
     from app import create_app
 
     app = create_app(config_name)
@@ -334,6 +368,7 @@ def start_web_server(port=5000):
     table.add_row("🔑  Pass:", "admin")
     table.add_row("", "")
     table.add_row("🤖  Bridges:", "[green]active in background[/green]")
+    table.add_row("⚙️   Mode:", f"[yellow]{'Debug' if debug else 'Production'}[/yellow]")
     table.add_row("⏹️   Stop:", "[bold red]Ctrl+C[/bold red]")
 
     dashboard = Panel(
@@ -350,7 +385,7 @@ def start_web_server(port=5000):
     console.print("\n")
 
     # Start the Flask development server directly
-    app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
+    app.run(host="0.0.0.0", port=port, debug=debug, use_reloader=False)
 
 
 def main():
@@ -371,6 +406,8 @@ def main():
         asyncio.run(interactive_chat(model=model_override, api_base=api_base_override))
     elif len(sys.argv) > 1 and sys.argv[1] == "serve":
         port = 5000
+        debug = "--debug" in sys.argv
+        migrate = "--migrate" in sys.argv
         for i, arg in enumerate(sys.argv):
             if (arg == "--port" or arg == "-p") and i + 1 < len(sys.argv):
                 try:
@@ -378,7 +415,7 @@ def main():
                 except ValueError:
                     print(f"Error: Invalid port number '{sys.argv[i + 1]}'")
                     sys.exit(1)
-        start_web_server(port=port)
+        start_web_server(port=port, debug=debug, migrate=migrate)
     elif len(sys.argv) > 1 and sys.argv[1] == "tutorial":
         ensure_env()
         # Tutorial implementation will go here
@@ -429,17 +466,35 @@ def main():
 
         # 1. Initialize Database
         db_path = os.path.abspath(os.path.expanduser(settings.db_path))
+        do_seed = True
+        
         if os.path.exists(db_path):
             if not force_yes:
                 print(f"⚠️  Database already exists at {db_path}")
-                if not questionary.confirm("Overwrite and re-initialize?", default=False).ask():
+                choice = questionary.select(
+                    "What would you like to do?",
+                    choices=[
+                        "Ensure schema exists (keep existing data)",
+                        "Reset database (delete and start fresh)",
+                        "Abort"
+                    ],
+                    default="Ensure schema exists (keep existing data)"
+                ).ask()
+                
+                if choice == "Abort":
                     print("Aborting setup.")
                     return
-            os.remove(db_path)
+                elif choice == "Reset database (delete and start fresh)":
+                    os.remove(db_path)
+            else:
+                # Force yes means reset
+                os.remove(db_path)
             
         print("⚙️  Step 1/2: Initializing database tables...")
         # shopyo-seed handles db.create_all() and default roles
         run_shopyo_command(["shopyo-seed"])
+        # Run migrations to catch up with schema changes (like missing columns)
+        run_flask_command(["db", "upgrade"], quiet=True)
         
         # 2. Create Admin
         print("\n⚙️  Step 2/2: Creating admin credentials...")

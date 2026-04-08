@@ -1,11 +1,11 @@
 <!DOCTYPE html>
-<html lang="en" :class="$store.viewManager.theme" x-data x-init="$store.viewManager.init()">
+<html lang="en" :class="$store.viewManager?.theme || 'dark'" x-data x-init="$store.viewManager?.init()">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Angel Claw | Control Panel</title>
     <link rel="manifest" href="/static/manifest.json">
-    <meta name="theme-color" id="theme-meta" :content="$store.viewManager.theme === 'dark' ? '#09090b' : '#f4f4f5'">
+    <meta name="theme-color" id="theme-meta" :content="($store.viewManager?.theme || 'dark') === 'dark' ? '#09090b' : '#f4f4f5'">
     <link rel="icon" type="image/png" href="/static/wing.png">
     <link rel="apple-touch-icon" href="/static/wing.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -23,15 +23,236 @@
             }
         };
     </script>
-    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@alpinejs/collapse@3.x.x/dist/cdn.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     <script>
-        // Ensure CSRF token is added to all HTMX requests
-        document.body.addEventListener('htmx:configRequest', (evt) => {
-            const token = document.getElementById('csrf_token')?.value;
-            if (token) evt.detail.headers['X-CSRFToken'] = token;
-        });
+        // Initialize Alpine placeholder before it loads
+        window.Alpine = window.Alpine || {};
+        
+        // Simple view loader using fetch
+        async function loadView(viewName) {
+            const container = document.getElementById('main-view-container');
+            if (!container) return;
+            
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch(`/view/${viewName}`, {
+                    headers: { 'X-CSRFToken': token || '' }
+                });
+                if (res.ok) {
+                    container.innerHTML = await res.text();
+                    // Update active view in store
+                    if (Alpine.store('viewManager')) {
+                        Alpine.store('viewManager').activeView = viewName;
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load view:', e);
+            }
+        }
+        
+        // Define data functions before Alpine loads
+        document.addEventListener('alpine:init', () => {
+            Alpine.data('dashboardData', () => ({
+                todosCount: '--', todosTotal: 0, eventsCount: '--', eventsDays: 7,
+                credits: { balance: 0, limit: 1000, lifetime_spent: 0 },
+                async init() {
+                    await Promise.all([this.loadCredits(), this.loadTodos(), this.loadEvents()]);
+                },
+                async loadCredits() {
+                    try { const r = await fetch('/credits'); const d = await r.json(); this.credits = d; } catch(e) { console.error(e); }
+                },
+                async loadTodos() {
+                    try { const r = await fetch('/todos?format=json'); const d = await r.json(); this.todosCount = d.pending || 0; this.todosTotal = d.total || 0; } catch(e) { this.todosCount = 0; }
+                },
+                async loadEvents() {
+                    try { const r = await fetch('/calendar?format=json'); const d = await r.json(); this.eventsCount = d.upcoming || 0; } catch(e) { this.eventsCount = 0; }
+                }
+            }));
 
+            Alpine.data('tasksData', () => ({
+                todos: [], loading: true,
+                async init() { await this.loadTodos(); },
+                async loadTodos() { try { const r = await fetch('/todos?format=json'); const d = await r.json(); this.todos = this.parseTodos(d.events || ''); } catch(e) { console.error(e); } finally { this.loading = false; } },
+                parseTodos(text) { if (!text || text.includes('No todos')) return []; const lines = text.split('\n'), results = []; for (let i = 1; i < lines.length; i++) { const line = lines[i].trim(); if (line && !line.startsWith('##')) { const completed = line.includes('✅'); const content = line.replace(/^[✅⬜]\s*/, '').replace(/^\[\w+\]\s*\d+\.\s*/, ''); results.push({ id: i, content: content, completed: completed, priority: 'medium' }); } } return results; },
+                async toggleTodo(id) { console.log('Toggle todo:', id); }
+            }));
+
+            Alpine.data('calendarData', () => ({
+                events: [], loading: true,
+                async init() { try { const r = await fetch('/calendar?format=json'); const d = await r.json(); this.events = d.events || []; } catch(e) { console.error(e); } finally { this.loading = false; } }
+            }));
+
+            Alpine.data('messagesData', () => ({
+                messages: [], loading: true,
+                async init() { try { const r = await fetch('/messages?format=json'); const d = await r.json(); this.messages = d.messages || []; } catch(e) { console.error(e); } finally { this.loading = false; } }
+            }));
+
+            Alpine.data('apiData', () => ({
+                apiKeys: [], mcpServers: [], loading: true, showNewKeyForm: false,
+                async init() { await Promise.all([this.loadApiKeys(), this.loadMcpServers()]); },
+                async loadApiKeys() { try { const r = await fetch('/me'); const d = await r.json(); this.apiKeys = d.api_keys || []; } catch(e) { console.error(e); } },
+                async loadMcpServers() { try { const r = await fetch('/system/mcp'); const d = await r.json(); this.mcpServers = d.servers || []; } catch(e) { console.error(e); } finally { this.loading = false; } },
+                async revokeKey(id) { if (!confirm('Revoke this API key?')) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/api-key/revoke/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.apiKeys = this.apiKeys.filter(k => k.id !== id); } catch(e) { console.error(e); } }
+            }));
+
+            Alpine.data('soulData', () => ({
+                soulContent: '', loading: true, saving: false,
+                async init() { try { const r = await fetch('/soul?format=json'); const d = await r.json(); this.soulContent = d.instruction || ''; } catch(e) { console.error(e); } finally { this.loading = false; } },
+                async saveSoul() { this.saving = true; try { const token = document.getElementById('csrf_token')?.value; await fetch('/soul/update', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' }, body: JSON.stringify({ instruction: this.soulContent }) }); alert('Soul updated successfully!'); } catch(e) { alert('Error saving: ' + e.message); } finally { this.saving = false; } }
+            }));
+
+            Alpine.data('settingsData', () => ({
+                showPasswordForm: false, passwords: { current: '', new: '' }, changing: false,
+                theme: localStorage.getItem('theme') || 'dark',
+                accent: localStorage.getItem('accent-color') || '#22c55e', assistantIcon: localStorage.getItem('assistant-icon') || 'fa-brain',
+                toggleTheme(mode) { this.theme = mode; localStorage.setItem('theme', mode); document.documentElement.className = mode; },
+                applyAccent(color) { this.accent = color; localStorage.setItem('accent-color', color); document.documentElement.style.setProperty('--accent-color', color); const rgb = this.hexToRgb(color); document.documentElement.style.setProperty('--accent-rgb', rgb); },
+                hexToRgb(hex) { const r = parseInt(hex.slice(1,3), 16), g = parseInt(hex.slice(3,5), 16), b = parseInt(hex.slice(5,7), 16); return `${r} ${g} ${b}`; },
+                async changePassword() { this.changing = true; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch('/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' }, body: JSON.stringify({ old_password: this.passwords.current, new_password: this.passwords.new }) }); if (r.ok) { alert('Password updated!'); this.showPasswordForm = false; this.passwords = { current: '', new: '' }; } else { alert('Failed to update password'); } } catch(e) { alert('Error: ' + e.message); } finally { this.changing = false; } }
+            }));
+
+            Alpine.data('integrationsData', () => ({
+                integrations: {}, bridgeOnline: false, loading: true,
+                async init() { try { const r = await fetch('/me'); const d = await r.json(); this.integrations = d.integrations || {}; this.bridgeOnline = d.bridge_online || false; } catch(e) { console.error(e); } finally { this.loading = false; } }
+            }));
+
+            Alpine.data('skillsData', () => ({
+                skills: [], loading: true,
+                async init() { try { const r = await fetch('/skills'); const d = await r.json(); this.skills = d.skills || []; } catch(e) { console.error(e); } finally { this.loading = false; } }
+            }));
+
+            Alpine.data('memoryData', () => ({
+                memories: [], loading: true, deleteModal: false, deleteTarget: null,
+                async init() { await this.loadMemories(); },
+                async loadMemories() { try { const sid = Alpine.store('viewManager')?.currentSessionId || 'Thread 1'; const r = await fetch(`/chat/memories?session_id=${encodeURIComponent(sid)}`); const d = await r.json(); this.memories = d.memories || []; } catch(e) { console.error(e); } finally { this.loading = false; } },
+                confirmDelete(mem) { this.deleteTarget = mem; this.deleteModal = true; },
+                async executeDelete() { if (!this.deleteTarget) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/chat/memories/delete/${this.deleteTarget.id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.memories = this.memories.filter(m => m.id !== this.deleteTarget.id); } catch(e) { console.error(e); } finally { this.deleteModal = false; this.deleteTarget = null; } }
+            }));
+
+            Alpine.data('threadsData', () => ({
+                sessions: [],
+                async init() { 
+                    await this.loadSessions();
+                    document.body.addEventListener('refresh-threads', () => this.loadSessions());
+                },
+                async loadSessions() { 
+                    try { 
+                        const r = await fetch('/chat/sessions'); 
+                        const d = await r.json(); 
+                        this.sessions = d.sessions || []; 
+                    } catch(e) { console.error(e); } 
+                }
+            }));
+        });
+        
+        // Define chatInterface
+        window.chatInterface = function() {
+            return {
+                userInput: '',
+                messages: [],
+                loadingHistory: false,
+                streamingContent: '',
+                devLogOpen: false,
+                logs: [],
+
+                async loadHistory() {
+                    const sid = Alpine.store('viewManager')?.currentSessionId || "Thread 1";
+                    this.loadingHistory = true;
+                    try {
+                        const res = await fetch(`/chat/history/${encodeURIComponent(sid)}`);
+                        const data = await res.json();
+                        this.messages = data.history || [];
+                        this.$nextTick(() => this.scrollToBottom());
+                    } catch (e) {
+                        console.error("History load error", e);
+                    } finally {
+                        this.loadingHistory = false;
+                    }
+                },
+
+                async sendMessage() {
+                    const msg = this.userInput.trim();
+                    const viewStore = Alpine.store('viewManager');
+                    if (!msg || viewStore?.isStreaming) return;
+
+                    this.messages.push({ role: 'user', content: msg });
+                    this.userInput = '';
+                    if (viewStore) viewStore.isStreaming = true;
+                    this.streamingContent = '';
+                    this.$nextTick(() => this.scrollToBottom());
+
+                    try {
+                        const sid = viewStore?.currentSessionId || "Thread 1";
+                        const token = document.getElementById('csrf_token')?.value;
+                        const res = await fetch('/chat', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+                            body: JSON.stringify({ 
+                                message: msg, 
+                                session_id: sid,
+                                use_global: viewStore?.useGlobalMemory
+                            })
+                        });
+
+                        if (!res.ok) throw new Error('Failed to send message');
+
+                        const reader = res.body.getReader();
+                        const decoder = new TextDecoder();
+
+                        while (true) {
+                            const { value, done } = await reader.read();
+                            if (done) break;
+
+                            const chunk = decoder.decode(value);
+                            const lines = chunk.split('\n');
+                            for (const line of lines) {
+                                const trimmed = line.trim();
+                                if (trimmed.startsWith('data: ')) {
+                                    try {
+                                        const data = JSON.parse(trimmed.slice(6));
+                                        if (data.chunk) {
+                                            if (data.chunk.startsWith('[TOOL_CALL:')) {
+                                                this.logs.push(`<span class="text-accent">Executing:</span> ${data.chunk.replace('[TOOL_CALL:', '').replace(']', '')}`);
+                                            } else {
+                                                this.streamingContent += data.chunk;
+                                            }
+                                        }
+                                    } catch (e) {}
+                                }
+                            }
+                            this.$nextTick(() => this.scrollToBottom());
+                            this.$nextTick(() => this.scrollToBottom());
+                        }
+                        
+                        this.messages.push({ role: 'assistant', content: this.streamingContent });
+                        this.streamingContent = '';
+                        document.body.dispatchEvent(new CustomEvent('refresh-threads'));
+                    } catch (err) {
+                        this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
+                    } finally {
+                        if (viewStore) viewStore.isStreaming = false;
+                        this.$nextTick(() => this.scrollToBottom());
+                    }
+                },
+
+                formatContent(text) {
+                    if (!text) return '';
+                    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                },
+
+                scrollToBottom() {
+                    const container = this.$refs.messageContainer;
+                    if (container) container.scrollTop = container.scrollHeight;
+                },
+
+                toggleDevLog() {
+                    this.devLogOpen = !this.devLogOpen;
+                }
+            };
+        };
+        
+        // Alpine store initialization
         document.addEventListener('alpine:init', () => {
             Alpine.store('viewManager', {
                 theme: localStorage.getItem('theme') || 'dark',
@@ -48,14 +269,24 @@
                 init() {
                     document.documentElement.className = this.theme;
                     this.applyAccent(this.accent);
-                    
-                    document.body.addEventListener('htmx:afterSwap', (evt) => {
-                        if (evt.detail.target.id === 'main-view-container') {
-                            const path = evt.detail.pathInfo.requestPath;
-                            const newView = path.split('/').pop();
-                            if (newView) this.activeView = newView;
-                        }
-                    });
+                    this.generatePairingToken();
+                },
+
+                async generatePairingToken() {
+                    try {
+                        const token = document.getElementById('csrf_token')?.value;
+                        const res = await fetch('/pair-token', { 
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': token || '' }
+                        });
+                        if (!res.ok) throw new Error('Failed to generate token');
+                        const data = await res.json();
+                        this.pairingToken = data.token || '---';
+                    } catch(e) { console.error('Failed to generate token:', e); }
+                },
+
+                openPairingModal() {
+                    this.generatePairingToken();
                 },
 
                 async createNewThread() {
@@ -72,6 +303,7 @@
                         });
                         const newId = `Thread ${nextNum}`;
                         this.switchToThread(newId);
+                        document.body.dispatchEvent(new CustomEvent('refresh-threads'));
                     } catch (e) {
                         console.error("Error creating thread:", e);
                     }
@@ -79,10 +311,11 @@
 
                 switchToThread(id) {
                     this.currentSessionId = id;
+                    this.isStreaming = false;
                     localStorage.setItem('current-session-id', id);
                     if (this.activeView !== 'chat') {
                         this.activeView = 'chat';
-                        htmx.ajax('GET', '/view/chat', '#main-view-container');
+                        loadView('chat');
                     } else {
                         window.dispatchEvent(new CustomEvent('refresh-chat'));
                     }
@@ -113,110 +346,6 @@
                 toggleSidebar() { this.sidebarOpen = !this.sidebarOpen; }
             });
         });
-
-        // Global chat interface function
-        window.chatInterface = function() {
-            return {
-                userInput: '',
-                messages: [],
-                loadingHistory: false,
-                streamingContent: '',
-                devLogOpen: false,
-                logs: [],
-
-                async loadHistory() {
-                    const sid = Alpine.store('viewManager').currentSessionId || "Thread 1";
-                    this.loadingHistory = true;
-                    try {
-                        const res = await fetch(`/chat/history/${encodeURIComponent(sid)}`);
-                        const data = await res.json();
-                        this.messages = data.history || [];
-                        this.$nextTick(() => this.scrollToBottom());
-                    } catch (e) {
-                        console.error("History load error", e);
-                    } finally {
-                        this.loadingHistory = false;
-                    }
-                },
-
-                async sendMessage() {
-                    const msg = this.userInput.trim();
-                    const viewStore = Alpine.store('viewManager');
-                    if (!msg || viewStore.isStreaming) return;
-
-                    this.messages.push({ role: 'user', content: msg });
-                    this.userInput = '';
-                    viewStore.isStreaming = true;
-                    this.streamingContent = '';
-                    this.$nextTick(() => this.scrollToBottom());
-
-                    try {
-                        const sid = viewStore.currentSessionId || "Thread 1";
-                        const token = document.getElementById('csrf_token')?.value;
-                        const res = await fetch('/chat', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
-                            body: JSON.stringify({ 
-                                message: msg, 
-                                session_id: sid,
-                                use_global: viewStore.useGlobalMemory
-                            })
-                        });
-
-                        if (!res.ok) throw new Error('Failed to send message');
-
-                        const reader = res.body.getReader();
-                        const decoder = new TextDecoder();
-
-                        while (true) {
-                            const { value, done } = await reader.read();
-                            if (done) break;
-
-                            const chunk = decoder.decode(value);
-                            const lines = chunk.split('\n');
-                            for (const line of lines) {
-                                if (line.startsWith('data: ')) {
-                                    try {
-                                        const data = JSON.parse(line.slice(6));
-                                        if (data.chunk) {
-                                            if (data.chunk.startsWith('[TOOL_CALL:')) {
-                                                this.logs.push(`<span class="text-accent">Executing:</span> ${data.chunk.replace('[TOOL_CALL:', '').replace(']', '')}`);
-                                            } else {
-                                                this.streamingContent += data.chunk;
-                                            }
-                                        }
-                                    } catch (e) {}
-                                }
-                            }
-                            this.$nextTick(() => this.scrollToBottom());
-                        }
-                        
-                        this.messages.push({ role: 'assistant', content: this.streamingContent });
-                        this.streamingContent = '';
-                        document.body.dispatchEvent(new CustomEvent('refresh-threads'));
-                    } catch (err) {
-                        this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
-                    } finally {
-                        viewStore.isStreaming = false;
-                        this.$nextTick(() => this.scrollToBottom());
-                    }
-                },
-
-                formatContent(text) {
-                    if (!text) return '';
-                    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-                },
-
-                scrollToBottom() {
-                    const container = this.$refs.messageContainer;
-                    if (container) container.scrollTop = container.scrollHeight;
-                },
-
-                toggleDevLog() {
-                    this.devLogOpen = !this.devLogOpen;
-                }
-            }
-        }
     </script>
     <style type="text/tailwindcss">
         @layer base {
@@ -246,6 +375,29 @@
                 color: var(--text-primary);
                 font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             }
+            
+            /* Custom Scrollbar */
+            ::-webkit-scrollbar {
+                width: 8px;
+                height: 8px;
+            }
+            ::-webkit-scrollbar-track {
+                background: transparent;
+            }
+            ::-webkit-scrollbar-thumb {
+                background: #3f3f46;
+                border-radius: 4px;
+            }
+            ::-webkit-scrollbar-thumb:hover {
+                background: #52525b;
+            }
+            
+            /* Firefox */
+            * {
+                scrollbar-width: thin;
+                scrollbar-color: #3f3f46 transparent;
+            }
+            
             [x-cloak] { display: none !important; }
         }
 
@@ -272,6 +424,9 @@
             }
             .btn-secondary {
                 @apply bg-zinc-800 text-white hover:bg-zinc-700;
+            }
+            .btn-danger {
+                @apply bg-red-600 text-white hover:bg-red-700;
             }
             .view-header {
                 @apply h-16 border-b border-[var(--border-color)] flex items-center justify-between px-4 md:px-8 backdrop-blur-md sticky top-0 z-30;
@@ -316,7 +471,7 @@
             x-cloak
         ></div>
 
-        <div id="main-view-container" class="flex-grow flex flex-col min-h-0">
+        <div id="main-view-container" class="flex-grow flex flex-col min-h-0 overflow-y-auto">
             {% block content %}{% endblock %}
         </div>
     </main>

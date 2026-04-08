@@ -1,3 +1,4 @@
+<div x-data="integrationsData()" x-init="init()">
 <header class="view-header">
     <div class="flex items-center gap-4">
         <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
@@ -7,9 +8,108 @@
     </div>
 </header>
 <div class="workspace">
-    <div class="max-w-4xl mx-auto w-full">
-        <div class="stat-card" hx-get="/me?format=integrations" hx-trigger="load">
-            <div class="flex justify-center py-12"><i class="fas fa-spinner fa-spin text-accent text-2xl"></i></div>
+    <div class="max-w-4xl mx-auto w-full space-y-6">
+        <!-- WhatsApp -->
+        <div class="stat-card">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-green-500/20 rounded-xl flex items-center justify-center">
+                        <i class="fab fa-whatsapp text-2xl text-green-500"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg">WhatsApp</h3>
+                        <p class="text-sm text-zinc-500" x-text="integrations.whatsapp?.connected ? 'Connected as ' + integrations.whatsapp.identifier : 'Not connected'"></p>
+                    </div>
+                </div>
+                <span class="text-xs px-3 py-1 rounded-full" :class="integrations.whatsapp?.connected ? 'bg-green-500/20 text-green-400' : 'bg-zinc-700 text-zinc-400'" x-text="integrations.whatsapp?.connected ? 'Connected' : 'Not connected'"></span>
+            </div>
+        </div>
+
+        <!-- Telegram -->
+        <div class="stat-card">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-blue-500/20 rounded-xl flex items-center justify-center">
+                        <i class="fab fa-telegram text-2xl text-blue-500"></i>
+                    </div>
+                    <div>
+                        <h3 class="font-bold text-lg">Telegram</h3>
+                        <p class="text-sm text-zinc-500" x-text="integrations.telegram?.connected ? 'Connected as ' + integrations.telegram.identifier : 'Not connected'"></p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-3">
+                    <template x-if="!integrations.telegram?.connected">
+                        <button @click="$store.viewManager.activeModal = 'telegram-pairing'" class="btn btn-primary text-sm">Connect</button>
+                    </template>
+                    <span x-show="integrations.telegram?.connected" class="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-400">Connected</span>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Bridge Status -->
+        <div class="stat-card">
+            <h3 class="font-bold mb-4">Bridge Status</h3>
+            <div class="flex items-center gap-3">
+                <span class="relative flex h-3 w-3">
+                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full" :class="bridgeOnline ? 'bg-green-400' : 'bg-red-400'"></span>
+                    <span class="relative inline-flex rounded-full h-3 w-3" :class="bridgeOnline ? 'bg-green-500' : 'bg-red-500'"></span>
+                </span>
+                <span :class="bridgeOnline ? 'text-green-400' : 'text-red-400'" x-text="bridgeOnline ? 'Online' : 'Offline'"></span>
+            </div>
         </div>
     </div>
 </div>
+
+<!-- Telegram Pairing Modal -->
+<div x-show="$store.viewManager.activeModal === 'telegram-pairing'" x-cloak class="fixed inset-0 bg-black/80 z-[1000] flex items-center justify-center p-4 backdrop-blur-md">
+    <div class="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl w-full max-w-[500px] p-8">
+        <div class="flex justify-between items-center mb-6">
+            <h3 class="text-2xl font-bold">Connect Telegram</h3>
+            <button @click="$store.viewManager.activeModal = null" class="text-zinc-500 hover:text-white"><i class="fas fa-times text-xl"></i></button>
+        </div>
+        
+        <div class="text-center">
+            <div class="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600 mb-2">Your Pairing Token</div>
+            <div class="relative">
+                <div x-text="$store.viewManager.pairingToken" class="w-full bg-black/40 border border-accent/20 text-accent py-5 rounded-2xl font-mono text-center text-3xl tracking-[0.5em] outline-none my-4">---</div>
+                <button @click="navigator.clipboard.writeText($store.viewManager.pairingToken); alert('Copied!')" class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white" title="Copy">
+                    <i class="fas fa-copy"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="bg-zinc-800/30 p-5 rounded-2xl text-[13px] border border-zinc-700/50 mt-6">
+            <p class="mb-3 opacity-80">Send this command to <a href="https://t.me/abdur_angelclaw_bot" target="_blank" class="text-blue-400 font-bold hover:underline">@abdur_angelclaw_bot</a> on Telegram:</p>
+            <code class="text-white font-mono break-all text-sm bg-black/40 p-3 rounded-lg block">/pair <span x-text="$store.viewManager.pairingToken" class="font-bold text-accent"></span></code>
+        </div>
+        
+        <div class="mt-6 text-sm text-zinc-500 text-center">
+            <p>After sending, wait a few seconds and refresh this page.</p>
+        </div>
+        
+        <div class="mt-6 flex gap-4">
+            <button class="btn btn-secondary flex-grow" @click="$store.viewManager.activeModal = null">Close</button>
+            <button class="btn btn-primary flex-grow" @click="$store.viewManager.openPairingModal()">New Token</button>
+        </div>
+    </div>
+</div>
+
+<script>
+function integrationsData() {
+    return {
+        integrations: {},
+        bridgeOnline: false,
+        loading: true,
+        
+        async init() {
+            try {
+                const res = await fetch('/me');
+                const data = await res.json();
+                this.integrations = data.integrations || {};
+                this.bridgeOnline = data.bridge_online || false;
+            } catch(e) { console.error(e); }
+            finally { this.loading = false; }
+        }
+    };
+}
+</script>

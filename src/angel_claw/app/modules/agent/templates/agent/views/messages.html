@@ -1,3 +1,4 @@
+<div x-data="messagesData()" x-init="init()">
 <header class="view-header">
     <div class="flex items-center gap-4">
         <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
@@ -8,8 +9,23 @@
 </header>
 <div class="workspace">
     <div class="max-w-4xl mx-auto w-full">
-        <div id="messages-list" hx-get="{{ url_for('agent.get_messages', format='html') }}" hx-trigger="load">
-            <div class="flex justify-center py-20"><i class="fas fa-spinner fa-spin text-accent text-2xl"></i></div>
+        <div class="stat-card">
+            <div x-show="loading" class="flex justify-center py-20">
+                <i class="fas fa-spinner fa-spin text-accent text-2xl"></i>
+            </div>
+            <div x-show="!loading" class="space-y-3">
+                <template x-for="msg in messages" :key="msg.id">
+                    <div class="p-4 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20">
+                        <div class="flex justify-between">
+                            <span class="font-medium" x-text="msg.from || msg.sender"></span>
+                            <span class="text-xs text-zinc-500" x-text="msg.date || msg.timestamp"></span>
+                        </div>
+                        <div class="mt-2 text-sm text-zinc-300" x-text="msg.preview || msg.body"></div>
+                    </div>
+                </template>
+                <p x-show="messages.length === 0" class="text-zinc-600 italic text-center py-8">No messages.</p>
+            </div>
         </div>
     </div>
 </div>
+

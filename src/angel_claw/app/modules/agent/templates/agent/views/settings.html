@@ -1,3 +1,4 @@
+<div x-data="settingsData()">
 <header class="view-header">
     <div class="flex items-center gap-4">
         <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
@@ -11,6 +12,20 @@
         <div class="stat-card">
             <h3 class="font-bold mb-6">Interface Customization</h3>
             
+            <div class="mb-8">
+                <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 block">Theme</label>
+                <div class="flex gap-4">
+                    <button @click="toggleTheme('dark')" class="flex-1 p-4 rounded-xl border-2 transition-all hover:border-accent" :class="theme === 'dark' ? 'border-accent bg-accent/10' : 'border-[var(--border-color)]'">
+                        <i class="fas fa-moon text-xl mb-2 block"></i>
+                        <div class="text-sm">Dark</div>
+                    </button>
+                    <button @click="toggleTheme('light')" class="flex-1 p-4 rounded-xl border-2 transition-all hover:border-accent" :class="theme === 'light' ? 'border-accent bg-accent/10' : 'border-[var(--border-color)]'">
+                        <i class="fas fa-sun text-xl mb-2 block"></i>
+                        <div class="text-sm">Light</div>
+                    </button>
+                </div>
+            </div>
+
             <div class="mb-8">
                 <label class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 block">Accent Color</label>
                 <div class="flex flex-wrap gap-4">
@@ -40,28 +55,28 @@
             </div>
         </div>
 
-        <div class="stat-card" x-data="{ passwordForm: false }">
+        <div class="stat-card">
             <h3 class="font-bold mb-4">Security</h3>
-            <button class="btn btn-secondary w-full md:w-auto" @click="passwordForm = true" x-show="!passwordForm">Change Password</button>
+            <button class="btn btn-secondary w-full md:w-auto" @click="showPasswordForm = true" x-show="!showPasswordForm">Change Password</button>
             
-            <form x-show="passwordForm" x-cloak
-                  hx-post="/auth/change-password" 
-                  hx-swap="none"
-                  @htmx:after-request="if(event.detail.successful) { passwordForm = false; alert('Password updated!'); $el.reset(); }"
-                  class="space-y-4">
+            <form x-show="showPasswordForm" x-cloak @submit.prevent="changePassword()" class="space-y-4">
                 <div>
                     <label class="block text-xs font-bold text-zinc-500 mb-1">Current Password</label>
-                    <input type="password" name="old_password" required class="w-full bg-black/20 border border-zinc-800 rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none">
+                    <input type="password" x-model="passwords.current" required class="w-full bg-[#18181b] border border-[#27272a] rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none" style="background-color: #18181b; border-color: #27272a;">
                 </div>
                 <div>
                     <label class="block text-xs font-bold text-zinc-500 mb-1">New Password</label>
-                    <input type="password" name="new_password" required class="w-full bg-black/20 border border-zinc-800 rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none">
+                    <input type="password" x-model="passwords.new" required class="w-full bg-[#18181b] border border-[#27272a] rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none" style="background-color: #18181b; border-color: #27272a;">
                 </div>
                 <div class="flex gap-3">
-                    <button type="submit" class="btn btn-primary">Update Password</button>
-                    <button type="button" class="btn btn-secondary" @click="passwordForm = false">Cancel</button>
+                    <button type="submit" class="btn btn-primary" :disabled="changing">
+                        <i class="fas fa-spinner fa-spin" x-show="changing"></i>
+                        <span x-show="!changing">Update Password</span>
+                    </button>
+                    <button type="button" class="btn btn-secondary" @click="showPasswordForm = false">Cancel</button>
                 </div>
             </form>
         </div>
     </div>
 </div>
+

@@ -431,13 +431,10 @@ def get_messages():
     user_context = _build_context()
     from angel_claw.skills.messaging import list_unread_messages
 
-    result = list_unread_messages(user_context.user_id, include_read=True)
+    messages = list_unread_messages(user_context.user_id, include_read=True)
     if request.args.get("format") == "html":
-        return render_template("agent/partials/_message_list.html", messages=result)
-    # Return JSON for dashboard
-    messages = result.get("messages", []) if isinstance(result, dict) else []
-    unread = len([m for m in messages if not m.get("read", False)])
-    return jsonify({"unread": unread, "recipients": len(messages), "messages": result})
+        return render_template("agent/partials/_message_list.html", messages=messages)
+    return jsonify({"messages": messages})
 
 
 @blueprint.route("/messages/delete/<int:message_id>", methods=["POST"])

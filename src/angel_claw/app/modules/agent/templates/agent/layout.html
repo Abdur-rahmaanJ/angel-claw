@@ -84,8 +84,12 @@
             }));
 
             Alpine.data('messagesData', () => ({
-                messages: [], loading: true,
-                async init() { try { const r = await fetch('/messages?format=json'); const d = await r.json(); this.messages = d.messages || []; } catch(e) { console.error(e); } finally { this.loading = false; } }
+                messages: [], loading: true, modalOpen: false, selectedMessage: null,
+                async init() { try { const r = await fetch('/messages?format=json'); const d = await r.json(); this.messages = d.messages || []; } catch(e) { console.error(e); } finally { this.loading = false; } },
+                formatDate(ts) { if (!ts) return ''; try { return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) { return ts; } },
+                openMessage(msg) { this.selectedMessage = msg; this.modalOpen = true; },
+                async markAsRead(id) { if (!id) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/messages/mark-read/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); const msg = this.messages.find(m => m.id === id); if (msg) msg.is_read = true; } catch(e) { console.error(e); } },
+                async deleteMsg(id) { if (!id || !confirm('Delete this message?')) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/messages/delete/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.messages = this.messages.filter(m => m.id !== id); this.modalOpen = false; } catch(e) { console.error(e); } }
             }));
 
             Alpine.data('apiData', () => ({

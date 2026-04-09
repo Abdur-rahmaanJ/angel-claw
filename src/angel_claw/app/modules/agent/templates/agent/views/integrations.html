@@ -45,18 +45,6 @@
                 </div>
             </div>
         </div>
-        
-        <!-- Bridge Status -->
-        <div class="stat-card">
-            <h3 class="font-bold mb-4">Bridge Status</h3>
-            <div class="flex items-center gap-3">
-                <span class="relative flex h-3 w-3">
-                    <span class="animate-ping absolute inline-flex h-full w-full rounded-full" :class="bridgeOnline ? 'bg-green-400' : 'bg-red-400'"></span>
-                    <span class="relative inline-flex rounded-full h-3 w-3" :class="bridgeOnline ? 'bg-green-500' : 'bg-red-500'"></span>
-                </span>
-                <span :class="bridgeOnline ? 'text-green-400' : 'text-red-400'" x-text="bridgeOnline ? 'Online' : 'Offline'"></span>
-            </div>
-        </div>
     </div>
 </div>
 
@@ -98,7 +86,6 @@
 function integrationsData() {
     return {
         integrations: {},
-        bridgeOnline: false,
         loading: true,
         
         async init() {
@@ -106,7 +93,6 @@ function integrationsData() {
                 const res = await fetch('/me');
                 const data = await res.json();
                 this.integrations = data.integrations || {};
-                this.bridgeOnline = data.bridge_online || false;
             } catch(e) { console.error(e); }
             finally { this.loading = false; }
         }

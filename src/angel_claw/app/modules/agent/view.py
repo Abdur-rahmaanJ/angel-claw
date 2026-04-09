@@ -1,3 +1,5 @@
+import logging
+
 from flask import render_template
 from flask import request
 from flask import jsonify
@@ -10,6 +12,8 @@ from asgiref.sync import async_to_sync
 
 from angel_claw.engine import AngelClawEngine
 from angel_claw.models import UserContext
+
+logger = logging.getLogger("angel-claw-view")
 
 mhelp = ModuleHelp(__file__, __name__)
 blueprint = mhelp.blueprint
@@ -98,16 +102,21 @@ executor = ThreadPoolExecutor(max_workers=2)
 
 
 def run_async_streaming(user_context, message, use_global=False):
-    """Run async generator in thread and yield chunks."""
+    """Run async generator in thread with proper Flask context handling."""
+    # Create a new event loop in this thread
     loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     try:
-        asyncio.set_event_loop(loop)
+        # Get the async generator
         async_gen = engine.execute_streaming(
             user_context, message, use_global=use_global
         )
 
+        # Iterate through the async generator in this thread
         while True:
             try:
+                # run_until_complete runs in the same thread, preserving context
                 chunk = loop.run_until_complete(async_gen.__anext__())
                 if chunk is not None:
                     yield f"data: {json.dumps({'chunk': chunk})}\n\n"
@@ -123,21 +132,48 @@ def run_async_streaming(user_context, message, use_global=False):
         logger.error(traceback.format_exc())
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
     finally:
-        loop.run_until_complete(asyncio.sleep(0))
+        # Clean up the loop
+        loop.run_until_complete(asyncio.sleep(0.1))
         loop.close()
 
 
 @blueprint.route("/chat", methods=["POST"])
 @login_required
 def chat():
-    data = request.get_json()
-    message = data.get("message")
+    logger = logging.getLogger("angel-claw-view")
+    import os
+
+    log_dir = os.path.expanduser("~/.angelclaw/logs")
+    os.makedirs(log_dir, exist_ok=True)
+    file_handler = logging.FileHandler(os.path.join(log_dir, "chat.log"))
+    file_handler.setLevel(logging.DEBUG)
+    file_handler.setFormatter(
+        logging.Formatter("%(asctime)s [%(name)s %(levelname)s] - %(message)s")
+    )
+    logger.addHandler(file_handler)
+    logger.setLevel(logging.DEBUG)
+
+    try:
+        data = request.get_json(silent=True)
+        logger.info(f"Chat request data: {data}")
+    except Exception as e:
+        logger.error(f"Error parsing JSON: {e}")
+        data = None
+
+    if not data:
+        logger.warning("No data in chat request")
+        return jsonify({"error": "Invalid request data"}), 400
+
+    message = data.get("message", "").strip()
     use_global = data.get("use_global", False)
     session_id = data.get("session_id", "Thread 1")
+
     if not message:
+        logger.warning("Empty message in chat request")
         return jsonify({"error": "No message provided"}), 400
 
     user_context = _build_context(session_id=session_id)
+    logger.info(f"Chat from user: {user_context.user_id}, session: {session_id}")
 
     def generate():
         yield from run_async_streaming(user_context, message, use_global=use_global)

@@ -1,49 +1,78 @@
 from typing import Optional, List
 from datetime import datetime
+import logging
+import traceback
 from angel_claw.skills.manager import skill
 from angel_claw.config import settings
 
+logger = logging.getLogger("angel-claw-messaging")
+
 
 @skill
-async def send_internal_message(to_user: str, content: str, user_id: str) -> str:
+async def send_internal_message(to_user: str, content: str, user_id: str = None) -> str:
     """
     Sends an internal system message/note to another user.
-    - to_user: The email address identifying the recipient.
-    - content: The message content.
-    - user_id: The sender's ID (automatically injected).
+
+    Parameters:
+    - to_user: The email address of the recipient (e.g., "user@example.com")
+    - content: The message text to send
+    - user_id: (optional) The sender's ID - automatically provided by the system
     """
+    logger.info(
+        f"send_internal_message called: to_user={to_user}, user_id={user_id}, content={content[:50]}..."
+    )
+
+    if not user_id:
+        return "Error: Could not determine sender. Please try again."
+    if not to_user:
+        return "Error: Recipient email is required."
+    if not content:
+        return "Error: Message content is required."
+
     from angel_claw.engine import AngelClawEngine
 
     engine = AngelClawEngine()
 
-    with engine._app_context():
-        from shopyo_auth.models import User
-        from modules.agent.models import InternalMessage
-        from init import db
+    try:
+        with engine._app_context():
+            from shopyo_auth.models import User
+            from modules.agent.models import InternalMessage
+            from init import db
 
-        recipient = User.get_by_email(to_user)
-        if not recipient:
-            return f"Error: User '{to_user}' not found."
+            recipient = User.get_by_email(to_user)
+            if not recipient:
+                return f"Error: User '{to_user}' not found."
 
-        new_msg = InternalMessage(
-            sender_id=user_id,
-            recipient_id=str(recipient.id),
-            recipient_email=to_user,
-            content=content,
-        )
-        db.session.add(new_msg)
-        db.session.commit()
+            new_msg = InternalMessage(
+                sender_id=user_id,
+                recipient_id=str(recipient.id),
+                recipient_email=to_user,
+                content=content,
+            )
+            db.session.add(new_msg)
+            db.session.commit()
+            logger.info(
+                f"Message committed to DB: sender={user_id}, recipient={recipient.id}"
+            )
 
-        try:
-            from angel_claw.cron import cron_manager
+            try:
+                from angel_claw.cron import cron_manager
 
-            sender = db.session.get(User, user_id)
-            notification = f"📬 [Internal Message] From: {sender.email}\n\n{content}"
-            await cron_manager._send_proactive_message(notification, str(recipient.id))
-        except Exception:
-            pass
+                sender = db.session.get(User, user_id)
+                notification = (
+                    f"📬 [Internal Message] From: {sender.email}\n\n{content}"
+                )
+                await cron_manager._send_proactive_message(
+                    notification, str(recipient.id)
+                )
+            except Exception as e:
+                logger.warning(f"Could not send proactive notification: {e}")
 
-        return f"✅ Message delivered to {to_user}."
+            return f"✅ Message delivered to {to_user}."
+    except Exception as e:
+        logger.error(f"Error sending internal message: {e}")
+        logger.error(traceback.format_exc())
+        return f"Error: {str(e)}"
 
 
 @skill

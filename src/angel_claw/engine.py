@@ -22,12 +22,13 @@ from asgiref.sync import async_to_sync
 from .runtime.cache import cache
 
 logger = logging.getLogger("angel-claw-engine")
+logger.setLevel(logging.DEBUG)
 
-# Silence litellm logging
+# Silence litellm verbose logging but keep errors
 litellm.suppress_debug_info = True
 litellm.add_disable_loading_cost_map = True
-logging.getLogger("LiteLLM").setLevel(logging.CRITICAL)
-logging.getLogger("litellm").setLevel(logging.CRITICAL)
+logging.getLogger("LiteLLM").setLevel(logging.WARNING)
+logging.getLogger("litellm").setLevel(logging.WARNING)
 
 
 import threading
@@ -108,12 +109,14 @@ class AngelClawEngine:
 
                 if has_app_context():
                     # If we are in a flask request, use that context
+                    logger.debug("Using existing Flask app context")
                     return current_app.app_context()
             except ImportError:
                 pass
 
             with AngelClawEngine._app_lock:
                 if AngelClawEngine._cached_app:
+                    logger.debug("Using cached Flask app")
                     return AngelClawEngine._cached_app.app_context()
 
                 logger.info(
@@ -452,6 +455,36 @@ class AngelClawEngine:
             response_message = response.choices[0].message
             msg_dict = {"role": "assistant", "content": response_message.content}
 
+            # Debug: log the raw response_message and tool_calls
+            debug_file = os.path.expanduser("~/.angelclaw/logs/tool_debug.txt")
+            os.makedirs(os.path.dirname(debug_file), exist_ok=True)
+            with open(debug_file, "a") as f:
+                f.write(
+                    f"{datetime.now().isoformat()} - response_message type: {type(response_message)}\n"
+                )
+                f.write(
+                    f"{datetime.now().isoformat()} - response_message.content: {response_message.content}\n"
+                )
+                f.write(
+                    f"{datetime.now().isoformat()} - response_message.tool_calls: {response_message.tool_calls}\n"
+                )
+                if response_message.tool_calls:
+                    for tc in response_message.tool_calls:
+                        f.write(f"{datetime.now().isoformat()} - tc type: {type(tc)}\n")
+                        f.write(f"{datetime.now().isoformat()} - tc.id: {tc.id}\n")
+                        f.write(
+                            f"{datetime.now().isoformat()} - tc.function: {tc.function}\n"
+                        )
+                        f.write(
+                            f"{datetime.now().isoformat()} - tc.function.name: {tc.function.name}\n"
+                        )
+                        f.write(
+                            f"{datetime.now().isoformat()} - tc.function.arguments: {repr(tc.function.arguments)}\n"
+                        )
+                        f.write(
+                            f"{datetime.now().isoformat()} - type(tc.function.arguments): {type(tc.function.arguments)}\n"
+                        )
+
             if response_message.tool_calls:
                 # Audit: Tool Spam Defense
                 if len(response_message.tool_calls) > MAX_TOOLS_PER_TURN:
@@ -485,10 +518,35 @@ class AngelClawEngine:
             # Handle Tool Calls - Audit: Unified Sandboxed Execution
             for tool_call in response_message.tool_calls:
                 function_name = tool_call.function.name
+
+                # Debug: raw arguments string - write to debug file
+                raw_args = tool_call.function.arguments
+                debug_file = os.path.expanduser("~/.angelclaw/logs/tool_debug.txt")
+                os.makedirs(os.path.dirname(debug_file), exist_ok=True)
+                with open(debug_file, "a") as f:
+                    f.write(
+                        f"{datetime.now().isoformat()} - TOOL_CALL object: {repr(tool_call)}\n"
+                    )
+                    f.write(
+                        f"{datetime.now().isoformat()} - tool_call.function.name = {tool_call.function.name}\n"
+                    )
+                    f.write(
+                        f"{datetime.now().isoformat()} - tool_call.function.arguments = {repr(tool_call.function.arguments)}\n"
+                    )
+                    f.write(
+                        f"{datetime.now().isoformat()} - type(tool_call.function.arguments) = {type(tool_call.function.arguments)}\n"
+                    )
+
                 try:
-                    function_args = json.loads(tool_call.function.arguments)
+                    function_args = json.loads(raw_args)
                 except json.JSONDecodeError:
                     function_args = {}
+
+                # Debug: what are we passing to call_tool?
+                with open(debug_file, "a") as f:
+                    f.write(
+                        f"{datetime.now().isoformat()} - ABOUT TO CALL runtime.call_tool: {function_args}\n"
+                    )
 
                 # Tool credit check
                 allowed, err_msg = await self._check_credits(user_id, "tool_execution")
@@ -504,9 +562,13 @@ class AngelClawEngine:
                     continue
 
                 # Use the unified runtime caller which handles sandboxing and context injection
+                logger.warning(
+                    f"CALLING runtime.call_tool(function_name={function_name}, function_args={function_args}, session_id={session_id})"
+                )
                 function_result = await runtime.call_tool(
                     function_name, function_args, session_id
                 )
+                logger.warning(f"call_tool returned: {function_result}")
                 messages.append(
                     {
                         "tool_call_id": tool_call.id,
@@ -578,18 +640,31 @@ class AngelClawEngine:
         self, context: UserContext, message: str, use_global: bool = False
     ):
         """Streaming version of execute - yields chunks as they arrive."""
-        ctx = self._app_context()
-        if ctx:
-            with ctx:
-                async for chunk in self._execute_streaming_internal(
-                    context, message, use_global=use_global
-                ):
-                    yield chunk
-        else:
+        # Check if we're already in an app context (e.g., from Flask request)
+        from flask import has_app_context
+
+        in_app_context = has_app_context()
+
+        if in_app_context:
+            # Already in Flask request context - run directly without wrapping
             async for chunk in self._execute_streaming_internal(
                 context, message, use_global=use_global
             ):
                 yield chunk
+        else:
+            # Not in Flask context - use engine's context management
+            ctx = self._app_context()
+            if ctx:
+                with ctx:
+                    async for chunk in self._execute_streaming_internal(
+                        context, message, use_global=use_global
+                    ):
+                        yield chunk
+            else:
+                async for chunk in self._execute_streaming_internal(
+                    context, message, use_global=use_global
+                ):
+                    yield chunk
 
     async def _execute_streaming_internal(
         self, context: UserContext, message: str, use_global: bool = False

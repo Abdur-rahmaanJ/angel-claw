@@ -85,8 +85,6 @@ class LlmExecutor:
             response_message = response.choices[0].message
             msg_dict = {"role": "assistant", "content": response_message.content}
 
-            self._log_response(response_message)
-
             if response_message.tool_calls:
                 if len(response_message.tool_calls) > MAX_TOOLS_PER_TURN:
                     logger.warning(
@@ -402,36 +400,6 @@ class LlmExecutor:
             }
             for tc in tool_calls
         ]
-
-    def _log_response(self, response_message):
-        """Log response for debugging."""
-        debug_file = os.path.expanduser("~/.angelclaw/logs/tool_debug.txt")
-        os.makedirs(os.path.dirname(debug_file), exist_ok=True)
-        with open(debug_file, "a") as f:
-            from datetime import datetime
-
-            f.write(
-                f"{datetime.now().isoformat()} - response_message type: {type(response_message)}\n"
-            )
-            f.write(
-                f"{datetime.now().isoformat()} - response_message.content: {response_message.content}\n"
-            )
-            f.write(
-                f"{datetime.now().isoformat()} - response_message.tool_calls: {response_message.tool_calls}\n"
-            )
-            if response_message.tool_calls:
-                for tc in response_message.tool_calls:
-                    f.write(f"{datetime.now().isoformat()} - tc type: {type(tc)}\n")
-                    f.write(f"{datetime.now().isoformat()} - tc.id: {tc.id}\n")
-                    f.write(
-                        f"{datetime.now().isoformat()} - tc.function: {tc.function}\n"
-                    )
-                    f.write(
-                        f"{datetime.now().isoformat()} - tc.function.name: {tc.function.name}\n"
-                    )
-                    f.write(
-                        f"{datetime.now().isoformat()} - tc.function.arguments: {repr(tc.function.arguments)}\n"
-                    )
 
 
 def create_llm_executor(settings, cache=None) -> LlmExecutor:

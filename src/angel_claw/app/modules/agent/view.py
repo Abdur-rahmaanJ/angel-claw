@@ -141,17 +141,6 @@ def run_async_streaming(user_context, message, use_global=False):
 @login_required
 def chat():
     logger = logging.getLogger("angel-claw-view")
-    import os
-
-    log_dir = os.path.expanduser("~/.angelclaw/logs")
-    os.makedirs(log_dir, exist_ok=True)
-    file_handler = logging.FileHandler(os.path.join(log_dir, "chat.log"))
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(
-        logging.Formatter("%(asctime)s [%(name)s %(levelname)s] - %(message)s")
-    )
-    logger.addHandler(file_handler)
-    logger.setLevel(logging.DEBUG)
 
     try:
         data = request.get_json(silent=True)

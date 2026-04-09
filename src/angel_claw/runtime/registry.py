@@ -24,7 +24,6 @@ class TieredSkillRegistry:
 
         self.user_root = get_user_root(context.user_id)
 
-        # Paths
         internal_skills = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "skills"
         )
@@ -34,7 +33,6 @@ class TieredSkillRegistry:
 
         self.manager = SkillManager([internal_skills, local_skills, str(user_skills)])
 
-        # Phase 1 Sandbox: Thread pool with timeout
         self._executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=5, thread_name_prefix=f"user_{context.user_id}_sandbox"
         )
@@ -46,7 +44,6 @@ class TieredSkillRegistry:
 
     @property
     def skills(self) -> Dict[str, Callable]:
-        # DEPRECATED: Use call_tool instead for better sandboxing
         sandboxed_skills = {}
         for name, func in self.manager.skills.items():
             sandboxed_skills[name] = self._make_sandboxed(func)
@@ -56,26 +53,12 @@ class TieredSkillRegistry:
         self, name: str, arguments: Dict[str, Any], session_id: str
     ) -> str:
         """Unified, sandboxed tool caller for local and MCP tools."""
-        debug_file = os.path.expanduser("~/.angelclaw/logs/tool_debug.txt")
-        os.makedirs(os.path.dirname(debug_file), exist_ok=True)
-
-        with open(debug_file, "a") as f:
-            f.write(f"{datetime.now().isoformat()} - REGISTRY call_tool START\n")
-            f.write(
-                f"  name={name}, session_id={session_id}, user_id={self.context.user_id}\n"
-            )
-            f.write(f"  arguments={arguments}\n")
-
-        # Ensure arguments is a dict
         if not isinstance(arguments, dict):
-            with open(debug_file, "a") as f:
-                f.write(f"  ERROR: arguments is not dict, type={type(arguments)}\n")
             arguments = {}
 
         if name in self.manager.skills:
             func = self.manager.skills[name]
 
-            # Inject context
             sig = inspect.signature(func)
 
             if "session_id" in sig.parameters:
@@ -94,24 +77,15 @@ class TieredSkillRegistry:
                 if "is_admin" not in arguments:
                     arguments["is_admin"] = self.context.is_admin
 
-            with open(debug_file, "a") as f:
-                f.write(f"  Final arguments after injection: {arguments}\n")
-
-            # Phase 2: Docker Sandboxing (if enabled)
             if settings.docker_sandboxing_enabled:
                 result = await self._call_in_docker(name, arguments)
             else:
-                # Phase 1: Thread Sandbox
                 sandboxed_func = self._make_sandboxed(func)
                 result = await sandboxed_func(**arguments)
-
-            with open(debug_file, "a") as f:
-                f.write(f"  Result: {result}\n")
 
             return self._sanitize_output(str(result))
 
         elif name in mcp_manager.tool_to_server:
-            # Sandbox MCP calls
             try:
                 result = await asyncio.wait_for(
                     mcp_manager.call_tool(name, arguments), timeout=45
@@ -125,15 +99,12 @@ class TieredSkillRegistry:
             return f"Error: Tool '{name}' not found."
 
     async def _call_in_docker(self, name: str, arguments: Dict[str, Any]) -> str:
-        """Executes a skill inside a transient Docker container (optionally with gVisor)."""
-        # Find which file contains this skill
         skill_file = None
         for d in self.manager.skills_dirs:
             if not os.path.exists(d):
                 continue
             for f in os.listdir(d):
                 if f.endswith(".py"):
-                    # This is a bit slow but necessary if we don't track file-to-func mapping
                     with open(os.path.join(d, f), "r") as file_content:
                         if f"def {name}" in file_content.read():
                             skill_file = os.path.abspath(os.path.join(d, f))
@@ -148,7 +119,6 @@ class TieredSkillRegistry:
             os.path.join(os.path.dirname(__file__), "container_runner.py")
         )
 
-        # Docker Command Construction
         cmd = [
             "docker",
             "run",
@@ -202,14 +172,10 @@ class TieredSkillRegistry:
             return f"Error: Sandbox infrastructure failure: {e}"
 
     def _sanitize_output(self, output: str) -> str:
-        """Sanitizes tool output to prevent prompt injection from external sources."""
-        # Simple defense: ensure tool output doesn't look like system instructions
-        # and limit total length to prevent context explosion/DOS
         max_len = 15000
         if len(output) > max_len:
             output = output[:max_len] + "... [TRUNCATED]"
 
-        # Strip potential instruction-like prefixes that might trick the LLM
         forbidden_prefixes = ["SYSTEM:", "ASSISTANT:", "USER:", "IMPORTANT:"]
         for prefix in forbidden_prefixes:
             if output.upper().startswith(prefix):
@@ -219,46 +185,22 @@ class TieredSkillRegistry:
         return output
 
     def _make_sandboxed(self, func: Callable) -> Callable:
-        func_name = func.__name__
-
-        # Write debug logs to file
-        debug_file = os.path.expanduser("~/.angelclaw/logs/tool_debug.txt")
-        os.makedirs(os.path.dirname(debug_file), exist_ok=True)
-
-        def log_debug(msg):
-            with open(debug_file, "a") as f:
-                f.write(f"{datetime.now().isoformat()} - {msg}\n")
-
         is_async = asyncio.iscoroutinefunction(func)
 
         async def sandboxed_wrapper(*args, **kwargs):
-            log_debug(f"=== sandboxed_wrapper START: {func_name} ===")
-            log_debug(f"kwargs = {kwargs}")
-
             try:
                 if is_async:
-                    log_debug(f"Calling ASYNC {func_name} with kwargs={kwargs}")
-                    coro = func(**kwargs)
-                    log_debug(f"Got coroutine: {type(coro)}")
-                    result = await asyncio.wait_for(coro, timeout=30)
-                    log_debug(f"Async result: {str(result)[:80]}")
+                    result = await asyncio.wait_for(func(**kwargs), timeout=30)
                 else:
-                    log_debug(f"Calling SYNC {func_name} in executor")
                     loop = asyncio.get_event_loop()
                     result = await asyncio.wait_for(
                         loop.run_in_executor(self._executor, lambda: func(**kwargs)),
                         timeout=30,
                     )
-                log_debug(f"sandboxed_wrapper returning: {str(result)[:50]}...")
                 return result
             except asyncio.TimeoutError:
-                log_debug(f"Skill TIMED OUT: {func_name}")
                 return f"Error: Skill timed out after 30 seconds."
             except Exception as e:
-                log_debug(f"Skill ERROR: {func_name} - {e}")
-                import traceback
-
-                log_debug(traceback.format_exc())
                 return f"Error: {str(e)}"
 
         return sandboxed_wrapper

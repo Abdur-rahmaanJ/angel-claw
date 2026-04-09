@@ -23,11 +23,6 @@ class PairingService:
     """Pairing service for managing channel pairing and tokens with DI support."""
 
     def __init__(self, settings, app_context_manager):
-        """
-        Args:
-            settings: Settings object for configuration
-            app_context_manager: AppContextManager instance
-        """
         self._settings = settings
         self._app_context_manager = app_context_manager
 
@@ -36,34 +31,31 @@ class PairingService:
         if self._settings.auth_mode != "shopyo":
             raise NotImplementedError("Channel pairing only supported in Shopyo mode")
 
-        ctx = self._app_context_manager._app_context().__enter__()
-        if not ctx:
-            return
+        with self._app_context_manager._app_context():
+            try:
+                from modules.agent.models import Channel
+                from init import db
 
-        try:
-            from modules.agent.models import Channel
-            from init import db
+                channel = Channel.query.filter_by(
+                    channel_type=channel_type, channel_identifier=identifier
+                ).first()
 
-            channel = Channel.query.filter_by(
-                channel_type=channel_type, channel_identifier=identifier
-            ).first()
+                if not channel:
+                    channel = Channel(
+                        user_id=context.user_id,
+                        channel_type=channel_type,
+                        channel_identifier=identifier,
+                        is_active=True,
+                    )
+                    db.session.add(channel)
+                else:
+                    channel.user_id = context.user_id
+                    channel.last_seen_at = datetime.now(UTC)
+                    channel.is_active = True
 
-            if not channel:
-                channel = Channel(
-                    user_id=context.user_id,
-                    channel_type=channel_type,
-                    channel_identifier=identifier,
-                    is_active=True,
-                )
-                db.session.add(channel)
-            else:
-                channel.user_id = context.user_id
-                channel.last_seen_at = datetime.now(UTC)
-                channel.is_active = True
-
-            db.session.commit()
-        finally:
-            self._app_context_manager._app_context().__exit__(None, None, None)
+                db.session.commit()
+            except Exception as e:
+                logger.error(f"Error pairing channel: {e}")
 
     def generate_pair_token(self, context: UserContext) -> str:
         """Generate a pairing token for a user."""
@@ -72,11 +64,10 @@ class PairingService:
                 "Pairing token generation only supported in Shopyo mode"
             )
 
-        ctx = self._app_context_manager._app_context().__enter__()
-        if ctx is None:
-            raise RuntimeError("Could not load app context")
+        with self._app_context_manager._app_context() as ctx:
+            if ctx is None:
+                raise RuntimeError("Could not load app context")
 
-        try:
             from modules.agent.models import PairingToken
             from init import db
 
@@ -90,8 +81,6 @@ class PairingService:
             db.session.add(pairing_token)
             db.session.commit()
             return token
-        finally:
-            self._app_context_manager._app_context().__exit__(None, None, None)
 
     def validate_pair_token(self, token: str) -> Optional[str]:
         """Validate a pairing token and return user_id if valid."""
@@ -101,12 +90,11 @@ class PairingService:
                 "Pairing token validation only supported in Shopyo mode"
             )
 
-        ctx = self._app_context_manager._app_context().__enter__()
-        if not ctx:
-            logger.error("Engine: Could not get app context for token validation")
-            return None
+        with self._app_context_manager._app_context() as ctx:
+            if not ctx:
+                logger.error("Engine: Could not get app context for token validation")
+                return None
 
-        try:
             from modules.agent.models import PairingToken
             from init import db
 
@@ -130,10 +118,7 @@ class PairingService:
             else:
                 logger.warning("Engine: Token not found or already consumed")
             return None
-        finally:
-            self._app_context_manager._app_context().__exit__(None, None, None)
 
 
 def create_pairing_service(settings, app_context_manager) -> PairingService:
-    """Factory function to create a PairingService."""
     return PairingService(settings, app_context_manager)

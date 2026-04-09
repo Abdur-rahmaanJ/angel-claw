@@ -1,7 +1,7 @@
 import logging
 import hashlib
 import secrets
-from datetime import datetime, UTC, timedelta
+from datetime import datetime, UTC
 from typing import Optional, Protocol
 from ..models import UserContext
 
@@ -22,11 +22,6 @@ class ApiKeyService:
     """API key service for managing API keys with DI support."""
 
     def __init__(self, settings, app_context_manager):
-        """
-        Args:
-            settings: Settings object for configuration
-            app_context_manager: AppContextManager instance
-        """
         self._settings = settings
         self._app_context_manager = app_context_manager
 
@@ -35,11 +30,10 @@ class ApiKeyService:
         if self._settings.auth_mode != "shopyo":
             raise NotImplementedError("API Key creation only supported in Shopyo mode")
 
-        ctx = self._app_context_manager._app_context().__enter__()
-        if not ctx:
-            raise RuntimeError("Could not load app context")
+        with self._app_context_manager._app_context() as ctx:
+            if not ctx:
+                raise RuntimeError("Could not load app context")
 
-        try:
             from modules.agent.models import ApiKey
             from init import db
 
@@ -55,8 +49,6 @@ class ApiKeyService:
             db.session.add(api_key)
             db.session.commit()
             return raw_key
-        finally:
-            self._app_context_manager._app_context().__exit__(None, None, None)
 
     def revoke_api_key(self, context: UserContext, key_id: str):
         """Revoke an API key."""
@@ -65,20 +57,19 @@ class ApiKeyService:
                 "API Key revocation only supported in Shopyo mode"
             )
 
-        ctx = self._app_context_manager._app_context().__enter__()
-        if not ctx:
-            return
+        with self._app_context_manager._app_context():
+            try:
+                from modules.agent.models import ApiKey
+                from init import db
 
-        try:
-            from modules.agent.models import ApiKey
-            from init import db
-
-            api_key = ApiKey.query.filter_by(id=key_id, user_id=context.user_id).first()
-            if api_key:
-                api_key.is_active = False
-                db.session.commit()
-        finally:
-            self._app_context_manager._app_context().__exit__(None, None, None)
+                api_key = ApiKey.query.filter_by(
+                    id=key_id, user_id=context.user_id
+                ).first()
+                if api_key:
+                    api_key.is_active = False
+                    db.session.commit()
+            except Exception as e:
+                logger.error(f"Error revoking API key: {e}")
 
     def validate_api_key(self, raw_key: str) -> Optional[UserContext]:
         """Validate an API key and return user context if valid."""
@@ -87,11 +78,10 @@ class ApiKeyService:
                 "API Key validation only supported in Shopyo mode"
             )
 
-        ctx = self._app_context_manager._app_context().__enter__()
-        if not ctx:
-            return None
+        with self._app_context_manager._app_context() as ctx:
+            if not ctx:
+                return None
 
-        try:
             import hashlib
             from modules.agent.models import ApiKey
             from shopyo_auth.models import User
@@ -125,10 +115,7 @@ class ApiKeyService:
                         is_admin=getattr(user, "is_admin", False),
                     )
             return None
-        finally:
-            self._app_context_manager._app_context().__exit__(None, None, None)
 
 
 def create_api_key_service(settings, app_context_manager) -> ApiKeyService:
-    """Factory function to create an ApiKeyService."""
     return ApiKeyService(settings, app_context_manager)

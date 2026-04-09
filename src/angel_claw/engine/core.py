@@ -53,11 +53,7 @@ class AngelClawEngine:
 
     def _ensure_channel(self, context: UserContext):
         if settings.auth_mode == "shopyo":
-            ctx = self._app_context_manager._app_context()
-            if not ctx:
-                return
-
-            with ctx:
+            with self._app_context_manager._app_context():
                 try:
                     from modules.agent.models import Channel
                     from init import db
@@ -87,9 +83,8 @@ class AngelClawEngine:
     async def execute(
         self, context: UserContext, message: str, use_global: bool = False
     ) -> EngineResponse:
-        ctx = self._app_context_manager._app_context()
-        if ctx:
-            with ctx:
+        with self._app_context_manager._app_context() as ctx:
+            if ctx:
                 return await self._execute_internal(
                     context, message, use_global=use_global
                 )
@@ -208,18 +203,17 @@ class AngelClawEngine:
             ):
                 yield chunk
         else:
-            ctx = self._app_context_manager._app_context()
-            if ctx:
-                with ctx:
+            with self._app_context_manager._app_context() as ctx:
+                if ctx:
                     async for chunk in self._execute_streaming_internal(
                         context, message, use_global=use_global
                     ):
                         yield chunk
-            else:
-                async for chunk in self._execute_streaming_internal(
-                    context, message, use_global=use_global
-                ):
-                    yield chunk
+                else:
+                    async for chunk in self._execute_streaming_internal(
+                        context, message, use_global=use_global
+                    ):
+                        yield chunk
 
     async def _execute_streaming_internal(
         self, context: UserContext, message: str, use_global: bool = False

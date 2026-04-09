@@ -3,7 +3,7 @@
      @refresh-chat.window="loadHistory(); Alpine.store('viewManager').isStreaming = false"
      x-init="loadHistory()">
     
-    <header class="view-header">
+    <header class="view-header shrink-0">
         <div class="flex items-center gap-4">
             <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
                 <i class="fas fa-bars"></i>
@@ -24,7 +24,7 @@
         </div>
     </header>
 
-    <div class="flex-grow flex flex-col min-h-0 relative">
+    <div class="flex-1 flex flex-col min-h-0 relative">
         <!-- Dev Log -->
         <div x-show="devLogOpen" x-transition class="absolute inset-x-0 top-0 h-40 bg-black/90 border-b border-zinc-800 z-20 font-mono text-[9px] p-4 overflow-y-auto">
             <div class="flex justify-between items-center mb-2 border-b border-zinc-800 pb-1">
@@ -39,7 +39,7 @@
         </div>
 
         <!-- Messages Container -->
-        <div class="flex-grow overflow-y-auto px-4 md:px-8 py-8 space-y-6" id="chat-messages" x-ref="messageContainer">
+        <div class="flex-1 overflow-y-auto px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-6" id="chat-messages" x-ref="messageContainer">
             <template x-if="loadingHistory">
                 <div class="flex justify-center py-20"><i class="fas fa-spinner fa-spin text-accent text-2xl"></i></div>
             </template>
@@ -49,44 +49,44 @@
             </template>
 
             <template x-for="(msg, index) in messages" :key="index">
-                <div class="max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]">
-                    <div class="w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white"
+                <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4 animate-[fadeIn_0.3s_ease-out]">
+                    <div class="w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm md:text-base"
                          :class="msg.role === 'user' ? 'bg-zinc-800' : 'bg-accent'">
                         <i class="fas" :class="msg.role === 'user' ? 'fa-user' : $store.viewManager.assistantIcon"></i>
                     </div>
-                    <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words" x-html="formatContent(msg.content)"></div>
+                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words" x-html="formatContent(msg.content)"></div>
                 </div>
             </template>
             
             <!-- Streaming Message -->
             <template x-if="$store.viewManager.isStreaming">
-                <div class="max-w-[850px] mx-auto flex gap-4 animate-[fadeIn_0.3s_ease-out]">
-                    <div class="w-10 h-10 rounded-full bg-accent flex items-center justify-center flex-shrink-0 text-white">
+                <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4 animate-[fadeIn_0.3s_ease-out]">
+                    <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-accent flex items-center justify-center flex-shrink-0 text-white text-sm md:text-base">
                         <i class="fas" :class="$store.viewManager.assistantIcon"></i>
                     </div>
-                    <div class="text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words" x-html="formatContent(streamingContent)"></div>
+                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words" x-html="formatContent(streamingContent)"></div>
                 </div>
             </template>
         </div>
     </div>
 
     <!-- Input Area -->
-    <div class="px-4 md:px-8 pb-8 pt-4 border-t border-[var(--border-color)] bg-[var(--bg-color)]">
+    <div class="px-3 md:px-8 pb-4 md:pb-8 pt-3 md:pt-4 border-t border-[var(--border-color)] bg-[var(--bg-color)] shrink-0">
         <div class="max-w-[850px] mx-auto relative">
             <form @submit.prevent="sendMessage()">
                 <textarea 
                     x-model="userInput"
                     @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
                     @input="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
-                    class="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 pr-14 py-4 text-[15px] focus:border-accent outline-none resize-none min-h-[60px] max-h-[200px] transition-all text-white" 
+                    class="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 pr-12 md:pr-14 py-3 md:py-4 text-[14px] md:text-[15px] focus:border-accent outline-none resize-none min-h-[50px] md:min-h-[60px] max-h-[150px] md:max-h-[200px] transition-all text-white" 
                     placeholder="Ask your agent anything..." 
                     rows="1"
                     :disabled="$store.viewManager.isStreaming"></textarea>
                 <button type="submit" 
-                        class="absolute right-2 bottom-2 w-10 h-10 bg-accent text-white rounded-xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                        class="absolute right-2 bottom-2 md:bottom-2 w-9 h-9 md:w-10 md:h-10 bg-accent text-white rounded-xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
                         :disabled="!userInput.trim() || $store.viewManager.isStreaming">
-                    <i class="fas fa-paper-plane" x-show="!$store.viewManager.isStreaming"></i>
-                    <i class="fas fa-spinner fa-spin" x-show="$store.viewManager.isStreaming" x-cloak></i>
+                    <i class="fas fa-paper-plane text-sm" x-show="!$store.viewManager.isStreaming"></i>
+                    <i class="fas fa-spinner fa-spin text-sm" x-show="$store.viewManager.isStreaming" x-cloak></i>
                 </button>
             </form>
         </div>

@@ -6,12 +6,6 @@
             <i class="fas fa-spinner fa-spin text-accent text-2xl"></i>
         </div>
     </div>
-    <script>
-        // Load initial view after Alpine initializes
-        document.addEventListener('alpine:init', () => {
-            setTimeout(() => loadView('{{ active_view or "dashboard" }}'), 100);
-        });
-    </script>
 {% endblock %}
 
 {% block modals %}

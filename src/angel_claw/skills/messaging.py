@@ -34,7 +34,7 @@ async def send_internal_message(to_user: str, content: str, user_id: str = None)
     engine = AngelClawEngine()
 
     try:
-        with engine._app_context():
+        with engine._app_context_manager._app_context():
             from shopyo_auth.models import User
             from modules.agent.models import InternalMessage
             from init import db
@@ -85,7 +85,7 @@ def list_unread_messages(user_id: str, include_read: bool = True) -> List[dict]:
 
     engine = AngelClawEngine()
 
-    with engine._app_context():
+    with engine._app_context_manager._app_context():
         from modules.agent.models import InternalMessage
         from shopyo_auth.models import User
         from init import db
@@ -127,7 +127,7 @@ def mark_messages_as_read(user_id: str) -> str:
 
     engine = AngelClawEngine()
 
-    with engine._app_context():
+    with engine._app_context_manager._app_context():
         from modules.agent.models import InternalMessage
         from init import db
 
@@ -151,7 +151,7 @@ def delete_internal_message(message_id: int, user_id: str) -> str:
 
     engine = AngelClawEngine()
 
-    with engine._app_context():
+    with engine._app_context_manager._app_context():
         from modules.agent.models import InternalMessage
         from init import db
 
@@ -178,7 +178,7 @@ def mark_message_as_read(message_id: int, user_id: str) -> str:
 
     engine = AngelClawEngine()
 
-    with engine._app_context():
+    with engine._app_context_manager._app_context():
         from modules.agent.models import InternalMessage
         from init import db
 

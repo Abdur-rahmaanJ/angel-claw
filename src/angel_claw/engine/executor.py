@@ -177,7 +177,7 @@ class LlmExecutor:
         session_id: str,
         user_id: str,
         credit_service,
-    ):
+    ) -> tuple[str, List[Dict], int]:
         """Execute LLM with streaming."""
         turns = 0
         tool_calls_list = []
@@ -211,8 +211,7 @@ class LlmExecutor:
                     delta = chunk.choices[0].delta
                     if delta.content:
                         assistant_content += delta.content
-                        for char in delta.content:
-                            yield char
+                        yield "char", delta.content
 
                     if delta.tool_calls:
                         for tc in delta.tool_calls:
@@ -319,15 +318,16 @@ class LlmExecutor:
 
             except Exception as e:
                 logger.error(f"Error in execute_streaming turn {turns}: {e}")
-                yield f"\n\n[Error: {str(e)}]"
+                yield "error", f"\n\n[Error: {str(e)}]"
                 break
 
         if not assistant_content.strip() and tool_calls_list:
             assistant_content = (
                 "✅ I've processed your request using my available tools."
             )
-            for char in assistant_content:
-                yield char
+            yield "char", assistant_content
+
+        yield "done", assistant_content
 
     def _reconstruct_response(self, data: dict):
         """Reconstruct a pseudo-response object from cached data."""

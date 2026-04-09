@@ -268,7 +268,8 @@ class AngelClawEngine:
 
         all_tools = await runtime.skills.get_tool_definitions()
 
-        async for char in self._llm_executor.execute_streaming(
+        final_content = ""
+        async for typ, content in self._llm_executor.execute_streaming(
             model=model,
             messages=messages,
             all_tools=all_tools,
@@ -279,13 +280,21 @@ class AngelClawEngine:
             user_id=user_id,
             credit_service=self._credit_service,
         ):
-            yield char
+            if typ == "char":
+                final_content += content
+                yield content
+            elif typ == "error":
+                yield content
+            elif typ == "done":
+                final_content = content
 
-        runtime.add_message(session_id, Message(role=Role.ASSISTANT, content=""))
+        runtime.add_message(
+            session_id, Message(role=Role.ASSISTANT, content=final_content)
+        )
         memos.process(
             message,
             user=context.email,
-            response="",
+            response=final_content,
             namespace=session_id,
         )
 

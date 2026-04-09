@@ -66,8 +66,8 @@ class HistoryService:
             user_id=user_id,
             email="",
             roles=[],
-            channel_type="",
-            channel_identifier="",
+            channel_type="web",
+            channel_identifier=session_id,
         )
         history = PersistentHistory(context)
         return history.get_history(session_id)
@@ -77,7 +77,11 @@ class HistoryService:
         from ..models import UserContext
 
         context = UserContext(
-            user_id=user_id, email="", roles=[], channel_type="", channel_identifier=""
+            user_id=user_id,
+            email="",
+            roles=[],
+            channel_type="web",
+            channel_identifier=session_id,
         )
         runtime = await self._get_runtime_manager().get_runtime(context)
         return await runtime.chat_history(session_id)

@@ -197,7 +197,7 @@ wheels = [
 
 [[package]]
 name = "angel-claw"
-version = "0.11.0"
+version = "0.12.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -275,7 +275,7 @@ requires-dist = [
     { name = "redis", specifier = ">=7.3.0" },
     { name = "shopyo", specifier = ">=4.16.0" },
     { name = "shopyo-appadmin", specifier = ">=1.4.1" },
-    { name = "shopyo-auth", specifier = ">=1.9.0" },
+    { name = "shopyo-auth", specifier = ">=1.10.0" },
     { name = "shopyo-base", specifier = ">=1.4.0" },
     { name = "shopyo-dashboard", specifier = ">=1.4.0" },
     { name = "shopyo-i18n", specifier = ">=1.2.0" },
@@ -289,7 +289,7 @@ provides-extras = ["test", "file-handler", "google-calendar"]
 
 [[package]]
 name = "angel-recall"
-version = "0.4.1"
+version = "0.5.0"
 source = { editable = "../angel-recall" }
 dependencies = [
     { name = "agentor" },
@@ -4143,15 +4143,15 @@ wheels = [
 
 [[package]]
 name = "shopyo-auth"
-version = "1.9.0"
+version = "1.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "flask-limiter" },
     { name = "shopyo" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f1/4f/1a14b256af9c0aa0dc3461404af0443dee524406deb389a0196a5a88d811/shopyo_auth-1.9.0.tar.gz", hash = "sha256:eb2392bc57c8b237ed9ea19789f615bf450651be7123b3a3d23d7dcc4f859ece", size = 23903, upload-time = "2026-04-05T23:12:46.898Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/99/ef/84549730019f22ae61c72b72cb5dad3bb67fd1c91a313f3f7a95a671cde3/shopyo_auth-1.10.0.tar.gz", hash = "sha256:971d003f1623e47534aae0b78a0048dd5a6917bb4b7ef6c1d7363c43b17b5567", size = 24012, upload-time = "2026-04-08T20:07:37.477Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/5f/13/d998501788f399008328888ba81b7c02853fc2d6b1150f77fd47aeb127eb/shopyo_auth-1.9.0-py3-none-any.whl", hash = "sha256:f8c0053577295205f72b2f39bcc4792df2cce6599df3f84850a04c1ba5e39cb1", size = 20680, upload-time = "2026-04-05T23:12:28.926Z" },
+    { url = "https://files.pythonhosted.org/packages/e1/26/1bf2a3b25472ac5d1677c391023db84b0d9cbc996d2a49f3bbebc12c420b/shopyo_auth-1.10.0-py3-none-any.whl", hash = "sha256:f2c8b60f25c8298b9a8191148e43c3cc66f24c0fec30e88bd33c8830692c75bd", size = 20742, upload-time = "2026-04-08T20:07:28.542Z" },
 ]
 
 [[package]]

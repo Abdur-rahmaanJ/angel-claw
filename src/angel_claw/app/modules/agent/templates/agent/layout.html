@@ -118,8 +118,77 @@
             }));
 
             Alpine.data('skillsData', () => ({
-                skills: [], loading: true,
-                async init() { try { const r = await fetch('/skills'); const d = await r.json(); this.skills = d.skills || []; } catch(e) { console.error(e); } finally { this.loading = false; } }
+                skills: [], loading: true, configModal: false, configSkill: null, configFields: [],
+                skillFieldDefs: {},
+                config: {{ skill_config | tojson }},
+                async init() { await this.loadSkills(); },
+                async loadSkills() { 
+                    try { const r = await fetch('/skills'); const d = await r.json(); 
+                        this.skillFieldDefs = d.skill_field_defs || {};
+                        this.skills = (d.skills || []).map(s => ({
+                            ...s, 
+                            enabled: !this.config[s.name]?.disabled,
+                            has_config: !!this.skillFieldDefs[s.name]
+                        })); 
+                    } catch(e) { console.error(e); } 
+                    finally { this.loading = false; } 
+                },
+                toggleSkill(name) { 
+                    const skill = this.skills.find(s => s.name === name);
+                    if (skill) {
+                        skill.enabled = !skill.enabled;
+                        const token = document.getElementById('csrf_token')?.value;
+                        fetch('/skills/toggle', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' },
+                            body: JSON.stringify({ skill: name, enabled: skill.enabled })
+                        });
+                    }
+                },
+                openConfig(skill) {
+                    this.configSkill = skill;
+                    const defs = this.skillFieldDefs[skill.name] || [];
+                    const saved = this.config[skill.name]?.fields || {};
+                    this.configFields = defs.map(f => ({
+                        name: f.name,
+                        type: f.type || 'text',
+                        description: f.description || '',
+                        value: saved[f.name] || ''
+                    }));
+                    this.configModal = true;
+                },
+                async saveConfig() {
+                    if (!this.configSkill) return;
+                    const fields = this.configFields.reduce((acc, f) => { acc[f.name] = f.value; return acc; }, {});
+                    const token = document.getElementById('csrf_token')?.value;
+                    await fetch('/skills/config', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' },
+                        body: JSON.stringify({ skill: this.configSkill.name, fields })
+                    });
+                    this.configModal = false;
+                },
+                async uploadSkill(event) {
+                    const file = event.target.files[0];
+                    if (!file) return;
+                    const formData = new FormData();
+                    formData.append('skill_file', file);
+                    const token = document.getElementById('csrf_token')?.value;
+                    try {
+                        const r = await fetch('/skills/upload', {
+                            method: 'POST',
+                            headers: { 'X-CSRFToken': token || '' },
+                            body: formData
+                        });
+                        const d = await r.json();
+                        if (d.result === 'success') {
+                            await this.loadSkills();
+                        } else {
+                            alert(d.error || 'Upload failed');
+                        }
+                    } catch(e) { console.error(e); alert('Upload failed'); }
+                    event.target.value = '';
+                }
             }));
 
             Alpine.data('memoryData', () => ({

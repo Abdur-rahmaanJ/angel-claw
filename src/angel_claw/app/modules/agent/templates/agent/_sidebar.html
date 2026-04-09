@@ -64,6 +64,9 @@
             <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'memory' }" @click="loadView('memory'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-brain w-5 text-center"></i> Memory
             </a>
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'skills' }" @click="loadView('skills'); $store.viewManager.sidebarOpen = false">
+                <i class="fas fa-cubes w-5 text-center"></i> Skills
+            </a>
             <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'api' }" @click="loadView('api'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-code w-5 text-center"></i> API & MCP
             </a>

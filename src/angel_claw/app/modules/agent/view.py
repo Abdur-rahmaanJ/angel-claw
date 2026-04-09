@@ -1,3 +1,5 @@
+import logging
+
 from flask import render_template
 from flask import request
 from flask import jsonify
@@ -10,6 +12,8 @@ from asgiref.sync import async_to_sync
 
 from angel_claw.engine import AngelClawEngine
 from angel_claw.models import UserContext
+
+logger = logging.getLogger("angel-claw-view")
 
 mhelp = ModuleHelp(__file__, __name__)
 blueprint = mhelp.blueprint
@@ -36,7 +40,12 @@ def _build_context(session_id=None):
 @blueprint.route("/")
 @login_required
 def index():
-    context = mhelp.context()
+    try:
+        context = mhelp.context()
+        # Filter out None values that can't be JSON serialized
+        context = {k: v for k, v in context.items() if v is not None}
+    except:
+        context = {}
     user_context = _build_context()
     # history = engine.get_history(user_context) # Cleared on reload per request
     history = []
@@ -50,12 +59,34 @@ def index():
     channel_types = [c.channel_type for c in channels]
 
     # Get credit info
-    credit_info = {"balance": 0, "lifetime_spent": 0}
+    credit_info = {"balance": 0, "limit": 1000, "lifetime_spent": 0}
     if credits_enabled():
         credit_info = get_user_stats(user_id)
 
+    # Get skill config
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_root = get_user_root(user_id)
+    skill_config_file = user_root / "skill_config.json"
+    skill_config = {}
+    if skill_config_file.exists():
+        try:
+            skill_config = json.load(open(skill_config_file))
+        except:
+            pass
+
+    # Ensure skill_config is a dict
+    if not isinstance(skill_config, dict):
+        skill_config = {}
+
     context.update(
-        {"history": history, "channels": channel_types, "credit_info": credit_info}
+        {
+            "history": history,
+            "channels": channel_types,
+            "credit_info": credit_info,
+            "skill_config": skill_config,
+        }
     )
     return render_template("{}/index.html".format(mhelp.info["module_name"]), **context)
 
@@ -71,16 +102,21 @@ executor = ThreadPoolExecutor(max_workers=2)
 
 
 def run_async_streaming(user_context, message, use_global=False):
-    """Run async generator in thread and yield chunks."""
+    """Run async generator in thread with proper Flask context handling."""
+    # Create a new event loop in this thread
     loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+
     try:
-        asyncio.set_event_loop(loop)
+        # Get the async generator
         async_gen = engine.execute_streaming(
             user_context, message, use_global=use_global
         )
 
+        # Iterate through the async generator in this thread
         while True:
             try:
+                # run_until_complete runs in the same thread, preserving context
                 chunk = loop.run_until_complete(async_gen.__anext__())
                 if chunk is not None:
                     yield f"data: {json.dumps({'chunk': chunk})}\n\n"
@@ -96,21 +132,37 @@ def run_async_streaming(user_context, message, use_global=False):
         logger.error(traceback.format_exc())
         yield f"data: {json.dumps({'error': str(e)})}\n\n"
     finally:
-        loop.run_until_complete(asyncio.sleep(0))
+        # Clean up the loop
+        loop.run_until_complete(asyncio.sleep(0.1))
         loop.close()
 
 
 @blueprint.route("/chat", methods=["POST"])
 @login_required
 def chat():
-    data = request.get_json()
-    message = data.get("message")
+    logger = logging.getLogger("angel-claw-view")
+
+    try:
+        data = request.get_json(silent=True)
+        logger.info(f"Chat request data: {data}")
+    except Exception as e:
+        logger.error(f"Error parsing JSON: {e}")
+        data = None
+
+    if not data:
+        logger.warning("No data in chat request")
+        return jsonify({"error": "Invalid request data"}), 400
+
+    message = data.get("message", "").strip()
     use_global = data.get("use_global", False)
     session_id = data.get("session_id", "Thread 1")
+
     if not message:
+        logger.warning("Empty message in chat request")
         return jsonify({"error": "No message provided"}), 400
 
     user_context = _build_context(session_id=session_id)
+    logger.info(f"Chat from user: {user_context.user_id}, session: {session_id}")
 
     def generate():
         yield from run_async_streaming(user_context, message, use_global=use_global)
@@ -422,13 +474,101 @@ def mark_message_read(message_id):
 def get_skills():
     # Use the registry to get skills including user-specific ones
     from angel_claw.runtime.registry import TieredSkillRegistry
+    import importlib
 
     user_context = _build_context()
     registry = TieredSkillRegistry(user_context)
     skills = registry.manager.get_skill_details()
+
+    # Get user skill config from file
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_root = get_user_root(user_context.user_id)
+    skill_config_file = user_root / "skill_config.json"
+    skill_config = {}
+    if skill_config_file.exists():
+        try:
+            skill_config = json.load(open(skill_config_file))
+        except:
+            pass
+
+    # Get skill field definitions from skill modules
+    skill_field_defs = {}
+    for skill_name in skills.keys():
+        try:
+            # Try to import the skill module and get SKILL_CONFIG
+            mod = importlib.import_module(f"angel_claw.skills.{skill_name}")
+            if hasattr(mod, "SKILL_CONFIG"):
+                # SKILL_CONFIG is {"fields": [...]}, extract the fields array
+                skill_field_defs[skill_name] = mod.SKILL_CONFIG.get("fields", [])
+        except:
+            pass
+
     if request.args.get("format") == "html":
         return render_template("agent/partials/_skills_list.html", skills=skills)
-    return jsonify({"skills": skills})
+
+    # Convert dict to array
+    skills_list = [{"name": k, "description": v} for k, v in skills.items()]
+    return jsonify(
+        {
+            "skills": skills_list,
+            "skill_config": skill_config,
+            "skill_field_defs": skill_field_defs,
+        }
+    )
+
+
+@blueprint.route("/skills/toggle", methods=["POST"])
+@login_required
+def toggle_skill():
+    data = request.get_json()
+    skill_name = data.get("skill")
+    enabled = data.get("enabled", True)
+
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_context = _build_context()
+    user_root = get_user_root(user_context.user_id)
+
+    skill_config_file = user_root / "skill_config.json"
+    skill_config = {}
+    if skill_config_file.exists():
+        skill_config = json.load(open(skill_config_file))
+
+    if skill_name not in skill_config:
+        skill_config[skill_name] = {}
+    skill_config[skill_name]["disabled"] = not enabled
+
+    json.dump(skill_config, open(skill_config_file, "w"))
+    return jsonify({"result": "success"})
+
+
+@blueprint.route("/skills/config", methods=["POST"])
+@login_required
+def save_skill_config():
+    data = request.get_json()
+    skill_name = data.get("skill")
+    fields = data.get("fields", {})
+
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_context = _build_context()
+    user_root = get_user_root(user_context.user_id)
+
+    skill_config_file = user_root / "skill_config.json"
+    skill_config = {}
+    if skill_config_file.exists():
+        skill_config = json.load(open(skill_config_file))
+
+    if skill_name not in skill_config:
+        skill_config[skill_name] = {}
+    skill_config[skill_name]["fields"] = fields
+
+    json.dump(skill_config, open(skill_config_file, "w"))
+    return jsonify({"result": "success"})
 
 
 @blueprint.route("/skills/upload", methods=["POST"])

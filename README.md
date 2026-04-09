@@ -219,6 +219,83 @@ Angel Claw is hardened for "Diamond-Tier" reliability:
 
 ---
 
+## 🛠️ Creating Custom Skills
+
+Skills are Python functions that the AI can call as tools. Angel Claw provides a built-in skill manager that automatically discovers and registers skills.
+
+### Basic Skill Structure
+
+```python
+from angel_claw.skills.manager import skill
+
+@skill
+def my_skill(arg1: str, arg2: int = 10) -> str:
+    """Description of what the skill does."""
+    return f"Result: {arg1} x {arg2}"
+```
+
+### Adding Configuration Fields
+
+If your skill requires user-specific configuration (like API keys), define a `SKILL_CONFIG`:
+
+```python
+SKILL_CONFIG = {
+    "fields": [
+        {
+            "name": "API_KEY",
+            "type": "password",
+            "description": "Your API key from the provider"
+        },
+        {
+            "name": "ENABLE_FEATURE",
+            "type": "checkbox",
+            "description": "Enable this feature"
+        }
+    ]
+}
+
+@skill
+def my_api_skill(query: str, user_id: str = None) -> str:
+    """Skill that uses user-specific config."""
+    from angel_claw.utils import get_user_root
+    import json
+    
+    # Load user's config
+    if user_id:
+        user_root = get_user_root(user_id)
+        config_file = user_root / "skill_config.json"
+        if config_file.exists():
+            user_config = json.load(open(config_file))
+            api_key = user_config.get("my_api_skill", {}).get("fields", {}).get("API_KEY")
+            if not api_key:
+                return "Error: Please configure API_KEY in Skills settings."
+    
+    # Your skill logic here
+    return "Success!"
+```
+
+### User Context Parameters
+
+The runtime automatically injects these parameters if your function accepts them:
+- `user_id`: The current user's ID (for accessing user-specific data)
+- `session_id`: The current chat session ID
+- `roles`: User's role list
+- `is_admin`: Boolean for admin status
+
+### Uploading Custom Skills
+
+1. **Via Web Dashboard**: Go to **Skills** tab → click **Upload Skill** button → select your `.py` file
+2. **Manual Upload**: Place Python files in `~/.angelclaw/users/{user_id}/skills/`
+
+### Skill Types
+
+| Type | Location | Visibility |
+|------|----------|-------------|
+| **Platform** | `src/angel_claw/skills/` | All users |
+| **User** | `~/.angelclaw/users/{user_id}/skills/` | Single user |
+
+---
+
 # 📜 License
 
 Apache 2.0 License.

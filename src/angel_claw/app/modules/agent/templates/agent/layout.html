@@ -332,8 +332,8 @@
                 accent: localStorage.getItem('accent-color') || '#22c55e',
                 assistantIcon: localStorage.getItem('assistant-icon') || 'fa-brain',
                 sidebarOpen: false,
-                activeView: '{{ active_view or "dashboard" }}',
-                currentSessionId: localStorage.getItem('current-session-id') || 'Thread 1',
+                activeView: 'chat',
+                currentSessionId: null,
                 useGlobalMemory: localStorage.getItem('use-global-memory') === 'true',
                 isStreaming: false,
                 activeModal: null,
@@ -343,6 +343,9 @@
                     document.documentElement.className = this.theme;
                     this.applyAccent(this.accent);
                     this.generatePairingToken();
+                    if (this.activeView === 'chat') {
+                        this.createNewThread();
+                    }
                 },
 
                 async generatePairingToken() {
@@ -393,6 +396,28 @@
                         window.dispatchEvent(new CustomEvent('refresh-chat'));
                     }
                     document.body.dispatchEvent(new CustomEvent('refresh-threads'));
+                },
+
+                async createNewThread() {
+                    try {
+                        const res = await fetch('/chat/sessions');
+                        const data = await res.json();
+                        const sessions = data.sessions || [];
+                        let nextNum = 1;
+                        sessions.forEach(s => {
+                            if (s.id.startsWith('Thread ')) {
+                                const num = parseInt(s.id.replace('Thread ', ''));
+                                if (!isNaN(num) && num >= nextNum) nextNum = num + 1;
+                            }
+                        });
+                        const newId = `Thread ${nextNum}`;
+                        this.currentSessionId = newId;
+                        this.activeView = 'chat';
+                        loadView('chat');
+                        document.body.dispatchEvent(new CustomEvent('refresh-threads'));
+                    } catch (e) {
+                        console.error("Error creating thread:", e);
+                    }
                 },
 
                 toggleTheme() { 

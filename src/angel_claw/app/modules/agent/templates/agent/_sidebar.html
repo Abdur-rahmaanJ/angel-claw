@@ -58,6 +58,9 @@
             <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'messages' }" @click="loadView('messages'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-inbox w-5 text-center"></i> Messages
             </a>
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'reminders' }" @click="loadView('reminders'); $store.viewManager.sidebarOpen = false">
+                <i class="fas fa-bell w-5 text-center"></i> Reminders
+            </a>
             <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'soul' }" @click="loadView('soul'); $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-dna w-5 text-center"></i> Soul
             </a>

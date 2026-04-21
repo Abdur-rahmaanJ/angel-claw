@@ -219,12 +219,13 @@ def setup_flask_admin(app):
         index_view=MyAdminIndexView(),
     )
     from shopyo_admin import DefaultModelView
-    from modules.agent.models import UserCredit, CreditTransaction, CreditAction
+    from modules.agent.models import UserCredit, CreditTransaction, CreditAction, Reminder
     from init import db
 
     admin.add_view(DefaultModelView(UserCredit, db.session, category="Credits"))
     admin.add_view(DefaultModelView(CreditTransaction, db.session, category="Credits"))
     admin.add_view(DefaultModelView(CreditAction, db.session, category="Credits"))
+    admin.add_view(DefaultModelView(Reminder, db.session))
 
     admin.add_link(MenuLink(name="Logout", category="", url="/auth/logout?next=/admin"))
 

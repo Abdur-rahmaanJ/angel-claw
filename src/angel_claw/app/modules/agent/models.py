@@ -198,3 +198,17 @@ class SystemHeartbeat(PkModel):
         hb.last_heartbeat = datetime.now()
         hb.status = status
         db.session.commit()
+
+
+class Reminder(PkModel):
+    __tablename__ = "reminders"
+    __table_args__ = {"extend_existing": True}
+
+    user_id = db.Column(db.String(100), nullable=False, index=True)
+    message = db.Column(db.Text, nullable=False)
+    remind_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now())
+    channel_type = db.Column(db.String(50), nullable=False)  # web, telegram, etc
+    channel_identifier = db.Column(db.String(255), nullable=False)
+    is_sent = db.Column(db.Boolean(), default=False)
+    job_name = db.Column(db.String(100), nullable=True)  # link to cron job name

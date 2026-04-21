@@ -1,0 +1,115 @@
+<div x-data="remindersData()" x-init="init()">
+<header class="view-header">
+    <div class="flex items-center gap-4">
+        <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h2 class="font-bold text-lg md:text-xl">Reminders</h2>
+    </div>
+</header>
+
+<div class="workspace">
+    <div class="max-w-4xl mx-auto w-full">
+        <div class="stat-card">
+            <div class="flex justify-between items-center mb-6">
+                <h3 class="font-bold uppercase text-[10px] tracking-widest text-zinc-500">Your Scheduled Reminders</h3>
+            </div>
+
+            <div x-show="loading" class="flex justify-center py-20">
+                <i class="fas fa-spinner fa-spin text-accent text-2xl"></i>
+            </div>
+            
+            <div x-show="!loading" class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-[10px] uppercase tracking-widest text-zinc-600 border-b border-white/5">
+                            <th class="px-4 py-3">Status</th>
+                            <th class="px-4 py-3">Message</th>
+                            <th class="px-4 py-3">Scheduled For</th>
+                            <th class="px-4 py-3">Channel</th>
+                            <th class="px-4 py-3 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        <template x-for="r in reminders" :key="r.id">
+                            <tr class="border-b border-white/5 hover:bg-white/[0.02] transition-colors group">
+                                <td class="px-4 py-4">
+                                    <span :class="r.is_sent ? 'bg-zinc-800 text-zinc-500' : 'bg-accent/10 text-accent'" 
+                                          class="px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                                        <span x-text="r.is_sent ? 'Sent' : 'Pending'"></span>
+                                    </span>
+                                </td>
+                                <td class="px-4 py-4 font-medium text-zinc-200" x-text="r.message"></td>
+                                <td class="px-4 py-4 text-zinc-400" x-text="formatDate(r.remind_at)"></td>
+                                <td class="px-4 py-4">
+                                    <div class="flex items-center gap-2">
+                                        <i class="fas" :class="r.channel === 'telegram' ? 'fa-paper-plane' : 'fa-globe'"></i>
+                                        <span class="capitalize" x-text="r.channel"></span>
+                                    </div>
+                                </td>
+                                <td class="px-4 py-4 text-right">
+                                    <button @click="deleteReminder(r.id)" class="p-2 text-zinc-600 hover:text-red-500 transition-colors">
+                                        <i class="fas fa-trash-alt"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        </template>
+                        <tr x-show="reminders.length === 0">
+                            <td colspan="5" class="px-4 py-12 text-center text-zinc-600 italic">No reminders scheduled.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+</div>
+
+<script>
+function remindersData() {
+    return {
+        reminders: [],
+        loading: true,
+        async init() {
+            await this.loadReminders();
+        },
+        async loadReminders() {
+            try {
+                const r = await fetch('/reminders?format=json');
+                const d = await r.json();
+                this.reminders = d.reminders || [];
+            } catch(e) {
+                console.error(e);
+            } finally {
+                this.loading = false;
+            }
+        },
+        formatDate(iso) {
+            if (!iso) return '';
+            const d = new Date(iso);
+            return d.toLocaleString('en-US', { 
+                month: 'short', 
+                day: 'numeric', 
+                year: 'numeric',
+                hour: 'numeric',
+                minute: '2-digit'
+            });
+        },
+        async deleteReminder(id) {
+            if (!confirm('Delete this reminder?')) return;
+            try {
+                const token = document.getElementById('csrf_token')?.value;
+                const res = await fetch(`/reminders/delete/${id}`, {
+                    method: 'POST',
+                    headers: { 'X-CSRFToken': token || '' }
+                });
+                if (res.ok) {
+                    this.reminders = this.reminders.filter(r => r.id !== id);
+                }
+            } catch(e) {
+                console.error(e);
+            }
+        }
+    }
+}
+</script>

@@ -11,16 +11,24 @@
                 title="{{ s.preview or s.id }}">
                 {{ title }}
             </button>
-            {% if s.id != 'Thread 1' %}
+            <div class="flex items-center opacity-0 group-hover:opacity-100 transition-all">
                 <button 
-                    hx-post="/chat/delete/{{ s.id }}" 
-                    hx-confirm="Delete {{ s.id }}?"
-                    hx-target="closest div" 
-                    hx-swap="outerHTML"
-                    class="opacity-0 group-hover:opacity-100 p-1 hover:text-red-500 transition-all">
-                    <i class="fas fa-times text-[10px]"></i>
+                    @click.stop="window.copyToClipboard('{{ s.preview or s.id }}', $event)"
+                    class="p-1 hover:text-accent transition-all"
+                    title="Copy Preview">
+                    <i class="fas fa-copy text-[10px]"></i>
                 </button>
-            {% endif %}
+                {% if s.id != 'Thread 1' %}
+                    <button 
+                        hx-post="/chat/delete/{{ s.id }}" 
+                        hx-confirm="Delete {{ s.id }}?"
+                        hx-target="closest div" 
+                        hx-swap="outerHTML"
+                        class="p-1 hover:text-red-500 transition-all">
+                        <i class="fas fa-times text-[10px]"></i>
+                    </button>
+                {% endif %}
+            </div>
         </div>
     {% endfor %}
 {% else %}

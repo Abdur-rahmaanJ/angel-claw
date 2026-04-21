@@ -425,6 +425,44 @@ def get_calendar():
     return jsonify({"upcoming": upcoming, "events": result})
 
 
+@blueprint.route("/reminders")
+@login_required
+def get_reminders():
+    from modules.agent.models import Reminder
+    user_id = str(current_user.id)
+    reminders = Reminder.query.filter_by(user_id=user_id).order_by(Reminder.remind_at.desc()).all()
+    
+    if request.args.get("format") == "json":
+        return jsonify({
+            "reminders": [{
+                "id": r.id,
+                "message": r.message,
+                "remind_at": r.remind_at.isoformat(),
+                "channel": r.channel_type,
+                "is_sent": r.is_sent
+            } for r in reminders]
+        })
+    
+    return render_template("agent/views/reminders.html", reminders=reminders)
+
+
+@blueprint.route("/reminders/delete/<int:reminder_id>", methods=["POST"])
+@login_required
+def delete_reminder(reminder_id):
+    from modules.agent.models import Reminder
+    from init import db
+    from angel_claw.cron import cron_manager
+
+    reminder = Reminder.query.filter_by(id=reminder_id, user_id=str(current_user.id)).first()
+    if reminder:
+        if reminder.job_name:
+            cron_manager.delete_job(reminder.job_name)
+        db.session.delete(reminder)
+        db.session.commit()
+        return jsonify({"result": "success"})
+    return jsonify({"error": "Reminder not found"}), 404
+
+
 @blueprint.route("/messages")
 @login_required
 def get_messages():

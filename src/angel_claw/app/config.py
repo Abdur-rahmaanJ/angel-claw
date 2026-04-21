@@ -66,7 +66,7 @@ class ProductionConfig(BaseConfig):
 
     # built in flask configs
     ENV = "production"
-    SECRET_KEY = os.environ.get("SECRET_KEY")
+    SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-secret-key-change-in-production"
 
     # control email confirmation for user registration
     EMAIL_CONFIRMATION_DISABLED = True

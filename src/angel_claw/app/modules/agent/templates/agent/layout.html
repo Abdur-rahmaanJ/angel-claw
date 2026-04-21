@@ -9,6 +9,7 @@
     <link rel="icon" type="image/png" href="/static/wing.png">
     <link rel="apple-touch-icon" href="/static/wing.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <script src="/static/js/tailwind.min.js"></script>
     <script>
@@ -29,6 +30,26 @@
         // Initialize Alpine placeholder before it loads
         window.Alpine = window.Alpine || {};
         
+        window.formatContent = function(text) {
+            if (!text) return '';
+            try {
+                return marked.parse(text, { breaks: true, gfm: true });
+            } catch (e) {
+                return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            }
+        };
+
+        window.copyToClipboard = function(text, event) {
+            navigator.clipboard.writeText(text).then(() => {
+                const icon = event.currentTarget.querySelector('i');
+                const oldClass = icon.className;
+                icon.className = 'fas fa-check text-success-color';
+                setTimeout(() => {
+                    icon.className = oldClass;
+                }, 2000);
+            });
+        };
+
         // Simple view loader using fetch
         async function loadView(viewName) {
             const container = document.getElementById('main-view-container');
@@ -40,7 +61,20 @@
                     headers: { 'X-CSRFToken': token || '' }
                 });
                 if (res.ok) {
-                    container.innerHTML = await res.text();
+                    const html = await res.text();
+                    container.innerHTML = html;
+                    
+                    // Manually execute scripts in the loaded HTML
+                    const scripts = container.querySelectorAll('script');
+                    scripts.forEach(oldScript => {
+                        const newScript = document.createElement('script');
+                        Array.from(oldScript.attributes).forEach(attr => {
+                            newScript.setAttribute(attr.name, attr.value);
+                        });
+                        newScript.appendChild(document.createTextNode(oldScript.innerHTML));
+                        oldScript.parentNode.replaceChild(newScript, oldScript);
+                    });
+
                     // Update active view in store
                     if (Alpine.store('viewManager')) {
                         Alpine.store('viewManager').activeView = viewName;
@@ -110,10 +144,19 @@
                 showPasswordForm: false, passwords: { current: '', new: '' }, changing: false,
                 theme: localStorage.getItem('theme') || 'dark',
                 accent: localStorage.getItem('accent-color') || '#22c55e', assistantIcon: localStorage.getItem('assistant-icon') || 'fa-brain',
+                notificationStatus: Notification.permission,
                 toggleTheme(mode) { this.theme = mode; localStorage.setItem('theme', mode); document.documentElement.className = mode; },
                 applyAccent(color) { this.accent = color; localStorage.setItem('accent-color', color); document.documentElement.style.setProperty('--accent-color', color); const rgb = this.hexToRgb(color); document.documentElement.style.setProperty('--accent-rgb', rgb); },
                 hexToRgb(hex) { const r = parseInt(hex.slice(1,3), 16), g = parseInt(hex.slice(3,5), 16), b = parseInt(hex.slice(5,7), 16); return `${r} ${g} ${b}`; },
-                async changePassword() { this.changing = true; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch('/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' }, body: JSON.stringify({ old_password: this.passwords.current, new_password: this.passwords.new }) }); if (r.ok) { alert('Password updated!'); this.showPasswordForm = false; this.passwords = { current: '', new: '' }; } else { alert('Failed to update password'); } } catch(e) { alert('Error: ' + e.message); } finally { this.changing = false; } }
+                async changePassword() { this.changing = true; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch('/auth/change-password', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' }, body: JSON.stringify({ old_password: this.passwords.current, new_password: this.passwords.new }) }); if (r.ok) { alert('Password updated!'); this.showPasswordForm = false; this.passwords = { current: '', new: '' }; } else { alert('Failed to update password'); } } catch(e) { alert('Error: ' + e.message); } finally { this.changing = false; } },
+                requestNotificationPermission() {
+                    Notification.requestPermission().then(permission => {
+                        this.notificationStatus = permission;
+                        if (permission === "granted") {
+                            new Notification("Angel Claw", { body: "Notifications enabled successfully!", icon: "/static/wing.png" });
+                        }
+                    });
+                }
             }));
 
             Alpine.data('integrationsData', () => ({
@@ -236,7 +279,7 @@
                         const res = await fetch(`/chat/history/${encodeURIComponent(sid)}`);
                         const data = await res.json();
                         this.messages = data.history || [];
-                        this.$nextTick(() => this.scrollToBottom());
+                        this.$nextTick(() => this.scrollToBottom(true));
                     } catch (e) {
                         console.error("History load error", e);
                     } finally {
@@ -253,7 +296,7 @@
                     this.userInput = '';
                     if (viewStore) viewStore.isStreaming = true;
                     this.streamingContent = '';
-                    this.$nextTick(() => this.scrollToBottom());
+                    this.$nextTick(() => this.scrollToBottom(true));
 
                     try {
                         const sid = viewStore?.currentSessionId || "Thread 1";
@@ -277,6 +320,9 @@
                             const { value, done } = await reader.read();
                             if (done) break;
 
+                            const container = this.$refs.messageContainer;
+                            const wasAtBottom = container ? (container.scrollHeight - container.scrollTop - container.clientHeight < 20) : false;
+
                             const chunk = decoder.decode(value);
                             const lines = chunk.split('\n');
                             for (const line of lines) {
@@ -294,8 +340,10 @@
                                     } catch (e) {}
                                 }
                             }
-                            this.$nextTick(() => this.scrollToBottom());
-                            this.$nextTick(() => this.scrollToBottom());
+                            
+                            if (wasAtBottom && container) {
+                                container.scrollTop = container.scrollHeight;
+                            }
                         }
                         
                         this.messages.push({ role: 'assistant', content: this.streamingContent });
@@ -305,18 +353,25 @@
                         this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
                     } finally {
                         if (viewStore) viewStore.isStreaming = false;
-                        this.$nextTick(() => this.scrollToBottom());
+                        this.$nextTick(() => {
+                            const container = this.$refs.messageContainer;
+                            if (container && (container.scrollHeight - container.scrollTop - container.clientHeight < 100)) {
+                                container.scrollTop = container.scrollHeight;
+                            }
+                        });
                     }
                 },
 
-                formatContent(text) {
-                    if (!text) return '';
-                    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-                },
-
-                scrollToBottom() {
+                scrollToBottom(force = false) {
                     const container = this.$refs.messageContainer;
-                    if (container) container.scrollTop = container.scrollHeight;
+                    if (!container) return;
+                    
+                    const threshold = 40; // pixels from bottom
+                    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+                    
+                    if (force || isAtBottom) {
+                        container.scrollTop = container.scrollHeight;
+                    }
                 },
 
                 toggleDevLog() {
@@ -338,17 +393,57 @@
                 isStreaming: false,
                 activeModal: null,
                 pairingToken: '---',
+                notificationTimer: null,
 
                 init() {
                     document.documentElement.className = this.theme;
                     this.applyAccent(this.accent);
                     this.generatePairingToken();
-                    if (this.activeView === 'chat') {
+
+                    // Always load chat on initial page load
+                    this.activeView = 'chat';
+                    loadView('chat').then(() => {
                         this.createNewThread();
-                    }
+                    });
+
+                    // Start notification poller
+                    this.startNotificationPoller();
+                },
+
+                startNotificationPoller() {
+                    if (this.notificationTimer) clearInterval(this.notificationTimer);
+                    this.notificationTimer = setInterval(() => this.checkNotifications(), 30000);
+                    // Also check immediately
+                    this.checkNotifications();
+                },
+
+                async checkNotifications() {
+                    if (Notification.permission !== "granted") return;
+
+                    try {
+                        const r = await fetch('/messages?format=json');
+                        const d = await r.json();
+                        const unread = (d.messages || []).filter(m => !m.is_read);
+
+                        for (const msg of unread) {
+                            // Show notification
+                            new Notification("Angel Claw Reminder", {
+                                body: msg.content.replace('🔔 REMINDER: ', ''),
+                                icon: "/static/wing.png"
+                            });
+
+                            // Mark as read immediately so we don't show it again
+                            const token = document.getElementById('csrf_token')?.value;
+                            await fetch(`/messages/mark-read/${msg.id}`, { 
+                                method: 'POST', 
+                                headers: { 'X-CSRFToken': token || '' } 
+                            });
+                        }
+                    } catch(e) { console.error("Notification check error", e); }
                 },
 
                 async generatePairingToken() {
+
                     try {
                         const token = document.getElementById('csrf_token')?.value;
                         const res = await fetch('/pair-token', { 
@@ -385,39 +480,17 @@
                     }
                 },
 
-                switchToThread(id) {
+                async switchToThread(id) {
                     this.currentSessionId = id;
                     this.isStreaming = false;
                     localStorage.setItem('current-session-id', id);
                     if (this.activeView !== 'chat') {
                         this.activeView = 'chat';
-                        loadView('chat');
+                        await loadView('chat');
                     } else {
                         window.dispatchEvent(new CustomEvent('refresh-chat'));
                     }
                     document.body.dispatchEvent(new CustomEvent('refresh-threads'));
-                },
-
-                async createNewThread() {
-                    try {
-                        const res = await fetch('/chat/sessions');
-                        const data = await res.json();
-                        const sessions = data.sessions || [];
-                        let nextNum = 1;
-                        sessions.forEach(s => {
-                            if (s.id.startsWith('Thread ')) {
-                                const num = parseInt(s.id.replace('Thread ', ''));
-                                if (!isNaN(num) && num >= nextNum) nextNum = num + 1;
-                            }
-                        });
-                        const newId = `Thread ${nextNum}`;
-                        this.currentSessionId = newId;
-                        this.activeView = 'chat';
-                        loadView('chat');
-                        document.body.dispatchEvent(new CustomEvent('refresh-threads'));
-                    } catch (e) {
-                        console.error("Error creating thread:", e);
-                    }
                 },
 
                 toggleTheme() { 
@@ -500,6 +573,22 @@
         }
 
         @layer components {
+            .markdown-content {
+                line-height: 1.6;
+            }
+            .markdown-content h1 { font-size: 1.5rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 1rem; display: block; }
+            .markdown-content h2 { font-size: 1.25rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.75rem; display: block; }
+            .markdown-content h3 { font-size: 1.125rem; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; display: block; }
+            .markdown-content p { margin-bottom: 0.75rem; }
+            .markdown-content p:last-child { margin-bottom: 0; }
+            .markdown-content ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.75rem; }
+            .markdown-content ol { list-style-type: decimal; margin-left: 1.5rem; margin-bottom: 0.75rem; }
+            .markdown-content code { background-color: rgba(255, 255, 255, 0.1); padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.875rem; }
+            .markdown-content pre { background-color: rgba(0, 0, 0, 0.4); padding: 1rem; border-radius: 0.5rem; font-family: monospace; font-size: 0.875rem; overflow-x: auto; margin-top: 1rem; margin-bottom: 1rem; border: 1px solid rgba(255, 255, 255, 0.05); }
+            .markdown-content pre code { background-color: transparent; padding: 0; }
+            .markdown-content blockquote { border-left: 4px solid var(--accent-color); padding-left: 1rem; font-style: italic; margin-top: 0.75rem; margin-bottom: 0.75rem; opacity: 0.8; }
+            .markdown-content a { color: var(--accent-color); text-decoration: underline; }
+
             .nav-item {
                 @apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-300 transition-all duration-300 cursor-pointer mb-1 text-[13px] font-semibold relative overflow-hidden;
             }
@@ -569,7 +658,7 @@
             x-cloak
         ></div>
 
-        <div id="main-view-container" class="flex-grow flex flex-col min-h-0 overflow-y-auto">
+        <div id="main-view-container" class="flex-grow flex flex-col min-h-0 overflow-hidden">
             {% block content %}{% endblock %}
         </div>
     </main>

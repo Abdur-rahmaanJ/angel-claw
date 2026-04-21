@@ -56,6 +56,31 @@
         </div>
 
         <div class="stat-card">
+            <h3 class="font-bold mb-4">Notifications</h3>
+            <p class="text-xs text-zinc-500 mb-6 italic leading-relaxed">
+                Allow Angel Claw to send you browser notifications when reminders or important alerts are triggered.
+            </p>
+            <div class="flex items-center justify-between p-4 bg-white/5 border border-white/5 rounded-2xl group transition-all hover:border-accent/20">
+                <div class="flex items-center gap-4">
+                    <div class="w-12 h-12 bg-accent/20 rounded-xl flex items-center justify-center text-accent">
+                        <i class="fas fa-bell"></i>
+                    </div>
+                    <div>
+                        <div class="text-sm font-bold">Web Push Notifications</div>
+                        <div class="text-[10px] text-zinc-500 uppercase font-black tracking-widest mt-1" x-text="notificationStatus"></div>
+                    </div>
+                </div>
+                <button 
+                    @click="requestNotificationPermission()" 
+                    class="btn btn-primary text-xs"
+                    :disabled="notificationStatus === 'granted'">
+                    <i class="fas fa-hand-point-up mr-2"></i>
+                    <span x-text="notificationStatus === 'granted' ? 'Already Enabled' : 'Ask Permission'"></span>
+                </button>
+            </div>
+        </div>
+
+        <div class="stat-card">
             <h3 class="font-bold mb-4">Security</h3>
             <button class="btn btn-secondary w-full md:w-auto" @click="showPasswordForm = true" x-show="!showPasswordForm">Change Password</button>
             

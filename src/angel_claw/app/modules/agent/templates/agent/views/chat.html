@@ -49,25 +49,43 @@
             </template>
 
             <template x-for="(msg, index) in messages" :key="index">
-                <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4 animate-[fadeIn_0.3s_ease-out]">
+                <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4 animate-[fadeIn_0.3s_ease-out] group/msg">
                     <div class="w-8 h-8 md:w-10 md:h-10 aspect-square rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm md:text-base"
                          :class="msg.role === 'user' ? 'bg-zinc-800' : 'bg-accent'">
                         <i class="fas" :class="msg.role === 'user' ? 'fa-user' : $store.viewManager.assistantIcon"></i>
                     </div>
-                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content">
+                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content relative">
                         <div x-html="formatContent(msg.content)"></div>
+                        <template x-if="msg.role === 'assistant'">
+                            <div class="mt-2 flex">
+                                <button @click="window.copyToClipboard(msg.content, $event)" 
+                                        class="p-1.5 text-zinc-600 hover:text-accent transition-colors flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest bg-white/5 rounded-md hover:bg-white/10"
+                                        title="Copy Markdown">
+                                    <i class="fas fa-copy"></i>
+                                    <span>Copy Markdown</span>
+                                </button>
+                            </div>
+                        </template>
                     </div>
                 </div>
             </template>
             
             <!-- Streaming Message -->
             <template x-if="$store.viewManager.isStreaming">
-                <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4">
+                <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4 group/msg">
                     <div class="w-8 h-8 md:w-10 md:h-10 aspect-square rounded-full bg-accent flex items-center justify-center flex-shrink-0 text-white text-sm md:text-base">
                         <i class="fas" :class="$store.viewManager.assistantIcon"></i>
                     </div>
-                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content">
+                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content relative">
                         <div x-html="formatContent(streamingContent)"></div>
+                        <div class="mt-2 flex">
+                            <button @click="window.copyToClipboard(streamingContent, $event)" 
+                                    class="p-1.5 text-zinc-600 hover:text-accent transition-colors flex items-center gap-1.5 text-[10px] uppercase font-bold tracking-widest bg-white/5 rounded-md hover:bg-white/10"
+                                    title="Copy Markdown">
+                                <i class="fas fa-copy"></i>
+                                <span>Copy Markdown</span>
+                            </button>
+                        </div>
                     </div>
                 </div>
             </template>

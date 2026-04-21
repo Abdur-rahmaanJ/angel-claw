@@ -39,6 +39,17 @@
             }
         };
 
+        window.copyToClipboard = function(text, event) {
+            navigator.clipboard.writeText(text).then(() => {
+                const icon = event.currentTarget.querySelector('i');
+                const oldClass = icon.className;
+                icon.className = 'fas fa-check text-success-color';
+                setTimeout(() => {
+                    icon.className = oldClass;
+                }, 2000);
+            });
+        };
+
         // Simple view loader using fetch
         async function loadView(viewName) {
             const container = document.getElementById('main-view-container');

@@ -24,7 +24,7 @@
         </div>
     </header>
 
-    <div class="flex-1 flex flex-col min-h-0 relative">
+    <div class="flex-1 flex flex-col min-h-0 relative" style="overflow-anchor: none;">
         <!-- Dev Log -->
         <div x-show="devLogOpen" x-transition class="absolute inset-x-0 top-0 h-40 bg-black/90 border-b border-zinc-800 z-20 font-mono text-[9px] p-4 overflow-y-auto">
             <div class="flex justify-between items-center mb-2 border-b border-zinc-800 pb-1">
@@ -39,7 +39,7 @@
         </div>
 
         <!-- Messages Container -->
-        <div class="flex-1 overflow-y-auto px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-6" id="chat-messages" x-ref="messageContainer">
+        <div class="flex-1 overflow-y-auto px-3 md:px-8 py-4 md:py-8 space-y-4 md:space-y-6" id="chat-messages" x-ref="messageContainer" style="overflow-anchor: none;">
             <template x-if="loadingHistory">
                 <div class="flex justify-center py-20"><i class="fas fa-spinner fa-spin text-accent text-2xl"></i></div>
             </template>
@@ -54,17 +54,21 @@
                          :class="msg.role === 'user' ? 'bg-zinc-800' : 'bg-accent'">
                         <i class="fas" :class="msg.role === 'user' ? 'fa-user' : $store.viewManager.assistantIcon"></i>
                     </div>
-                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content" x-html="formatContent(msg.content)"></div>
+                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content">
+                        <div x-html="formatContent(msg.content)"></div>
+                    </div>
                 </div>
             </template>
             
             <!-- Streaming Message -->
             <template x-if="$store.viewManager.isStreaming">
-                <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4 animate-[fadeIn_0.3s_ease-out]">
+                <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4">
                     <div class="w-8 h-8 md:w-10 md:h-10 aspect-square rounded-full bg-accent flex items-center justify-center flex-shrink-0 text-white text-sm md:text-base">
                         <i class="fas" :class="$store.viewManager.assistantIcon"></i>
                     </div>
-                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content" x-html="formatContent(streamingContent)"></div>
+                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content">
+                        <div x-html="formatContent(streamingContent)"></div>
+                    </div>
                 </div>
             </template>
         </div>

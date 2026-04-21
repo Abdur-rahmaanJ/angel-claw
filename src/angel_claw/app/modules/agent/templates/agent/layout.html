@@ -246,7 +246,7 @@
                         const res = await fetch(`/chat/history/${encodeURIComponent(sid)}`);
                         const data = await res.json();
                         this.messages = data.history || [];
-                        this.$nextTick(() => this.scrollToBottom());
+                        this.$nextTick(() => this.scrollToBottom(true));
                     } catch (e) {
                         console.error("History load error", e);
                     } finally {
@@ -263,7 +263,7 @@
                     this.userInput = '';
                     if (viewStore) viewStore.isStreaming = true;
                     this.streamingContent = '';
-                    this.$nextTick(() => this.scrollToBottom());
+                    this.$nextTick(() => this.scrollToBottom(true));
 
                     try {
                         const sid = viewStore?.currentSessionId || "Thread 1";
@@ -287,6 +287,9 @@
                             const { value, done } = await reader.read();
                             if (done) break;
 
+                            const container = this.$refs.messageContainer;
+                            const wasAtBottom = container ? (container.scrollHeight - container.scrollTop - container.clientHeight < 20) : false;
+
                             const chunk = decoder.decode(value);
                             const lines = chunk.split('\n');
                             for (const line of lines) {
@@ -304,8 +307,10 @@
                                     } catch (e) {}
                                 }
                             }
-                            this.$nextTick(() => this.scrollToBottom());
-                            this.$nextTick(() => this.scrollToBottom());
+                            
+                            if (wasAtBottom && container) {
+                                container.scrollTop = container.scrollHeight;
+                            }
                         }
                         
                         this.messages.push({ role: 'assistant', content: this.streamingContent });
@@ -315,13 +320,25 @@
                         this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
                     } finally {
                         if (viewStore) viewStore.isStreaming = false;
-                        this.$nextTick(() => this.scrollToBottom());
+                        this.$nextTick(() => {
+                            const container = this.$refs.messageContainer;
+                            if (container && (container.scrollHeight - container.scrollTop - container.clientHeight < 100)) {
+                                container.scrollTop = container.scrollHeight;
+                            }
+                        });
                     }
                 },
 
-                scrollToBottom() {
+                scrollToBottom(force = false) {
                     const container = this.$refs.messageContainer;
-                    if (container) container.scrollTop = container.scrollHeight;
+                    if (!container) return;
+                    
+                    const threshold = 40; // pixels from bottom
+                    const isAtBottom = container.scrollHeight - container.scrollTop - container.clientHeight < threshold;
+                    
+                    if (force || isAtBottom) {
+                        container.scrollTop = container.scrollHeight;
+                    }
                 },
 
                 toggleDevLog() {
@@ -568,7 +585,7 @@
             x-cloak
         ></div>
 
-        <div id="main-view-container" class="flex-grow flex flex-col min-h-0 overflow-y-auto">
+        <div id="main-view-container" class="flex-grow flex flex-col min-h-0 overflow-hidden">
             {% block content %}{% endblock %}
         </div>
     </main>

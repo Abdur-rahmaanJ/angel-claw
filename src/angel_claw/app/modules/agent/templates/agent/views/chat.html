@@ -50,21 +50,21 @@
 
             <template x-for="(msg, index) in messages" :key="index">
                 <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4 animate-[fadeIn_0.3s_ease-out]">
-                    <div class="w-8 h-8 md:w-10 md:h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm md:text-base"
+                    <div class="w-8 h-8 md:w-10 md:h-10 aspect-square rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm md:text-base"
                          :class="msg.role === 'user' ? 'bg-zinc-800' : 'bg-accent'">
                         <i class="fas" :class="msg.role === 'user' ? 'fa-user' : $store.viewManager.assistantIcon"></i>
                     </div>
-                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words" x-html="formatContent(msg.content)"></div>
+                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content" x-html="formatContent(msg.content)"></div>
                 </div>
             </template>
             
             <!-- Streaming Message -->
             <template x-if="$store.viewManager.isStreaming">
                 <div class="max-w-[850px] mx-auto flex gap-3 md:gap-4 animate-[fadeIn_0.3s_ease-out]">
-                    <div class="w-8 h-8 md:w-10 md:h-10 rounded-full bg-accent flex items-center justify-center flex-shrink-0 text-white text-sm md:text-base">
+                    <div class="w-8 h-8 md:w-10 md:h-10 aspect-square rounded-full bg-accent flex items-center justify-center flex-shrink-0 text-white text-sm md:text-base">
                         <i class="fas" :class="$store.viewManager.assistantIcon"></i>
                     </div>
-                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words" x-html="formatContent(streamingContent)"></div>
+                    <div class="text-[14px] md:text-[15px] leading-relaxed pt-1 flex-grow overflow-hidden break-words markdown-content" x-html="formatContent(streamingContent)"></div>
                 </div>
             </template>
         </div>

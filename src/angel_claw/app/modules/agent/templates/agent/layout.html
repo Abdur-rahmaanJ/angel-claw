@@ -9,6 +9,7 @@
     <link rel="icon" type="image/png" href="/static/wing.png">
     <link rel="apple-touch-icon" href="/static/wing.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
     <script src="/static/js/tailwind.min.js"></script>
     <script>
@@ -29,6 +30,15 @@
         // Initialize Alpine placeholder before it loads
         window.Alpine = window.Alpine || {};
         
+        window.formatContent = function(text) {
+            if (!text) return '';
+            try {
+                return marked.parse(text, { breaks: true, gfm: true });
+            } catch (e) {
+                return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+            }
+        };
+
         // Simple view loader using fetch
         async function loadView(viewName) {
             const container = document.getElementById('main-view-container');
@@ -309,11 +319,6 @@
                     }
                 },
 
-                formatContent(text) {
-                    if (!text) return '';
-                    return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
-                },
-
                 scrollToBottom() {
                     const container = this.$refs.messageContainer;
                     if (container) container.scrollTop = container.scrollHeight;
@@ -398,28 +403,6 @@
                     document.body.dispatchEvent(new CustomEvent('refresh-threads'));
                 },
 
-                async createNewThread() {
-                    try {
-                        const res = await fetch('/chat/sessions');
-                        const data = await res.json();
-                        const sessions = data.sessions || [];
-                        let nextNum = 1;
-                        sessions.forEach(s => {
-                            if (s.id.startsWith('Thread ')) {
-                                const num = parseInt(s.id.replace('Thread ', ''));
-                                if (!isNaN(num) && num >= nextNum) nextNum = num + 1;
-                            }
-                        });
-                        const newId = `Thread ${nextNum}`;
-                        this.currentSessionId = newId;
-                        this.activeView = 'chat';
-                        loadView('chat');
-                        document.body.dispatchEvent(new CustomEvent('refresh-threads'));
-                    } catch (e) {
-                        console.error("Error creating thread:", e);
-                    }
-                },
-
                 toggleTheme() { 
                     this.theme = this.theme === 'dark' ? 'light' : 'dark'; 
                     localStorage.setItem('theme', this.theme);
@@ -500,6 +483,22 @@
         }
 
         @layer components {
+            .markdown-content {
+                line-height: 1.6;
+            }
+            .markdown-content h1 { font-size: 1.5rem; font-weight: 700; margin-top: 1.5rem; margin-bottom: 1rem; display: block; }
+            .markdown-content h2 { font-size: 1.25rem; font-weight: 700; margin-top: 1.25rem; margin-bottom: 0.75rem; display: block; }
+            .markdown-content h3 { font-size: 1.125rem; font-weight: 700; margin-top: 1rem; margin-bottom: 0.5rem; display: block; }
+            .markdown-content p { margin-bottom: 0.75rem; }
+            .markdown-content p:last-child { margin-bottom: 0; }
+            .markdown-content ul { list-style-type: disc; margin-left: 1.5rem; margin-bottom: 0.75rem; }
+            .markdown-content ol { list-style-type: decimal; margin-left: 1.5rem; margin-bottom: 0.75rem; }
+            .markdown-content code { background-color: rgba(255, 255, 255, 0.1); padding: 0.1rem 0.3rem; border-radius: 0.25rem; font-family: monospace; font-size: 0.875rem; }
+            .markdown-content pre { background-color: rgba(0, 0, 0, 0.4); padding: 1rem; border-radius: 0.5rem; font-family: monospace; font-size: 0.875rem; overflow-x: auto; margin-top: 1rem; margin-bottom: 1rem; border: 1px solid rgba(255, 255, 255, 0.05); }
+            .markdown-content pre code { background-color: transparent; padding: 0; }
+            .markdown-content blockquote { border-left: 4px solid var(--accent-color); padding-left: 1rem; font-style: italic; margin-top: 0.75rem; margin-bottom: 0.75rem; opacity: 0.8; }
+            .markdown-content a { color: var(--accent-color); text-decoration: underline; }
+
             .nav-item {
                 @apply flex items-center gap-3 px-4 py-2.5 rounded-xl text-zinc-500 hover:bg-white/[0.03] hover:text-zinc-300 transition-all duration-300 cursor-pointer mb-1 text-[13px] font-semibold relative overflow-hidden;
             }

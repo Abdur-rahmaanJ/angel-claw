@@ -376,9 +376,12 @@
                     document.documentElement.className = this.theme;
                     this.applyAccent(this.accent);
                     this.generatePairingToken();
-                    if (this.activeView === 'chat') {
+                    
+                    // Always load chat on initial page load
+                    this.activeView = 'chat';
+                    loadView('chat').then(() => {
                         this.createNewThread();
-                    }
+                    });
                 },
 
                 async generatePairingToken() {
@@ -418,13 +421,13 @@
                     }
                 },
 
-                switchToThread(id) {
+                async switchToThread(id) {
                     this.currentSessionId = id;
                     this.isStreaming = false;
                     localStorage.setItem('current-session-id', id);
                     if (this.activeView !== 'chat') {
                         this.activeView = 'chat';
-                        loadView('chat');
+                        await loadView('chat');
                     } else {
                         window.dispatchEvent(new CustomEvent('refresh-chat'));
                     }

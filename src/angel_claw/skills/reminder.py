@@ -68,12 +68,15 @@ def add_reminder(message: str, time_str: str, session_id: str = "web-default", u
 
     # 2. Store in DB for UI visibility
     try:
-        from init import db
-        from modules.agent.models import Reminder
+        from angel_claw.config import settings
+        from angel_claw.engine.app_context import create_app_context_manager
         
-        # We need an app context to use the DB
-        from flask import current_app
-        if current_app:
+        ctx_manager = create_app_context_manager(settings)
+        
+        with ctx_manager._app_context():
+            from init import db
+            from modules.agent.models import Reminder
+            
             reminder = Reminder(
                 user_id=user_id,
                 message=message,
@@ -84,9 +87,9 @@ def add_reminder(message: str, time_str: str, session_id: str = "web-default", u
             )
             db.session.add(reminder)
             db.session.commit()
+            logger.info(f"Reminder saved to DB: {message}")
     except Exception as e:
-        logger.error(f"Error saving reminder to DB: {e}")
-        # We still scheduled the cron job, so it will work, just not show in UI list until refreshed/fixed
+        logger.error(f"Error saving reminder to DB: {e}", exc_info=True)
 
     return f"✅ Reminder set: '{message}' for {remind_at.strftime('%Y-%m-%d %H:%M:%S')}"
 
@@ -94,12 +97,24 @@ def add_reminder(message: str, time_str: str, session_id: str = "web-default", u
 def list_reminders(user_id: Optional[str] = None) -> str:
     """Lists all upcoming reminders for the user."""
     if not user_id:
+        # Fallback to check if we can get user from session if user_id not provided
+        try:
+            from flask import current_user
+            if current_user and current_user.is_authenticated:
+                user_id = str(current_user.id)
+        except: pass
+        
+    if not user_id:
         return "Error: user_id is required."
 
     try:
-        from modules.agent.models import Reminder
-        from flask import current_app
-        if current_app:
+        from angel_claw.config import settings
+        from angel_claw.engine.app_context import create_app_context_manager
+        
+        ctx_manager = create_app_context_manager(settings)
+        
+        with ctx_manager._app_context():
+            from modules.agent.models import Reminder
             reminders = Reminder.query.filter_by(user_id=user_id, is_sent=False).order_by(Reminder.remind_at).all()
             if not reminders:
                 return "You have no upcoming reminders."
@@ -109,6 +124,6 @@ def list_reminders(user_id: Optional[str] = None) -> str:
                 lines.append(f"- {r.remind_at.strftime('%Y-%m-%d %H:%M')}: {r.message}")
             return "\n".join(lines)
     except Exception as e:
-        logger.error(f"Error listing reminders: {e}")
+        logger.error(f"Error listing reminders: {e}", exc_info=True)
     
     return "Error: Could not retrieve reminders from database."

@@ -9,6 +9,22 @@
                 <i class="fas fa-bars"></i>
             </button>
             <h2 class="font-bold text-lg md:text-xl">Conversation</h2>
+            <template x-if="$store.viewManager.currentSessionId !== 'Thread 1'">
+                <button 
+                    @click.stop="
+                        if (confirm('Delete ' + $store.viewManager.currentSessionId + '?')) {
+                            fetch('/chat/delete/' + $store.viewManager.currentSessionId, { method: 'POST', headers: { 'X-CSRFToken': document.getElementById('csrf_token')?.value } })
+                            .then(() => {
+                                $store.viewManager.createNewThread();
+                                document.body.dispatchEvent(new CustomEvent('refresh-threads'));
+                            });
+                        }
+                    "
+                    class="p-2 text-red-500/50 hover:text-red-500 transition-all ml-2"
+                    title="Delete Thread">
+                    <i class="fas fa-trash-alt text-xs"></i>
+                </button>
+            </template>
         </div>
         <div class="flex items-center gap-3">
             <button @click="toggleDevLog()" class="p-2 text-zinc-500 hover:text-accent transition-colors" title="Toggle Developer Log">

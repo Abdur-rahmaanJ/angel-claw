@@ -228,7 +228,7 @@ class LlmExecutor:
                                 if tc.function:
                                     if tc.function.name:
                                         existing["function"]["name"] = tc.function.name
-                                        yield f"[TOOL_CALL:{tc.function.name}]"
+                                        yield "char", f"[TOOL_CALL:{tc.function.name}]"
                                     if tc.function.arguments:
                                         existing["function"]["arguments"] += (
                                             tc.function.arguments
@@ -249,7 +249,7 @@ class LlmExecutor:
                                 }
                                 tool_calls_list.append(new_tc)
                                 if tc.function and tc.function.name:
-                                    yield f"[TOOL_CALL:{tc.function.name}]"
+                                    yield "char", f"[TOOL_CALL:{tc.function.name}]"
 
                 if tool_calls_list:
                     new_tool_calls = [

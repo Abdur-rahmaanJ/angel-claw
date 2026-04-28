@@ -14,46 +14,68 @@ logger = logging.getLogger("angel-claw-skill-reminder")
 def add_reminder(message: str, time_str: str, session_id: str = "web-default", user_id: Optional[str] = None) -> str:
     """
     Adds a reminder for the user.
-    Args:
-        message: The reminder message.
-        time_str: When to remind (e.g., "in 5 minutes", "tomorrow at 3pm", "2026-04-21 15:00:00").
-        session_id: The session/channel identifier.
-        user_id: The user ID.
     """
     if not user_id:
         return "Error: user_id is required to set a reminder."
 
     try:
-        # Try to parse the time_str
-        # Note: dateutil.parser is good for absolute times. 
-        # For relative times like "in 5 minutes", we might need more logic or just assume ISO/absolute for now
-        # given the LLM usually converts relative to absolute if instructed.
-        remind_at = parser.parse(time_str, fuzzy=True)
-        if remind_at < datetime.now():
+        import re
+        from datetime import timedelta
+        
+        # Use simple logic for 'in X minutes'
+        match = re.search(r'in\s+(\d+)\s+(min|minute|minutes)', time_str.lower())
+        if match:
+            minutes = int(match.group(1))
+            remind_at = datetime.now() + timedelta(minutes=minutes)
+        else:
+            # Fallback to dateutil for absolute times
+            remind_at = parser.parse(time_str, fuzzy=True)
+            
+        # Round to nearest minute for comparison
+        remind_at = remind_at.replace(second=0, microsecond=0)
+        
+        if remind_at < datetime.now().replace(second=0, microsecond=0):
             # If it's in the past and only time was provided, maybe it's for tomorrow
             if remind_at.date() == datetime.now().date():
-                from datetime import timedelta
                 remind_at += timedelta(days=1)
             else:
                 return f"Error: The time '{time_str}' (parsed as {remind_at}) is in the past."
     except Exception as e:
         return f"Error parsing time '{time_str}': {str(e)}"
 
-    # Determine channel type from session_id or context
-    # In our bridges, session_id for telegram is numeric chat_id. 
-    # For web it usually contains "web" or "Thread".
+    # Determine channel type
     channel_type = "web"
     if session_id.isdigit() or len(session_id) > 5 and session_id[0].isdigit():
         channel_type = "telegram"
     elif "web" in session_id.lower() or "thread" in session_id.lower():
         channel_type = "web"
 
-    # 1. Create Cron Job
-    job_name = f"reminder_{user_id}_{datetime.now().timestamp()}"
+    # 1. Prevent Duplicates
+    try:
+        from angel_claw.config import settings
+        from angel_claw.engine.app_context import create_app_context_manager
+        
+        ctx_manager = create_app_context_manager(settings)
+        with ctx_manager._app_context():
+            from modules.agent.models import Reminder
+            # Check if a similar reminder exists in the next 60 seconds
+            existing = Reminder.query.filter(
+                Reminder.user_id == user_id,
+                Reminder.message == message,
+                Reminder.is_sent == False,
+                Reminder.remind_at >= remind_at,
+                Reminder.remind_at < remind_at + timedelta(seconds=60)
+            ).first()
+            if existing:
+                return f"⚠️ A reminder for '{message}' already exists at {existing.remind_at.strftime('%Y-%m-%d %H:%M:%S')}"
+    except Exception as e:
+        logger.error(f"Error checking for existing reminder: {e}")
+
+    # 2. Create Cron Job
+    job_name = f"reminder_{user_id}_{remind_at.timestamp()}"
     
     payload_content = message
     if channel_type == "web":
-        # For web, we might want to prefix or wrap it so the UI knows it's a reminder
         payload_content = f"🔔 REMINDER: {message}"
 
     job = Job(
@@ -66,14 +88,12 @@ def add_reminder(message: str, time_str: str, session_id: str = "web-default", u
     
     async_to_sync(cron_manager.save_job_async)(job)
 
-    # 2. Store in DB for UI visibility
+    # 3. Store in DB
     try:
-        from init import db
-        from modules.agent.models import Reminder
-        
-        # We need an app context to use the DB
-        from flask import current_app
-        if current_app:
+        with ctx_manager._app_context():
+            from init import db
+            from modules.agent.models import Reminder
+            
             reminder = Reminder(
                 user_id=user_id,
                 message=message,
@@ -84,9 +104,9 @@ def add_reminder(message: str, time_str: str, session_id: str = "web-default", u
             )
             db.session.add(reminder)
             db.session.commit()
+            logger.info(f"Reminder saved to DB: {message}")
     except Exception as e:
-        logger.error(f"Error saving reminder to DB: {e}")
-        # We still scheduled the cron job, so it will work, just not show in UI list until refreshed/fixed
+        logger.error(f"Error saving reminder to DB: {e}", exc_info=True)
 
     return f"✅ Reminder set: '{message}' for {remind_at.strftime('%Y-%m-%d %H:%M:%S')}"
 
@@ -94,12 +114,24 @@ def add_reminder(message: str, time_str: str, session_id: str = "web-default", u
 def list_reminders(user_id: Optional[str] = None) -> str:
     """Lists all upcoming reminders for the user."""
     if not user_id:
+        # Fallback to check if we can get user from session if user_id not provided
+        try:
+            from flask import current_user
+            if current_user and current_user.is_authenticated:
+                user_id = str(current_user.id)
+        except: pass
+        
+    if not user_id:
         return "Error: user_id is required."
 
     try:
-        from modules.agent.models import Reminder
-        from flask import current_app
-        if current_app:
+        from angel_claw.config import settings
+        from angel_claw.engine.app_context import create_app_context_manager
+        
+        ctx_manager = create_app_context_manager(settings)
+        
+        with ctx_manager._app_context():
+            from modules.agent.models import Reminder
             reminders = Reminder.query.filter_by(user_id=user_id, is_sent=False).order_by(Reminder.remind_at).all()
             if not reminders:
                 return "You have no upcoming reminders."
@@ -109,6 +141,6 @@ def list_reminders(user_id: Optional[str] = None) -> str:
                 lines.append(f"- {r.remind_at.strftime('%Y-%m-%d %H:%M')}: {r.message}")
             return "\n".join(lines)
     except Exception as e:
-        logger.error(f"Error listing reminders: {e}")
+        logger.error(f"Error listing reminders: {e}", exc_info=True)
     
     return "Error: Could not retrieve reminders from database."

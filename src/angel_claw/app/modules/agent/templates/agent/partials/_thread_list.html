@@ -4,31 +4,39 @@
         {% set title = s.preview[:24].strip() if s.preview else "New Conversation" %}
         {% if s.preview and s.preview|length > 24 %}{% set title = title ~ "..." %}{% endif %}
         
-        <div class="group flex items-center justify-between gap-1 pr-2 rounded-md hover:bg-zinc-800/50 {{ 'bg-accent/10 text-accent font-semibold' if isActive else 'text-zinc-500' }}">
+        <div class="flex items-center gap-1 pr-2 rounded-md hover:bg-zinc-800/50 {{ 'bg-accent/10 text-accent font-semibold' if isActive else 'text-zinc-500' }}">
+            {% if s.id != 'Thread 1' %}
+                <button 
+                    @click.stop="
+                        if (confirm('Delete {{ s.id }}?')) {
+                            fetch('/chat/delete/{{ s.id }}', { method: 'POST', headers: { 'X-CSRFToken': document.getElementById('csrf_token')?.value } })
+                            .then(() => {
+                                $store.viewManager.createNewThread();
+                                document.body.dispatchEvent(new CustomEvent('refresh-threads'));
+                            });
+                        }
+                    "
+                    class="p-2 text-red-500/70 hover:text-red-500 transition-all"
+                    title="Delete Thread">
+                    <i class="fas fa-times text-[10px]"></i>
+                </button>
+            {% else %}
+                <div class="w-8"></div>
+            {% endif %}
+            
             <button 
                 @click="$store.viewManager.switchToThread('{{ s.id }}')"
-                class="flex-grow text-left px-3 py-2 text-[13px] truncate" 
+                class="flex-grow text-left py-2 text-[13px] truncate" 
                 title="{{ s.preview or s.id }}">
                 {{ title }}
             </button>
-            <div class="flex items-center opacity-0 group-hover:opacity-100 transition-all">
-                <button 
-                    @click.stop="window.copyToClipboard('{{ s.preview or s.id }}', $event)"
-                    class="p-1 hover:text-accent transition-all"
-                    title="Copy Preview">
-                    <i class="fas fa-copy text-[10px]"></i>
-                </button>
-                {% if s.id != 'Thread 1' %}
-                    <button 
-                        hx-post="/chat/delete/{{ s.id }}" 
-                        hx-confirm="Delete {{ s.id }}?"
-                        hx-target="closest div" 
-                        hx-swap="outerHTML"
-                        class="p-1 hover:text-red-500 transition-all">
-                        <i class="fas fa-times text-[10px]"></i>
-                    </button>
-                {% endif %}
-            </div>
+            
+            <button 
+                @click.stop="window.copyToClipboard('{{ s.preview or s.id }}', $event)"
+                class="p-2 text-zinc-500 hover:text-accent transition-all"
+                title="Copy Preview">
+                <i class="fas fa-copy text-[10px]"></i>
+            </button>
         </div>
     {% endfor %}
 {% else %}

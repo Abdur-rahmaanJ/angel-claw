@@ -162,15 +162,19 @@ class CronManager:
                             # For web reminders, also create an InternalMessage for the UI to pick up
                             if reminder.channel_type == "web":
                                 from shopyo_auth.models import User
-                                user = User.query.get(reminder.user_id)
+                                # Handle numeric ID string for User lookup
+                                user_id_val = int(reminder.user_id) if reminder.user_id.isdigit() else reminder.user_id
+                                user = User.query.get(user_id_val)
                                 if user:
                                     msg = InternalMessage(
                                         sender_id="system",
-                                        recipient_id=user.id,
+                                        recipient_id=str(user.id),
                                         recipient_email=user.email,
                                         content=f"🔔 REMINDER: {reminder.message}"
                                     )
                                     db.session.add(msg)
+                                else:
+                                    logger.error(f"User not found for reminder: {reminder.user_id}")
                             
                             db.session.commit()
             except Exception as e:
@@ -292,18 +296,28 @@ class CronManager:
     async def run(self):
         logger.info("Cron worker started.")
         while True:
-            now = datetime.now()
+            # Always work with naive datetime to match schedule values
+            now = datetime.now().replace(microsecond=0)
             jobs_to_run = []
 
             async with self._jobs_lock:
                 for job in list(self.jobs.values()):
-                    if job.enabled and job.next_run and job.next_run <= now:
-                        jobs_to_run.append(job)
+                    if job.next_run:
+                        # Ensure next_run is also naive for comparison
+                        next_run = job.next_run.replace(microsecond=0)
+                        if next_run <= now:
+                            logger.info(f"Cron: Found job '{job.name}' ready (scheduled: {next_run}, now: {now})")
+                            jobs_to_run.append(job)
+                        else:
+                            logger.debug(f"Cron: Job '{job.name}' not ready (scheduled: {next_run}, now: {now})")
 
             for job in jobs_to_run:
+                # Force-enable for execution if it was a one-shot scheduled job
+                job.enabled = True
+                logger.info(f"Cron worker triggering job: {job.name}, scheduled for {job.next_run}, now {now}")
                 await self._execute_job(job)
 
-            await asyncio.sleep(10)  # Check every 10 seconds
+            await asyncio.sleep(5)  # Faster polling to ensure responsiveness
 
 
 cron_manager = CronManager()

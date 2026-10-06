@@ -121,9 +121,26 @@
 
             Alpine.data('apiData', () => ({
                 apiKeys: [], mcpServers: [], loading: true, showNewKeyForm: false,
+                newKeyName: '', creating: false, createdKey: '',
                 async init() { await Promise.all([this.loadApiKeys(), this.loadMcpServers()]); },
-                async loadApiKeys() { try { const r = await fetch('/me'); const d = await r.json(); this.apiKeys = d.api_keys || []; } catch(e) { console.error(e); } },
-                async loadMcpServers() { try { const r = await fetch('/system/mcp'); const d = await r.json(); this.mcpServers = d.servers || []; } catch(e) { console.error(e); } finally { this.loading = false; } },
+                async loadApiKeys() { try { const r = await fetch('/me'); if (!r.ok) throw new Error(); const d = await r.json(); this.apiKeys = d.api_keys || []; } catch(e) { console.error(e); } },
+                async loadMcpServers() { try { const r = await fetch('/system/mcp'); if (!r.ok) throw new Error(); const d = await r.json(); this.mcpServers = d.servers || []; } catch(e) { console.error(e); } finally { this.loading = false; } },
+                async createKey() {
+                    const name = (this.newKeyName || '').trim();
+                    if (!name) { Alpine.store('ui').toast('Give the key a name first', 'error'); return; }
+                    this.creating = true;
+                    try {
+                        const token = document.getElementById('csrf_token')?.value;
+                        const r = await fetch('/api-key', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' }, body: JSON.stringify({ name }) });
+                        const d = await r.json();
+                        if (!r.ok) throw new Error(d.error || 'Failed to create key');
+                        this.createdKey = d.key;
+                        this.showNewKeyForm = false;
+                        this.newKeyName = '';
+                        await this.loadApiKeys();
+                    } catch(e) { Alpine.store('ui').toast(e.message || 'Failed to create key', 'error'); }
+                    finally { this.creating = false; }
+                },
                 async revokeKey(id) { if (!id) return; if (!await Alpine.store('ui').confirm({ title: 'Revoke API key?', message: 'Apps using this key will lose access immediately.', danger: true, confirmText: 'Revoke' })) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/api-key/revoke/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.apiKeys = this.apiKeys.filter(k => k.id !== id); Alpine.store('ui').toast('API key revoked'); } catch(e) { console.error(e); Alpine.store('ui').toast('Failed to revoke key', 'error'); } }
             }));
 

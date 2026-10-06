@@ -11,7 +11,7 @@ from asgiref.sync import async_to_sync
 
 from angel_claw.engine import AngelClawEngine
 from angel_claw.models import UserContext
-from angel_claw.mobile_bridge import queue_mobile_command, get_and_clear_commands
+from angel_claw.mobile_bridge import queue_mobile_command, get_and_clear_commands, set_user_capabilities, get_user_capabilities
 from init import csrf
 
 logger = logging.getLogger("angel-claw-api")
@@ -119,6 +119,17 @@ def mobile_command_result():
     command_id = data.get("command_id")
     status = data.get("status")
     logger.info(f"Command {command_id} result: {status}")
+    return jsonify({"status": "success"})
+
+
+@blueprint.route("/mobile/capabilities", methods=["POST"])
+@csrf.exempt
+@token_auth_required
+def api_mobile_capabilities():
+    """Mobile app reports what it can actually do right now (live capability list)."""
+    data = request.get_json() or {}
+    caps = data.get("capabilities", [])
+    set_user_capabilities(request.user_context.user_id, caps)
     return jsonify({"status": "success"})
 
 

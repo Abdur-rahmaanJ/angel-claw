@@ -13,6 +13,37 @@ class MessageBuilder:
     def __init__(self, settings):
         self._settings = settings
 
+    def _device_capabilities_block(self, context, user_id: str) -> str:
+        """Inject the phone's live capability list for mobile-channel prompts."""
+        if getattr(context, "channel_type", None) != "mobile":
+            return ""
+        from angel_claw.mobile_bridge import get_user_capabilities
+
+        caps = get_user_capabilities(user_id)
+        if not caps:
+            return ""
+
+        lines = []
+        for c in caps:
+            params = c.get("params") or []
+            param_str = ", ".join(
+                f"{p.get('name')} = {p.get('description', '')}" for p in params
+            ) or "no params"
+            lines.append(
+                f"- {c.get('id')}: {c.get('description', '')} [params: {param_str}]"
+            )
+
+        return (
+            "\n--- MOBILE DEVICE CAPABILITIES (live, checked on the user's phone) ---\n"
+            "To perform an action on the user's phone, call the skill "
+            "`run_mobile_capability` with `capability` set to an id below and "
+            "`params` set to a JSON object string, e.g. '{\"time\": \"15:00\"}'.\n"
+            "Only use listed ids. If the user asks for something not listed, say "
+            "which capability is missing instead of pretending you did it.\n"
+            + "\n".join(lines)
+            + "\n--- END MOBILE DEVICE CAPABILITIES ---\n"
+        )
+
     def build_system_prompt(
         self, runtime, context, user_id: str, safe_memory: str
     ) -> str:
@@ -26,6 +57,7 @@ class MessageBuilder:
             "--- END RETRIEVED MEMORY CONTEXT ---\n\n"
             "You have access to 'Skills' which are sandboxed tools you can call. "
             "Always validate tool outputs before using them in your response."
+            f"{self._device_capabilities_block(context, user_id)}"
         )
 
     def build_streaming_system_prompt(
@@ -42,6 +74,7 @@ class MessageBuilder:
             f"{safe_memory}\n"
             "--- END RETRIEVED MEMORY CONTEXT ---\n\n"
             f"Current date: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"{self._device_capabilities_block(context, user_id)}"
         )
 
     def build_messages(

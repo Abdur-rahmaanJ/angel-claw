@@ -19,3 +19,13 @@ def queue_mobile_command(user_id: str, command_type: str, params: dict):
 
 def get_and_clear_commands(user_id: str):
     return _command_queue.pop(user_id, [])
+
+# user_id -> list of capability descriptors the phone reported (live availability)
+_capabilities = {}
+
+def set_user_capabilities(user_id: str, capabilities: list):
+    _capabilities[user_id] = capabilities or []
+    print(f"[mobile_bridge] capabilities for {user_id}: {[c.get('id') for c in _capabilities[user_id]]}")
+
+def get_user_capabilities(user_id: str) -> list:
+    return _capabilities.get(user_id, [])

@@ -798,31 +798,10 @@ def mobile_list_messages():
     return jsonify({"status": "success", "messages": results})
 
 
-# Simple in-memory command queue for demonstration
-# In production, this should be in the database
-mobile_commands = {} # user_id -> list of commands
-
-
-@blueprint.route("/api/mobile/commands", methods=["GET"])
-@csrf.exempt
-@token_auth_required
-def mobile_list_commands():
-    """Get pending automation commands for the device."""
-    user_id = request.user_context.user_id
-    commands = mobile_commands.pop(user_id, [])
-    return jsonify({"status": "success", "commands": commands})
-
-
-@blueprint.route("/api/mobile/commands/result", methods=["POST"])
-@csrf.exempt
-@token_auth_required
-def mobile_command_result():
-    """Report the result of an automation command."""
-    data = request.get_json()
-    command_id = data.get("command_id")
-    status = data.get("status")
-    logger.info(f"Command {command_id} result: {status}")
-    return jsonify({"status": "success"})
+# Note: /api/mobile/commands and /api/mobile/commands/result are owned by the
+# api module (url_prefix "/api"), which reads the shared mobile_bridge queue that
+# skills write to. Registering them here too caused a split brain: whichever route
+# won, one queue stayed invisible. Keep command intake below on mobile_bridge.
 
 
 @blueprint.route("/api/mobile/command/add", methods=["POST"])
@@ -832,11 +811,9 @@ def mobile_add_command():
     data = request.get_json()
     target_user_id = data.get("user_id", str(current_user.id))
     command = data.get("command") # { "id": "...", "type": "click", "params": {...} }
-    
-    if target_user_id not in mobile_commands:
-        mobile_commands[target_user_id] = []
-    
-    mobile_commands[target_user_id].append(command)
+
+    from angel_claw.mobile_bridge import queue_mobile_command
+    queue_mobile_command(target_user_id, command.get("type"), command.get("params", {}))
     return jsonify({"status": "success"})
 
 

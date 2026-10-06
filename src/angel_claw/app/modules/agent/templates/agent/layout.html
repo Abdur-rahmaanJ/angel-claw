@@ -40,14 +40,18 @@
         };
 
         window.copyToClipboard = function(text, event) {
+            // Capture the icon synchronously: event.currentTarget is null
+            // by the time the clipboard promise resolves.
+            const btn = event && event.currentTarget ? event.currentTarget : null;
+            const icon = btn ? btn.querySelector('i') : null;
+            const oldClass = icon ? icon.className : null;
             navigator.clipboard.writeText(text).then(() => {
-                const icon = event.currentTarget.querySelector('i');
-                const oldClass = icon.className;
+                if (!icon) return;
                 icon.className = 'fas fa-check text-success-color';
                 setTimeout(() => {
                     icon.className = oldClass;
                 }, 2000);
-            });
+            }).catch(() => {});
         };
 
         // Simple view loader using fetch

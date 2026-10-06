@@ -78,10 +78,24 @@ def mobile_chat():
     """Talk to the agent via mobile API."""
     data = request.get_json()
     message = data.get("message")
-    session_id = data.get("session_id", "Mobile Thread")
+    session_id = data.get("session_id")
 
     if not message:
         return jsonify({"status": "error", "message": "Message is required"}), 400
+
+    if not session_id:
+        # New chat: mint the next "Thread N" (same convention as the web UI),
+        # skipping existing threads so histories never collide.
+        sessions = engine.get_chat_sessions(request.user_context)
+        nums = []
+        for s in sessions:
+            sid = s.get("id", "")
+            if sid.startswith("Thread "):
+                try:
+                    nums.append(int(sid.split(" ", 1)[1]))
+                except ValueError:
+                    pass
+        session_id = f"Thread {max(nums, default=0) + 1}"
 
     # UserContext is frozen, so use replace
     user_context = replace(

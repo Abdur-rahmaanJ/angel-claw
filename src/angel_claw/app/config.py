@@ -140,7 +140,7 @@ class TestingConfig(BaseConfig):
     MAIL_DEFAULT_SENDER = "shopyofrom@test.com"
 
     # flask sqlalchemy configs
-    SQLALCHEMY_DATABASE_URI = "sqlite:///testing.db"
+    SQLALCHEMY_DATABASE_URI = _get_default_db_path()
 
     # flask bycrpt configs
     BCRYPT_LOG_ROUNDS = 4

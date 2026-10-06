@@ -33,12 +33,12 @@
             <button @click="toggleDevLog()" class="p-2 text-zinc-500 hover:text-accent transition-colors" title="Toggle Developer Log">
                 <i class="fas fa-terminal text-[10px]"></i>
             </button>
-            <label class="flex items-center cursor-pointer group">
-                <span class="mr-2 text-[10px] font-bold text-zinc-500 uppercase tracking-widest group-hover:text-accent transition-colors">Global Memory</span>
-                <div class="relative">
-                    <input type="checkbox" id="global-memory-toggle" class="sr-only peer" x-model="$store.viewManager.useGlobalMemory" @change="localStorage.setItem('use-global-memory', $store.viewManager.useGlobalMemory)">
-                    <div class="w-8 h-4 bg-zinc-800 rounded-full peer peer-checked:after:translate-x-full after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-accent peer-checked:after:bg-white"></div>
-                </div>
+            <label class="flex items-center gap-2 cursor-pointer select-none" title="Share memory across all threads">
+                <span class="text-[10px] font-bold text-zinc-500 uppercase tracking-widest group-hover:text-accent transition-colors">Global Memory</span>
+                <input type="checkbox" id="global-memory-toggle" class="sr-only peer" x-model="$store.viewManager.useGlobalMemory" @change="localStorage.setItem('use-global-memory', $store.viewManager.useGlobalMemory)">
+                <div class="w-8 h-4 bg-zinc-800 rounded-full peer peer-checked:bg-accent transition-colors relative
+                            after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-zinc-400 after:rounded-full after:h-3 after:w-3 after:transition-all
+                            peer-checked:after:translate-x-4 peer-checked:after:bg-white"></div>
             </label>
         </div>
     </header>
@@ -114,17 +114,17 @@
     <!-- Input Area -->
     <div class="px-3 md:px-8 pb-4 md:pb-8 pt-3 md:pt-4 border-t border-[var(--border-color)] bg-[var(--bg-color)] shrink-0">
         <div class="max-w-[850px] mx-auto relative">
-            <form @submit.prevent="sendMessage()">
+            <form @submit.prevent="sendMessage()" class="flex items-end gap-2">
                 <textarea 
                     x-model="userInput"
                     @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
                     @input="$el.style.height = 'auto'; $el.style.height = $el.scrollHeight + 'px'"
-                    class="w-full bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 pr-12 md:pr-14 py-3 md:py-4 text-[14px] md:text-[15px] focus:border-accent outline-none resize-none min-h-[50px] md:min-h-[60px] max-h-[150px] md:max-h-[200px] transition-all text-white" 
+                    class="flex-grow bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 py-3 md:py-4 text-[14px] md:text-[15px] focus:border-accent outline-none resize-none min-h-[50px] md:min-h-[60px] max-h-[150px] md:max-h-[200px] transition-all text-white leading-relaxed" 
                     placeholder="Ask your agent anything..." 
                     rows="1"
                     :disabled="$store.viewManager.isStreaming"></textarea>
                 <button type="submit" 
-                        class="absolute right-2 bottom-2 md:bottom-2 w-9 h-9 md:w-10 md:h-10 bg-accent text-white rounded-xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
+                        class="w-[42px] h-[42px] md:w-[48px] md:h-[48px] shrink-0 self-end mb-1 bg-accent text-white rounded-2xl flex items-center justify-center hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
                         :disabled="!userInput.trim() || $store.viewManager.isStreaming">
                     <i class="fas fa-paper-plane text-sm" x-show="!$store.viewManager.isStreaming"></i>
                     <i class="fas fa-spinner fa-spin text-sm" x-show="$store.viewManager.isStreaming" x-cloak></i>

@@ -11,11 +11,15 @@
 <div class="workspace">
     <div class="max-w-4xl mx-auto w-full">
         <div class="stat-card">
-            <div x-show="loading" class="flex justify-center py-20">
-                <i class="fas fa-spinner fa-spin text-accent text-2xl"></i>
+            <div x-show="loading" class="space-y-3">
+                <template x-for="i in 4" :key="i">
+                    <div class="skeleton h-16 w-full"></div>
+                </template>
             </div>
-            
-            <div x-show="!loading" class="space-y-2">
+            <div x-show="error" class="load-error">
+                Couldn't load messages. <button class="text-accent underline" @click="init()">Retry</button>
+            </div>
+            <div x-show="!loading && !error" class="space-y-2">
                 <template x-for="msg in messages" :key="msg.id">
                     <div class="flex items-center gap-4 p-4 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20 transition-colors group">
                         <div class="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">

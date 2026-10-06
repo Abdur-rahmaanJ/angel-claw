@@ -138,7 +138,12 @@ def api_get_chat_sessions():
 @token_auth_required
 def api_get_chat_history(session_id):
     """Get message history for a specific session."""
-    history = engine.get_history(request.user_context, session_id=session_id)
+    # engine.get_history reads the session from context.channel_identifier
+    # (UserContext is frozen), so rebuild the context with the session.
+    user_context = replace(
+        request.user_context, channel_identifier=session_id
+    )
+    history = engine.get_history(user_context)
     return jsonify({
         "status": "success", 
         "history": [m.model_dump() for m in history]

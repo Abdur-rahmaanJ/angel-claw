@@ -165,39 +165,41 @@ class CronManager:
         # Handle Reminders persistence
         if job.name.startswith("reminder_"):
             try:
-                from flask import current_app
-                # We need to be careful with app context in async background tasks
-                # CronManager is usually run in a thread with access to the app if initialized properly
-                from angel_claw.runtime.manager import runtime_manager
-                app = getattr(runtime_manager, "_app", None)
-                if app:
-                    with app.app_context():
-                        from modules.agent.models import Reminder, InternalMessage, UserSetting
-                        from init import db
-                        reminder = Reminder.query.filter_by(job_name=job.name).first()
-                        if reminder:
-                            reminder.is_sent = True
-                            
-                            # For web reminders, also create an InternalMessage for the UI to pick up
-                            if reminder.channel_type == "web":
-                                from shopyo_auth.models import User
-                                # Handle numeric ID string for User lookup
-                                user_id_val = int(reminder.user_id) if reminder.user_id.isdigit() else reminder.user_id
-                                user = User.query.get(user_id_val)
-                                if user:
-                                    msg = InternalMessage(
-                                        sender_id="system",
-                                        recipient_id=str(user.id),
-                                        recipient_email=user.email,
-                                        content=f"🔔 REMINDER: {reminder.message}"
-                                    )
-                                    db.session.add(msg)
-                                else:
-                                    logger.error(f"User not found for reminder: {reminder.user_id}")
-                            
-                            db.session.commit()
+                # Use the shared app-context helper (falls back to creating a
+                # Flask app when running outside a request, e.g. cron thread).
+                from angel_claw.engine.app_context import create_app_context_manager
+                from angel_claw.config import settings
+
+                ctx_manager = create_app_context_manager(settings)
+                with ctx_manager._app_context() as app:
+                    if app is None:
+                        raise RuntimeError("No Flask app context available")
+                    from modules.agent.models import Reminder, InternalMessage
+                    from init import db
+                    reminder = Reminder.query.filter_by(job_name=job.name).first()
+                    if reminder:
+                        reminder.is_sent = True
+
+                        # For web reminders, also create an InternalMessage for the UI to pick up
+                        if reminder.channel_type == "web":
+                            from shopyo_auth.models import User
+                            # Handle numeric ID string for User lookup
+                            user_id_val = int(reminder.user_id) if reminder.user_id.isdigit() else reminder.user_id
+                            user = db.session.get(User, user_id_val)
+                            if user:
+                                msg = InternalMessage(
+                                    sender_id="system",
+                                    recipient_id=str(user.id),
+                                    recipient_email=user.email,
+                                    content=f"🔔 REMINDER: {reminder.message}"
+                                )
+                                db.session.add(msg)
+                            else:
+                                logger.error(f"User not found for reminder: {reminder.user_id}")
+
+                        db.session.commit()
             except Exception as e:
-                logger.error(f"Error updating reminder status: {e}")
+                logger.error(f"Error updating reminder status: {e}", exc_info=True)
 
         try:
             if job.payload.kind == "message":

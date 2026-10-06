@@ -69,6 +69,9 @@ class CronManager:
                     logger.error(f"Error loading job {filename}: {e}")
 
     async def save_job_async(self, job: Job):
+        # Always compute next_run before persisting, otherwise one-shot "at"
+        # jobs created at runtime never enter the execution loop.
+        self._calculate_next_run(job)
         async with self._jobs_lock:
             self.jobs[job.name] = job
         file_path = os.path.join(self.persist_dir, f"{job.name}.json")
@@ -76,6 +79,7 @@ class CronManager:
             f.write(job.model_dump_json(indent=2))
 
     def save_job(self, job: Job):
+        self._calculate_next_run(job)
         self.jobs[job.name] = job
         file_path = os.path.join(self.persist_dir, f"{job.name}.json")
         with open(file_path, "w") as f:
@@ -101,7 +105,22 @@ class CronManager:
         if job.schedule.kind == "at":
             try:
                 dt = datetime.fromisoformat(job.schedule.value)
-                job.next_run = dt if dt > now else None
+                if dt > now:
+                    job.next_run = dt
+                elif job.last_run is None and job.enabled:
+                    # One-shot job whose time already passed but never ran
+                    # (saved late or server restarted): fire it now unless it
+                    # is stale (older than 24h) — then just disable it.
+                    if now - dt < timedelta(days=1):
+                        job.next_run = now
+                    else:
+                        job.next_run = None
+                        job.enabled = False
+                        logger.warning(
+                            f"Disabling stale one-shot job {job.name} scheduled for {dt}"
+                        )
+                else:
+                    job.next_run = None
             except ValueError:
                 logger.error(
                     f"Invalid 'at' schedule for job {job.name}: {job.schedule.value}"

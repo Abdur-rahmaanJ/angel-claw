@@ -8,13 +8,15 @@
             {% if s.id != 'Thread 1' %}
                 <button 
                     @click.stop="
-                        if (confirm('Delete {{ s.id }}?')) {
+                        Alpine.store('ui').confirm({ title: 'Delete {{ s.id }}?', danger: true, confirmText: 'Delete' })
+                        .then(ok => {
+                            if (!ok) return;
                             fetch('/chat/delete/{{ s.id }}', { method: 'POST', headers: { 'X-CSRFToken': document.getElementById('csrf_token')?.value } })
                             .then(() => {
                                 $store.viewManager.createNewThread();
                                 document.body.dispatchEvent(new CustomEvent('refresh-threads'));
                             });
-                        }
+                        })
                     "
                     class="p-2 text-red-500/70 hover:text-red-500 transition-all"
                     title="Delete Thread">

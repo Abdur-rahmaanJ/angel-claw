@@ -12,13 +12,16 @@
             <template x-if="$store.viewManager.currentSessionId !== 'Thread 1'">
                 <button 
                     @click.stop="
-                        if (confirm('Delete ' + $store.viewManager.currentSessionId + '?')) {
+                        Alpine.store('ui').confirm({ title: 'Delete thread?', message: $store.viewManager.currentSessionId, danger: true, confirmText: 'Delete' })
+                        .then(ok => {
+                            if (!ok) return;
                             fetch('/chat/delete/' + $store.viewManager.currentSessionId, { method: 'POST', headers: { 'X-CSRFToken': document.getElementById('csrf_token')?.value } })
                             .then(() => {
                                 $store.viewManager.createNewThread();
                                 document.body.dispatchEvent(new CustomEvent('refresh-threads'));
+                                Alpine.store('ui').toast('Thread deleted');
                             });
-                        }
+                        })
                     "
                     class="p-2 text-red-500/50 hover:text-red-500 transition-all ml-2"
                     title="Delete Thread">

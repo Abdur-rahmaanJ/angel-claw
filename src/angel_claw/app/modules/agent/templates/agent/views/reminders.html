@@ -96,7 +96,7 @@ function remindersData() {
             });
         },
         async deleteReminder(id) {
-            if (!confirm('Delete this reminder?')) return;
+            if (!await Alpine.store('ui').confirm({ title: 'Delete reminder?', danger: true, confirmText: 'Delete' })) return;
             try {
                 const token = document.getElementById('csrf_token')?.value;
                 const res = await fetch(`/reminders/delete/${id}`, {

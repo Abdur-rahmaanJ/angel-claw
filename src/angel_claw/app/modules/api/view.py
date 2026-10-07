@@ -11,7 +11,7 @@ from asgiref.sync import async_to_sync
 
 from angel_claw.engine import AngelClawEngine
 from angel_claw.models import UserContext
-from angel_claw.mobile_bridge import queue_mobile_command, get_and_clear_commands, set_user_capabilities, get_user_capabilities
+from angel_claw.mobile_bridge import queue_mobile_command, get_and_clear_commands, set_user_capabilities, get_user_capabilities, pop_command_meta, set_user_device_info
 from init import csrf
 
 logger = logging.getLogger("angel-claw-api")
@@ -128,12 +128,40 @@ def mobile_list_commands():
 @csrf.exempt
 @token_auth_required
 def mobile_command_result():
-    """Report the result of an automation command."""
-    data = request.get_json()
+    """Report the result of an automation command.
+
+    When the device attaches a `result` payload (e.g. contact data it looked
+    up), the assistant gets a follow-up turn in the original thread so it can
+    relay the outcome to the user; the follow-up text is returned to the app.
+    """
+    data = request.get_json() or {}
     command_id = data.get("command_id")
     status = data.get("status")
-    logger.info(f"Command {command_id} result: {status}")
-    return jsonify({"status": "success"})
+    result = data.get("result")
+    logger.info(f"Command {command_id} result: {status}{' - ' + str(result) if result else ''}")
+
+    followup = None
+    if result:
+        meta = pop_command_meta(command_id)
+        if meta and meta.get("session_id"):
+            try:
+                user_context = replace(
+                    request.user_context,
+                    channel_type="mobile",
+                    channel_identifier=meta["session_id"],
+                )
+                prompt = (
+                    f"[automation-result] My phone just finished running the automation "
+                    f"command '{meta.get('type')}' and reported:\n{result}\n\n"
+                    "Tell the user the outcome in 1-3 natural sentences. "
+                    "If it contains contact details (numbers, emails), present them clearly."
+                )
+                response = async_to_sync(engine.execute)(user_context, prompt)
+                followup = response.content
+            except Exception as e:
+                logger.error(f"Follow-up after command {command_id} failed: {e}")
+
+    return jsonify({"status": "success", "followup": followup})
 
 
 @blueprint.route("/mobile/capabilities", methods=["POST"])
@@ -144,6 +172,8 @@ def api_mobile_capabilities():
     data = request.get_json() or {}
     caps = data.get("capabilities", [])
     set_user_capabilities(request.user_context.user_id, caps)
+    if data.get("device"):
+        set_user_device_info(request.user_context.user_id, data.get("device"))
     return jsonify({"status": "success"})
 
 

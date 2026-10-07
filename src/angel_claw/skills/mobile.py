@@ -51,7 +51,9 @@ def vibrate_mobile(duration_ms: int = 500, user_id: str = None) -> str:
     return "📳 Buzz! I've vibrated your phone."
 
 @skill
-def run_mobile_capability(capability: str, params: str = "{}", user_id: str = None) -> str:
+def run_mobile_capability(
+    capability: str, params: str = "{}", user_id: str = None, session_id: str = None
+) -> str:
     """
     Runs one capability on the user's connected Android phone.
     Only capabilities listed under MOBILE DEVICE CAPABILITIES are valid.
@@ -81,5 +83,5 @@ def run_mobile_capability(capability: str, params: str = "{}", user_id: str = No
         return f"Error: params must be a JSON object string ({e})"
 
     str_params = {str(k): str(v) for k, v in raw.items()}
-    queue_mobile_command(user_id, capability, str_params)
+    queue_mobile_command(user_id, capability, str_params, session_id=session_id)
     return f"✓ Queued '{capability}' on the user's phone."

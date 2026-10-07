@@ -17,11 +17,23 @@ class MessageBuilder:
         """Inject the phone's live capability list for mobile-channel prompts."""
         if getattr(context, "channel_type", None) != "mobile":
             return ""
-        from angel_claw.mobile_bridge import get_user_capabilities
+        from angel_claw.mobile_bridge import get_user_capabilities, get_user_device_info
+
+        device_block = ""
+        device = get_user_device_info(user_id)
+        if device:
+            device_block = (
+                "\n--- PHONE DEVICE INFO (reported live by the user's phone) ---\n"
+                + "\n".join(f"- {k}: {v}" for k, v in device.items())
+                + "\nUse these facts directly when relevant (e.g. timezone when "
+                "interpreting times, screen size for taps, model/battery when "
+                "asked) instead of asking the user.\n"
+                "--- END PHONE DEVICE INFO ---\n"
+            )
 
         caps = get_user_capabilities(user_id)
         if not caps:
-            return ""
+            return device_block
 
         lines = []
         for c in caps:
@@ -34,12 +46,18 @@ class MessageBuilder:
             )
 
         return (
-            "\n--- MOBILE DEVICE CAPABILITIES (live, checked on the user's phone) ---\n"
+            device_block
+            + "\n--- MOBILE DEVICE CAPABILITIES (live, checked on the user's phone) ---\n"
             "To perform an action on the user's phone, call the skill "
             "`run_mobile_capability` with `capability` set to an id below and "
             "`params` set to a JSON object string, e.g. '{\"time\": \"15:00\"}'.\n"
             "Only use listed ids. If the user asks for something not listed, say "
             "which capability is missing instead of pretending you did it.\n"
+            "MUST-USE RULE: if a listed capability below performs what the user "
+            "asked for, call `run_mobile_capability` — never a similarly-purposed "
+            "server-side skill (e.g. use `compose_email` to email from the phone, "
+            "not the `send_email` SMTP skill). Server-side skills are only for "
+            "actions with no matching capability above.\n"
             + "\n".join(lines)
             + "\n--- END MOBILE DEVICE CAPABILITIES ---\n"
         )

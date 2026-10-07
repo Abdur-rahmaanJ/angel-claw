@@ -67,3 +67,27 @@ def test_mask():
     assert masked.startswith("sk-1")
     assert masked.endswith("cdef")
     assert "1234567890" not in masked
+
+
+def test_has_newline_detects_injection():
+    view = _load_view()
+    assert not view._has_newline("clean value")
+    assert not view._has_newline("clean", "value")
+    assert view._has_newline("x\nMODEL=evil")
+    assert view._has_newline("x\r\nTELEGRAM_TOKEN=stolen")
+    assert view._has_newline("ok", "bad\nline")
+
+
+def test_upsert_rejects_newline(tmp_path, monkeypatch):
+    view = _load_view()
+    env = tmp_path / ".env"
+    env.write_text("MODEL=safe\n")
+    monkeypatch.setattr(view, "_env_path", lambda: str(env))
+
+    try:
+        view._upsert_env_file({"MODEL": "x\nEVIL=1"})
+        raise AssertionError("should have raised")
+    except ValueError:
+        pass
+
+    assert env.read_text() == "MODEL=safe\n"  # untouched

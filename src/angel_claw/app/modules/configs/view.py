@@ -1,5 +1,7 @@
 import asyncio
 import logging
+import os
+import tempfile
 
 from flask import render_template
 from flask import request
@@ -13,13 +15,6 @@ blueprint = mhelp.blueprint
 
 logger = logging.getLogger("angel-claw-configs")
 
-# Model settings editable through this module (backed by .env)
-_ENV_KEYS = {
-    "model": "MODEL",
-    "api_key": "MODEL_KEY",
-    "api_base": "MODEL_BASE_URL",
-}
-
 
 def _admin_required(fn):
     def wrapper(*args, **kwargs):
@@ -29,6 +24,11 @@ def _admin_required(fn):
 
     wrapper.__name__ = fn.__name__
     return wrapper
+
+
+def _has_newline(*values: str) -> bool:
+    """Line breaks in a value would inject extra lines into .env."""
+    return any(any(c in v for c in "\r\n") for v in values)
 
 
 def _env_path():
@@ -56,6 +56,10 @@ def _read_env_file():
 
 def _upsert_env_file(updates: dict):
     """Update/add keys in .env, keeping comments and unknown keys intact."""
+    for key, val in updates.items():
+        if _has_newline(str(key), str(val)):
+            raise ValueError(f"refusing newline in env value: {key!r}")
+
     path = _env_path()
     try:
         with open(path, "r") as f:
@@ -77,8 +81,19 @@ def _upsert_env_file(updates: dict):
     for key, val in remaining.items():
         new_lines.append(f"{key}={val}\n")
 
-    with open(path, "w") as f:
-        f.writelines(new_lines)
+    # Atomic replace: a crash mid-write must never corrupt .env
+    directory = os.path.dirname(os.path.abspath(path)) or "."
+    fd, tmp_path = tempfile.mkstemp(dir=directory, prefix=".env.tmp.")
+    try:
+        with os.fdopen(fd, "w") as f:
+            f.writelines(new_lines)
+        os.replace(tmp_path, path)
+    except BaseException:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
 
 def _mask(value: str) -> str:
@@ -140,6 +155,9 @@ def test():
     api_key = (request.form.get("api_key") or "").strip()
     api_base = (request.form.get("api_base") or "").strip()
 
+    if _has_newline(model, api_key, api_base):
+        return _render_form(error="Line breaks are not allowed in values.")
+
     if not model or not api_key:
         return _render_form(error="Model and API key are required for testing.")
 
@@ -158,6 +176,9 @@ def save():
     model = (request.form.get("model") or "").strip()
     api_key = (request.form.get("api_key") or "").strip()
     api_base = (request.form.get("api_base") or "").strip()
+
+    if _has_newline(model, api_key, api_base):
+        return _render_form(error="Line breaks are not allowed in values.")
 
     if not model:
         return _render_form(error="Model is required.")

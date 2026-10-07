@@ -333,6 +333,12 @@ def mobile_pair():
     if not token:
         return jsonify({"status": "error", "message": "Token is required"}), 400
 
+    # Accept permanent API keys directly (ac_v1_...) - skip pairing exchange
+    if token.startswith("ac_v1_"):
+        api_ctx = engine.validate_api_key(token)
+        if api_ctx:
+            return jsonify({"status": "success", "api_key": token})
+
     user_id = engine.validate_pair_token(token)
     if not user_id:
         return jsonify({"status": "error", "message": "Invalid or expired token"}), 401

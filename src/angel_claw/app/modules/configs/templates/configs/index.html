@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ info['display_string'] }}</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #09090b; color: #fafafa; margin: 0; padding: 2rem; }
+        .card { max-width: 560px; margin: 0 auto; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 2rem; }
+        h1 { font-size: 1.25rem; margin-top: 0; }
+        label { display: block; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; color: #71717a; margin: 1.25rem 0 .4rem; }
+        input { width: 100%; box-sizing: border-box; background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: .65rem .75rem; color: #fff; font-size: 14px; }
+        input:focus { outline: none; border-color: #22c55e; }
+        .hint { font-size: 11px; color: #71717a; margin-top: .3rem; }
+        .btns { display: flex; gap: .75rem; margin-top: 1.75rem; }
+        button { flex: 1; padding: .7rem; border-radius: 10px; border: none; font-weight: 700; font-size: 13px; cursor: pointer; }
+        .primary { background: #22c55e; color: #052e16; }
+        .secondary { background: #27272a; color: #fafafa; }
+        .msg { margin-top: 1.25rem; padding: .75rem 1rem; border-radius: 10px; font-size: 13px; }
+        .ok { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.4); color: #86efac; }
+        .err { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); color: #fca5a5; }
+        .back { display: inline-block; margin-bottom: 1rem; color: #71717a; font-size: 13px; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <a class="back" href="/dashboard">&larr; Back to dashboard</a>
+        <h1><i class="fa fa-sliders"></i> Model Configuration</h1>
+
+        <form method="POST" action="/configs/save">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            <label for="model">Model</label>
+            <input type="text" id="model" name="model" value="{{ config.model }}" required
+                   placeholder="openai/gpt-4o-mini">
+            <div class="hint">Provider/model id, e.g. openai/gpt-4o-mini, anthropic/claude-sonnet-4-5, groq/llama-3.3-70b</div>
+
+            <label for="api_key">API Key</label>
+            <input type="password" id="api_key" name="api_key" value=""
+                   placeholder="{{ config.api_key_masked or 'sk-...' }}">
+            <div class="hint">{% if config.api_key_masked %}Key set: {{ config.api_key_masked }} — leave blank to keep.{% else %}Leave blank to keep existing key once one is set.{% endif %}</div>
+
+            <label for="api_base">API Base URL (optional)</label>
+            <input type="text" id="api_base" name="api_base" value="{{ config.api_base }}"
+                   placeholder="https://api.openai.com/v1">
+            <div class="hint">Custom/OpenAI-compatible endpoint. Empty = provider default.</div>
+
+            <div class="btns">
+                <button type="submit" formaction="/configs/test" class="secondary">Test</button>
+                <button type="submit" class="primary">Save</button>
+            </div>
+        </form>
+
+        {% if message %}<div class="msg ok">{{ message }}</div>{% endif %}
+        {% if error %}<div class="msg err">{{ error }}</div>{% endif %}
+    </div>
+</body>
+</html>

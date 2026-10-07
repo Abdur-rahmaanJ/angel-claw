@@ -1,5 +1,5 @@
 import logging
-from functools import wraps
+from functools import wraps, lru_cache
 from dataclasses import replace
 
 from flask import request
@@ -20,6 +20,37 @@ mhelp = ModuleHelp(__file__, __name__)
 blueprint = mhelp.blueprint
 
 engine = AngelClawEngine()
+
+
+@lru_cache(maxsize=1)
+def _git_commit() -> str:
+    """Short commit hash of the running code; 'unknown' outside a git checkout."""
+    try:
+        import subprocess
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[4]
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=root, capture_output=True, text=True, timeout=5,
+        )
+        return out.stdout.strip() or "unknown"
+    except Exception:
+        return "unknown"
+
+
+@blueprint.route("/version", methods=["GET"])
+def api_version():
+    """Public build/version probe so clients can verify what's deployed."""
+    try:
+        from importlib.metadata import version as pkg_version
+        ver = pkg_version("angel-claw")
+    except Exception:
+        ver = "unknown"
+    return jsonify({
+        "status": "success",
+        "version": ver,
+        "commit": _git_commit(),
+    })
 
 def token_auth_required(f):
     @wraps(f)

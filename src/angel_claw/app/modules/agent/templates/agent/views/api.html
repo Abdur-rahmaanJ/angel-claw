@@ -1,4 +1,4 @@
-<div x-data="apiData()" x-init="init()">
+<div x-data="apiData()" x-init="init()" class="flex flex-col h-full overflow-hidden">
 <header class="view-header">
     <div class="flex items-center gap-4">
         <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
@@ -27,7 +27,33 @@
                     </div>
                 </template>
                 <p x-show="apiKeys.length === 0" class="text-zinc-500 text-sm">No API keys.</p>
-                <button @click="showNewKeyForm = true" class="btn btn-secondary mt-4">Create Key</button>
+                <button @click="showNewKeyForm = true" x-show="!showNewKeyForm" class="btn btn-secondary mt-4">Create Key</button>
+
+                <!-- New key form -->
+                <form x-show="showNewKeyForm" x-cloak @submit.prevent="createKey()" class="mt-4 space-y-3">
+                    <label class="block text-xs font-bold text-zinc-500 uppercase tracking-widest">Key Name</label>
+                    <input type="text" x-model="newKeyName" required maxlength="60" placeholder="e.g. My Mobile App"
+                           class="w-full bg-black/30 border border-[var(--border-color)] rounded-lg p-2.5 text-sm text-white focus:border-accent outline-none">
+                    <div class="flex gap-2">
+                        <button type="submit" class="btn btn-primary" :disabled="creating">
+                            <i class="fas fa-spinner fa-spin" x-show="creating" x-cloak></i>
+                            <span x-show="!creating">Create</span>
+                        </button>
+                        <button type="button" class="btn btn-secondary" @click="showNewKeyForm = false; newKeyName = ''">Cancel</button>
+                    </div>
+                </form>
+
+                <!-- Newly created key: shown once -->
+                <div x-show="createdKey" x-cloak class="mt-4 p-4 bg-black/40 border border-accent/30 rounded-xl">
+                    <div class="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-2">Copy your key now — it won't be shown again</div>
+                    <div class="flex items-center gap-2">
+                        <code class="flex-grow font-mono text-xs text-accent break-all" x-text="createdKey"></code>
+                        <button @click="window.copyToClipboard(createdKey, $event)"
+                                class="p-2 text-zinc-400 hover:text-accent transition-colors shrink-0" title="Copy key">
+                            <i class="fas fa-copy"></i>
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
         <div class="stat-card">

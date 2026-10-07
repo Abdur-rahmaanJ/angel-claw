@@ -69,6 +69,9 @@ class CronManager:
                     logger.error(f"Error loading job {filename}: {e}")
 
     async def save_job_async(self, job: Job):
+        # Always compute next_run before persisting, otherwise one-shot "at"
+        # jobs created at runtime never enter the execution loop.
+        self._calculate_next_run(job)
         async with self._jobs_lock:
             self.jobs[job.name] = job
         file_path = os.path.join(self.persist_dir, f"{job.name}.json")
@@ -76,6 +79,7 @@ class CronManager:
             f.write(job.model_dump_json(indent=2))
 
     def save_job(self, job: Job):
+        self._calculate_next_run(job)
         self.jobs[job.name] = job
         file_path = os.path.join(self.persist_dir, f"{job.name}.json")
         with open(file_path, "w") as f:
@@ -101,7 +105,22 @@ class CronManager:
         if job.schedule.kind == "at":
             try:
                 dt = datetime.fromisoformat(job.schedule.value)
-                job.next_run = dt if dt > now else None
+                if dt > now:
+                    job.next_run = dt
+                elif job.last_run is None and job.enabled:
+                    # One-shot job whose time already passed but never ran
+                    # (saved late or server restarted): fire it now unless it
+                    # is stale (older than 24h) — then just disable it.
+                    if now - dt < timedelta(days=1):
+                        job.next_run = now
+                    else:
+                        job.next_run = None
+                        job.enabled = False
+                        logger.warning(
+                            f"Disabling stale one-shot job {job.name} scheduled for {dt}"
+                        )
+                else:
+                    job.next_run = None
             except ValueError:
                 logger.error(
                     f"Invalid 'at' schedule for job {job.name}: {job.schedule.value}"
@@ -146,35 +165,41 @@ class CronManager:
         # Handle Reminders persistence
         if job.name.startswith("reminder_"):
             try:
-                from flask import current_app
-                # We need to be careful with app context in async background tasks
-                # CronManager is usually run in a thread with access to the app if initialized properly
-                from angel_claw.runtime.manager import runtime_manager
-                app = getattr(runtime_manager, "_app", None)
-                if app:
-                    with app.app_context():
-                        from modules.agent.models import Reminder, InternalMessage, UserSetting
-                        from init import db
-                        reminder = Reminder.query.filter_by(job_name=job.name).first()
-                        if reminder:
-                            reminder.is_sent = True
-                            
-                            # For web reminders, also create an InternalMessage for the UI to pick up
-                            if reminder.channel_type == "web":
-                                from shopyo_auth.models import User
-                                user = User.query.get(reminder.user_id)
-                                if user:
-                                    msg = InternalMessage(
-                                        sender_id="system",
-                                        recipient_id=user.id,
-                                        recipient_email=user.email,
-                                        content=f"🔔 REMINDER: {reminder.message}"
-                                    )
-                                    db.session.add(msg)
-                            
-                            db.session.commit()
+                # Use the shared app-context helper (falls back to creating a
+                # Flask app when running outside a request, e.g. cron thread).
+                from angel_claw.engine.app_context import create_app_context_manager
+                from angel_claw.config import settings
+
+                ctx_manager = create_app_context_manager(settings)
+                with ctx_manager._app_context() as app:
+                    if app is None:
+                        raise RuntimeError("No Flask app context available")
+                    from modules.agent.models import Reminder, InternalMessage
+                    from init import db
+                    reminder = Reminder.query.filter_by(job_name=job.name).first()
+                    if reminder:
+                        reminder.is_sent = True
+
+                        # For web reminders, also create an InternalMessage for the UI to pick up
+                        if reminder.channel_type == "web":
+                            from shopyo_auth.models import User
+                            # Handle numeric ID string for User lookup
+                            user_id_val = int(reminder.user_id) if reminder.user_id.isdigit() else reminder.user_id
+                            user = db.session.get(User, user_id_val)
+                            if user:
+                                msg = InternalMessage(
+                                    sender_id="system",
+                                    recipient_id=str(user.id),
+                                    recipient_email=user.email,
+                                    content=f"🔔 REMINDER: {reminder.message}"
+                                )
+                                db.session.add(msg)
+                            else:
+                                logger.error(f"User not found for reminder: {reminder.user_id}")
+
+                        db.session.commit()
             except Exception as e:
-                logger.error(f"Error updating reminder status: {e}")
+                logger.error(f"Error updating reminder status: {e}", exc_info=True)
 
         try:
             if job.payload.kind == "message":
@@ -292,18 +317,28 @@ class CronManager:
     async def run(self):
         logger.info("Cron worker started.")
         while True:
-            now = datetime.now()
+            # Always work with naive datetime to match schedule values
+            now = datetime.now().replace(microsecond=0)
             jobs_to_run = []
 
             async with self._jobs_lock:
                 for job in list(self.jobs.values()):
-                    if job.enabled and job.next_run and job.next_run <= now:
-                        jobs_to_run.append(job)
+                    if job.next_run:
+                        # Ensure next_run is also naive for comparison
+                        next_run = job.next_run.replace(microsecond=0)
+                        if next_run <= now:
+                            logger.info(f"Cron: Found job '{job.name}' ready (scheduled: {next_run}, now: {now})")
+                            jobs_to_run.append(job)
+                        else:
+                            logger.debug(f"Cron: Job '{job.name}' not ready (scheduled: {next_run}, now: {now})")
 
             for job in jobs_to_run:
+                # Force-enable for execution if it was a one-shot scheduled job
+                job.enabled = True
+                logger.info(f"Cron worker triggering job: {job.name}, scheduled for {job.next_run}, now {now}")
                 await self._execute_job(job)
 
-            await asyncio.sleep(10)  # Check every 10 seconds
+            await asyncio.sleep(5)  # Faster polling to ensure responsiveness
 
 
 cron_manager = CronManager()

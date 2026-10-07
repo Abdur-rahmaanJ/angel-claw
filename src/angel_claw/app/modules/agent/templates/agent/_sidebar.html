@@ -17,7 +17,7 @@
             <a href="javascript:void(0)" 
                class="nav-item" 
                :class="{ 'active': $store.viewManager.activeView === 'dashboard' }"
-               @click="loadView('dashboard'); $store.viewManager.sidebarOpen = false">
+               @click="location.hash = '/dashboard'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-th-large w-5 text-center"></i> Dashboard
             </a>
 
@@ -25,7 +25,7 @@
                 <a href="javascript:void(0)" 
                    class="nav-item" 
                    :class="{ 'active': $store.viewManager.activeView === 'chat' }"
-                   @click="open = !open; loadView('chat'); $store.viewManager.sidebarOpen = false">
+                   @click="open = !open; location.hash = '/chat'; $store.viewManager.sidebarOpen = false">
                     <i class="fas fa-comment-dots w-5 text-center"></i>
                     <span class="flex-grow">Chat</span>
                     <i class="fas fa-chevron-down text-[10px] opacity-50 transition-all duration-300" :class="{ '-rotate-90': !open }"></i>
@@ -49,34 +49,37 @@
                 </div>
             </div>
 
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'tasks' }" @click="loadView('tasks'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'tasks' }" @click="location.hash = '/tasks'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-check-square w-5 text-center"></i> Tasks
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'calendar' }" @click="loadView('calendar'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'calendar' }" @click="location.hash = '/calendar'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-calendar-alt w-5 text-center"></i> Calendar
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'messages' }" @click="loadView('messages'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'messages' }" @click="location.hash = '/messages'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-inbox w-5 text-center"></i> Messages
+                <span x-show="$store.viewManager.unreadMessages > 0" x-cloak
+                      class="ml-auto min-w-[20px] h-5 px-1.5 rounded-full bg-accent text-white text-[11px] font-bold flex items-center justify-center"
+                      x-text="$store.viewManager.unreadMessages"></span>
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'reminders' }" @click="loadView('reminders'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'reminders' }" @click="location.hash = '/reminders'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-bell w-5 text-center"></i> Reminders
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'soul' }" @click="loadView('soul'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'soul' }" @click="location.hash = '/soul'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-dna w-5 text-center"></i> Soul
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'memory' }" @click="loadView('memory'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'memory' }" @click="location.hash = '/memory'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-brain w-5 text-center"></i> Memory
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'skills' }" @click="loadView('skills'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'skills' }" @click="location.hash = '/skills'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-cubes w-5 text-center"></i> Skills
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'api' }" @click="loadView('api'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'api' }" @click="location.hash = '/api'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-code w-5 text-center"></i> API & MCP
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'integrations' }" @click="loadView('integrations'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'integrations' }" @click="location.hash = '/integrations'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-plug w-5 text-center"></i> Integrations
             </a>
-            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'settings' }" @click="loadView('settings'); $store.viewManager.sidebarOpen = false">
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'settings' }" @click="location.hash = '/settings'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-cog w-5 text-center"></i> Settings
             </a>
         </nav>

@@ -1,0 +1,12 @@
+{
+    "author": {
+        "mail": "",
+        "name": "",
+        "website": ""
+    },
+    "display_string": "API",
+    "fa-icon": "fa fa-plug",
+    "module_name": "api",
+    "type": "show",
+    "url_prefix": "/api"
+}

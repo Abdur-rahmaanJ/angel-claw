@@ -1,4 +1,4 @@
-<form hx-post="/soul/update" hx-trigger="submit" hx-swap="none" @htmx:after-request="alert('Soul updated successfully!')">
+<form hx-post="/soul/update" hx-trigger="submit" hx-swap="none" @htmx:after-request="Alpine.store('ui').toast('Soul updated successfully!')">
     <textarea 
         name="soul"
         class="w-full h-96 bg-black/40 border border-zinc-800 rounded-xl p-4 font-mono text-xs text-zinc-400 focus:border-accent outline-none"

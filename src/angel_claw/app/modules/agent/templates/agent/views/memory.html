@@ -1,4 +1,4 @@
-<div x-data="memoryData()" x-init="init()">
+<div x-data="memoryData()" x-init="init()" class="flex flex-col h-full overflow-hidden">
 <header class="view-header">
     <div class="flex items-center gap-4">
         <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
@@ -10,10 +10,15 @@
 <div class="workspace">
     <div class="max-w-4xl mx-auto w-full">
         <div class="stat-card">
-            <div x-show="loading" class="flex justify-center py-20">
-                <i class="fas fa-spinner fa-spin text-accent text-2xl"></i>
+            <div x-show="loading" class="space-y-3">
+                <template x-for="i in 3" :key="i">
+                    <div class="skeleton h-16 w-full"></div>
+                </template>
             </div>
-            <div x-show="!loading" class="space-y-3">
+            <div x-show="error" class="load-error">
+                Couldn't load memories. <button class="text-accent underline" @click="loadMemories()">Retry</button>
+            </div>
+            <div x-show="!loading && !error" class="space-y-3">
                 <template x-for="mem in memories" :key="mem.id">
                     <div class="p-4 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20">
                         <div class="flex justify-between items-start">

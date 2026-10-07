@@ -26,13 +26,14 @@ class AppContextManager:
 
     @contextmanager
     def _app_context(self):
+        global _cached_app
         if self._settings.auth_mode == "shopyo":
             try:
                 from flask import has_app_context, current_app
 
                 if has_app_context():
                     logger.debug("Using existing Flask app context")
-                    yield current_app.app_context()
+                    yield current_app
                     return
             except ImportError:
                 pass
@@ -40,7 +41,8 @@ class AppContextManager:
             with _app_lock:
                 if _cached_app:
                     logger.debug("Using cached Flask app")
-                    yield _cached_app.app_context()
+                    with _cached_app.app_context():
+                        yield _cached_app
                     return
 
                 logger.info(
@@ -64,7 +66,8 @@ class AppContextManager:
 
                     config_name = os.environ.get("FLASK_ENV", "production")
                     _cached_app = create_app(config_name)
-                    yield _cached_app.app_context()
+                    with _cached_app.app_context():
+                        yield _cached_app
                 except Exception as e:
                     logger.error(f"Engine: Failed to create fallback app context: {e}")
                     import traceback

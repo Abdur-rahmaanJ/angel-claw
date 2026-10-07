@@ -1,4 +1,4 @@
-<div x-data="remindersData()" x-init="init()">
+<div x-data="remindersData()" x-init="init()" class="flex flex-col h-full overflow-hidden">
 <header class="view-header">
     <div class="flex items-center gap-4">
         <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
@@ -96,7 +96,7 @@ function remindersData() {
             });
         },
         async deleteReminder(id) {
-            if (!confirm('Delete this reminder?')) return;
+            if (!await Alpine.store('ui').confirm({ title: 'Delete reminder?', danger: true, confirmText: 'Delete' })) return;
             try {
                 const token = document.getElementById('csrf_token')?.value;
                 const res = await fetch(`/reminders/delete/${id}`, {

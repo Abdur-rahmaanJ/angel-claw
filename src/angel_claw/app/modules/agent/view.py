@@ -7,6 +7,7 @@ from flask import Response
 from flask import stream_with_context
 from flask_login import login_required
 from flask_login import current_user
+from init import csrf
 from shopyo.api.module import ModuleHelp
 from asgiref.sync import async_to_sync
 
@@ -739,3 +740,150 @@ def get_mcp_status():
     from angel_claw.mcp_manager import mcp_manager
 
     return jsonify({"servers": mcp_manager.get_diagnostics()})
+
+
+# --- Mobile API Endpoints ---
+
+
+from functools import wraps
+
+
+def token_auth_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"status": "error", "message": "Missing or invalid token"}), 401
+        
+        token = auth_header.split(" ")[1]
+        context = engine.validate_api_key(token)
+        if not context:
+            return jsonify({"status": "error", "message": "Invalid token"}), 401
+            
+        # Attach context to request for use in route
+        request.user_context = context
+        return f(*args, **kwargs)
+    return decorated
+
+
+@blueprint.route("/api/mobile/messages", methods=["GET"])
+@csrf.exempt
+@token_auth_required
+def mobile_list_messages():
+    """List internal messages for the authenticated user."""
+    from modules.agent.models import InternalMessage
+    from shopyo_auth.models import User
+    from init import db
+
+    user_id = request.user_context.user_id
+    messages = (
+        InternalMessage.query.filter_by(recipient_id=user_id)
+        .order_by(InternalMessage.created_at.desc())
+        .limit(50)
+        .all()
+    )
+
+    results = []
+    for msg in messages:
+        sender = db.session.get(User, msg.sender_id)
+        results.append(
+            {
+                "id": msg.id,
+                "sender_email": sender.email if sender else "Unknown",
+                "content": msg.content,
+                "created_at": msg.created_at.isoformat(),
+                "is_read": msg.is_read,
+            }
+        )
+    return jsonify({"status": "success", "messages": results})
+
+
+# Note: /api/mobile/commands and /api/mobile/commands/result are owned by the
+# api module (url_prefix "/api"), which reads the shared mobile_bridge queue that
+# skills write to. Registering them here too caused a split brain: whichever route
+# won, one queue stayed invisible. Keep command intake below on mobile_bridge.
+
+
+@blueprint.route("/api/mobile/command/add", methods=["POST"])
+@login_required
+def mobile_add_command():
+    """Add a command to the mobile queue (called from Web UI)."""
+    data = request.get_json()
+    target_user_id = data.get("user_id", str(current_user.id))
+    command = data.get("command") # { "id": "...", "type": "click", "params": {...} }
+
+    from angel_claw.mobile_bridge import queue_mobile_command
+    queue_mobile_command(target_user_id, command.get("type"), command.get("params", {}))
+    return jsonify({"status": "success"})
+
+
+@blueprint.route("/api/mobile/pair", methods=["POST"])
+@csrf.exempt
+def mobile_pair():
+    """Exchange a pairing token for a permanent API key."""
+    data = request.get_json()
+    token = data.get("token")
+    device_name = data.get("device_name", "Android Device")
+
+    if not token:
+        return jsonify({"status": "error", "message": "Token is required"}), 400
+
+    user_id = engine.validate_pair_token(token)
+    if not user_id:
+        return jsonify({"status": "error", "message": "Invalid or expired token"}), 401
+
+    # Get user context for API key generation
+    from shopyo_auth.models import User
+    from init import db
+
+    user = db.session.get(User, user_id)
+    context = UserContext(
+        user_id=str(user.id),
+        email=user.email,
+        roles=[r.name for r in user.roles],
+        channel_type="api",
+        channel_identifier=f"mobile-{device_name}",
+    )
+
+    api_key = engine.create_api_key(context, f"Mobile: {device_name}")
+
+    # Mark token as consumed (validate_pair_token does this in some implementations, 
+    # but let's ensure it here if needed)
+    from modules.agent.models import PairingToken
+    pt = PairingToken.query.filter_by(token=token).first()
+    if pt:
+        pt.consumed = True
+        db.session.commit()
+
+    return jsonify({"status": "success", "api_key": api_key})
+
+
+@blueprint.route("/api/mobile/login", methods=["POST"])
+@csrf.exempt
+def mobile_login():
+    """Authenticate with email/password and return a permanent API key."""
+    data = request.get_json()
+    email = data.get("email")
+    password = data.get("pass")
+    device_name = data.get("device_name", "Android Device")
+
+    if not email or not password:
+        return jsonify({"status": "error", "message": "Email and password required"}), 400
+
+    from shopyo_auth.models import User
+
+    user = User.get_by_email(email)
+    if user is None or not user.check_password(password):
+        return jsonify({"status": "error", "message": "Invalid credentials"}), 401
+
+    context = UserContext(
+        user_id=str(user.id),
+        email=user.email,
+        roles=[r.name for r in user.roles],
+        channel_type="api",
+        channel_identifier=f"mobile-{device_name}",
+    )
+
+    api_key = engine.create_api_key(context, f"Mobile: {device_name}")
+
+    return jsonify({"status": "success", "api_key": api_key})

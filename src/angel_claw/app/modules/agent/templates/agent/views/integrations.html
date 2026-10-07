@@ -1,4 +1,4 @@
-<div x-data="integrationsData()" x-init="init()">
+<div x-data="integrationsData()" x-init="init()" class="flex flex-col h-full overflow-hidden">
 <header class="view-header">
     <div class="flex items-center gap-4">
         <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
@@ -60,7 +60,7 @@
             <div class="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600 mb-2">Your Pairing Token</div>
             <div class="relative">
                 <div x-text="$store.viewManager.pairingToken" class="w-full bg-black/40 border border-accent/20 text-accent py-5 rounded-2xl font-mono text-center text-3xl tracking-[0.5em] outline-none my-4">---</div>
-                <button @click="navigator.clipboard.writeText($store.viewManager.pairingToken); alert('Copied!')" class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white" title="Copy">
+                <button @click="navigator.clipboard.writeText($store.viewManager.pairingToken); Alpine.store('ui').toast('Copied to clipboard')" class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white" title="Copy">
                     <i class="fas fa-copy"></i>
                 </button>
             </div>

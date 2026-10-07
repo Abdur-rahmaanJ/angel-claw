@@ -143,7 +143,7 @@ def mobile_chat():
             "session_id": session_id
         })
     except Exception as e:
-        logger.error(f"Error in mobile chat: {e}")
+        logger.error(f"Error in mobile chat: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
 
 @blueprint.route("/mobile/commands", methods=["GET"])

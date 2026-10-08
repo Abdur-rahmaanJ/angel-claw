@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ info['display_string'] }}</title>
+    <style>
+        body { font-family: system-ui, sans-serif; background: #09090b; color: #fafafa; margin: 0; padding: 2rem; }
+        .card { max-width: 640px; margin: 0 auto; background: #18181b; border: 1px solid #27272a; border-radius: 16px; padding: 2rem; }
+        h1 { font-size: 1.25rem; margin-top: 0; }
+        h2 { font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .12em; color: #22c55e; margin: 2rem 0 .25rem; padding-top: 1.25rem; border-top: 1px solid #27272a; }
+        h2:first-of-type { border-top: none; padding-top: 0; margin-top: 1.5rem; }
+        label { display: block; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .1em; color: #71717a; margin: 1.25rem 0 .4rem; }
+        input[type="text"], input[type="password"], input[type="number"], textarea, select { width: 100%; box-sizing: border-box; background: #09090b; border: 1px solid #27272a; border-radius: 8px; padding: .65rem .75rem; color: #fff; font-size: 14px; font-family: inherit; }
+        textarea { min-height: 72px; resize: vertical; }
+        input:focus, textarea:focus, select:focus { outline: none; border-color: #22c55e; }
+        .hint { font-size: 11px; color: #71717a; margin-top: .3rem; }
+        .check { display: flex; align-items: center; gap: .55rem; font-size: 13px; text-transform: none; letter-spacing: 0; color: #fafafa; font-weight: 600; margin: 1.1rem 0 0; cursor: pointer; }
+        .check input { accent-color: #22c55e; width: 15px; height: 15px; }
+        .btns { display: flex; gap: .75rem; margin-top: 1.75rem; }
+        button { flex: 1; padding: .7rem; border-radius: 10px; border: none; font-weight: 700; font-size: 13px; cursor: pointer; }
+        .primary { background: #22c55e; color: #052e16; }
+        .secondary { background: #27272a; color: #fafafa; }
+        .msg { margin-top: 1.25rem; padding: .75rem 1rem; border-radius: 10px; font-size: 13px; }
+        .ok { background: rgba(34,197,94,.12); border: 1px solid rgba(34,197,94,.4); color: #86efac; }
+        .err { background: rgba(239,68,68,.12); border: 1px solid rgba(239,68,68,.4); color: #fca5a5; }
+        .back { display: inline-block; margin-bottom: 1rem; color: #71717a; font-size: 13px; text-decoration: none; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <a class="back" href="{{url_for('shopyo_dashboard.index')}}">&larr; Back to dashboard</a> &nbsp;&nbsp;&nbsp;
+        <a class="back" href="{{url_for('agent.index')}}">&larr; Back to agent</a>
+        <h1><i class="fa fa-sliders"></i> Configuration</h1>
+        <div class="hint">All settings below live in your .env file (see docs/configuration.md).</div>
+
+        <form method="POST" action="/configs/save">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+            {% for section in config.sections %}
+            <h2>{{ section.title }}</h2>
+
+            {% for field in section.fields %}
+                {% if field.type == 'checkbox' %}
+                <label class="check" for="{{ field.key }}">
+                    <input type="checkbox" id="{{ field.key }}" name="{{ field.key }}"
+                           {% if field.value in ['True', 'true', '1', 'yes', 'on'] %}checked{% endif %}>
+                    <span>{{ field.label }}</span>
+                </label>
+                <div class="hint">{{ field.hint }}</div>
+                {% else %}
+                <label for="{{ field.key }}">{{ field.label }}{% if field.required %} *{% endif %}</label>
+
+                {% if field.type == 'textarea' %}
+                <textarea id="{{ field.key }}" name="{{ field.key }}"
+                          placeholder="{{ field.hint }}">{{ field.value }}</textarea>
+
+                {% elif field.type == 'select' %}
+                <select id="{{ field.key }}" name="{{ field.key }}">
+                    {% for option in field.options %}
+                    <option value="{{ option }}" {% if field.value == option %}selected{% endif %}>{{ option }}</option>
+                    {% endfor %}
+                </select>
+
+                {% elif field.type == 'password' %}
+                <input type="password" id="{{ field.key }}" name="{{ field.key }}" value=""
+                       autocomplete="new-password"
+                       placeholder="{{ field.masked or 'not set' }}">
+
+                {% elif field.type == 'number' %}
+                <input type="number" id="{{ field.key }}" name="{{ field.key }}" value="{{ field.value }}">
+
+                {% else %}
+                <input type="text" id="{{ field.key }}" name="{{ field.key }}" value="{{ field.value }}">
+                {% endif %}
+
+                <div class="hint">{{ field.hint }}{% if field.masked %} &mdash; set ({{ field.masked }}), leave blank to keep.{% endif %}</div>
+                {% endif %}
+            {% endfor %}
+            {% endfor %}
+
+            <div class="btns">
+                <button type="submit" formaction="/configs/test" class="secondary">Test LLM</button>
+                <button type="submit" class="primary">Save</button>
+            </div>
+        </form>
+
+        {% if message %}<div class="msg ok">{{ message }}</div>{% endif %}
+        {% if error %}<div class="msg err">{{ error }}</div>{% endif %}
+    </div>
+</body>
+</html>

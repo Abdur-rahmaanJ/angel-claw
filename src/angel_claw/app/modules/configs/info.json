@@ -1,0 +1,12 @@
+{
+    "author": {
+        "mail": "",
+        "name": "",
+        "website": ""
+    },
+    "display_string": "Configs",
+    "fa-icon": "fa fa-sliders-h",
+    "module_name": "configs",
+    "type": "show",
+    "url_prefix": "/configs"
+}

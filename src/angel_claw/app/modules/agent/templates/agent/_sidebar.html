@@ -82,6 +82,11 @@
             <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'settings' }" @click="location.hash = '/settings'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-cog w-5 text-center"></i> Settings
             </a>
+            {% if current_user.is_admin %}
+            <a href="/configs/" class="nav-item" target="_self">
+                <i class="fas fa-sliders w-5 text-center"></i> Model Config
+            </a>
+            {% endif %}
         </nav>
 
         <div class="mt-auto pt-6 border-t border-[var(--border-color)]">

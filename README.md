@@ -22,6 +22,8 @@
 
 ## 🚀 The Agent OS Vision
 
+**NEW**: All configs can be configured via the agent UI
+
 **Angel Claw** is a high-density **Agent Operating System**. Built for both personal productivity and enterprise multi-tenancy, it provides a "Shared-Nothing" architecture where every user operates within a fully isolated, secure environment.
 
 - 🧠 **Multi-Tenant Memory**: Isolated, long-term memory for every user.

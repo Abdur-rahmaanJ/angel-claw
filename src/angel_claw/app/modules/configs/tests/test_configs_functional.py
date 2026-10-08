@@ -1,8 +1,12 @@
 import importlib.util
 import pathlib
+import re
 
 VIEW_PATH = (
     pathlib.Path(__file__).resolve().parents[1] / "view.py"
+)
+DOCS_ENV = (
+    pathlib.Path(__file__).resolve().parents[6] / "docs" / "configuration.md"
 )
 
 
@@ -91,3 +95,81 @@ def test_upsert_rejects_newline(tmp_path, monkeypatch):
         pass
 
     assert env.read_text() == "MODEL=safe\n"  # untouched
+
+
+def test_schema_covers_every_documented_env_key():
+    """Every variable in docs/configuration.md must have a config field."""
+    keys = set(re.findall(r"^\|\s*`([A-Z0-9_]+)`", DOCS_ENV.read_text(), re.M))
+    view = _load_view()
+
+    assert keys, "no keys parsed from docs/configuration.md"
+    assert keys == set(view.FIELD_BY_KEY)
+
+
+def test_ensure_env_file_creates_missing_file(tmp_path, monkeypatch):
+    view = _load_view()
+    env = tmp_path / ".env"
+    monkeypatch.setattr(view, "_env_path", lambda: str(env))
+
+    view._ensure_env_file()
+
+    content = env.read_text()
+    assert "MODEL=openai/gpt-4o-mini" in content
+    assert "PORT=8000" in content
+    assert "CACHE_TTL=3600" in content
+
+
+def test_ensure_env_file_keeps_existing_file(tmp_path, monkeypatch):
+    view = _load_view()
+    env = tmp_path / ".env"
+    env.write_text("MODEL=keep/me\n")
+    monkeypatch.setattr(view, "_env_path", lambda: str(env))
+
+    view._ensure_env_file()
+
+    assert env.read_text() == "MODEL=keep/me\n"
+
+
+def test_collect_updates_blank_secret_kept_checkbox_written(tmp_path, monkeypatch):
+    view = _load_view()
+    env = tmp_path / ".env"
+    env.write_text("MODEL_KEY=sk-stored\n")
+    monkeypatch.setattr(view, "_env_path", lambda: str(env))
+
+    form = {
+        "MODEL": "openai/gpt-4o",
+        "MODEL_KEY": "",        # blank -> keep stored key
+        "PORT": "9000",
+        "DEBUG": "on",          # checked
+        # WHATSAPP_ENABLED absent -> unchecked
+    }
+    updates = view._collect_updates(form)
+
+    assert "MODEL_KEY" not in updates
+    assert updates["MODEL"] == "openai/gpt-4o"
+    assert updates["PORT"] == "9000"
+    assert updates["DEBUG"] == "True"
+    assert updates["WHATSAPP_ENABLED"] == "False"
+
+
+def test_validate_updates_flags_bad_number_and_json(tmp_path, monkeypatch):
+    view = _load_view()
+    monkeypatch.setattr(view, "_env_path", lambda: str(tmp_path / ".env"))
+
+    good = {
+        "MODEL": "openai/gpt-4o-mini",
+        "MODEL_KEY": "sk-x",
+        "PORT": "8000",
+        "MCP_SERVERS": '{"a": {"command": "npx"}}',
+    }
+    assert view._validate_updates(dict(good)) is None
+
+    bad_port = dict(good, PORT="not-a-number")
+    assert "must be a number" in view._validate_updates(bad_port)
+
+    bad_json = dict(good, MCP_AUTH="{oops")
+    assert "must be valid JSON" in view._validate_updates(bad_json)
+
+    no_key = dict(good)
+    del no_key["MODEL_KEY"]
+    assert view._validate_updates(no_key) == "API key is required."

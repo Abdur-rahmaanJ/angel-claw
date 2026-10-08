@@ -1,6 +1,9 @@
 import asyncio
+import importlib.util
+import json
 import logging
 import os
+import pathlib
 import tempfile
 
 from flask import render_template
@@ -14,6 +17,20 @@ mhelp = ModuleHelp(__file__, __name__)
 blueprint = mhelp.blueprint
 
 logger = logging.getLogger("angel-claw-configs")
+
+# Schema of every .env variable, see docs/configuration.md
+_schema_path = pathlib.Path(__file__).with_name("schema.py")
+_schema_spec = importlib.util.spec_from_file_location("configs_schema", _schema_path)
+_schema = importlib.util.module_from_spec(_schema_spec)
+_schema_spec.loader.exec_module(_schema)
+
+SECTIONS = _schema.SECTIONS
+FIELDS = _schema.FIELDS
+FIELD_BY_KEY = _schema.FIELD_BY_KEY
+JSON_KEYS = _schema.JSON_KEYS
+NUMBER_KEYS = _schema.NUMBER_KEYS
+CHECKBOX_KEYS = _schema.CHECKBOX_KEYS
+LLM_KEYS = _schema.LLM_KEYS
 
 
 def _admin_required(fn):
@@ -104,6 +121,35 @@ def _mask(value: str) -> str:
     return f"{value[:4]}...{value[-4:]}"
 
 
+def _ensure_env_file():
+    """Create .env with the documented defaults when it does not exist."""
+    path = _env_path()
+    if not os.path.exists(path):
+        _upsert_env_file(_schema.defaults())
+        logger.info(f"created missing env file at {path}")
+
+
+def _sections_view(get_value):
+    """Render schema sections with a display value for each field."""
+    sections = []
+    for section in SECTIONS:
+        fields = []
+        for field in section["fields"]:
+            raw = get_value(field["key"], field.get("default", ""))
+            view_field = dict(field)
+            if field.get("secret"):
+                view_field["value"] = ""
+                view_field["masked"] = _mask(raw)
+            else:
+                view_field["value"] = raw
+                view_field["masked"] = ""
+            fields.append(view_field)
+        sections.append(
+            {"name": section["name"], "title": section["title"], "fields": fields}
+        )
+    return sections
+
+
 def _current_config():
     env = _read_env_file()
     return {
@@ -111,17 +157,120 @@ def _current_config():
         "api_key": env.get("MODEL_KEY", ""),
         "api_key_masked": _mask(env.get("MODEL_KEY", "")),
         "api_base": env.get("MODEL_BASE_URL", ""),
+        "sections": _sections_view(lambda key, default="": env.get(key, default)),
     }
 
 
-def _apply_to_settings(model, api_key, api_base):
+def _config_from_form(form):
+    """Same shape as _current_config but values come from a submitted form."""
+    env = _read_env_file()
+
+    def get_value(key, default=""):
+        field = FIELD_BY_KEY[key]
+        if field["type"] == "checkbox":
+            return "True" if form.get(key) else "False"
+        value = form.get(key)
+        if value is None:
+            return default
+        value = value.strip()
+        if field.get("secret") and not value:
+            return env.get(key, default)
+        return value
+
+    return {
+        "model": get_value("MODEL"),
+        "api_key": get_value("MODEL_KEY"),
+        "api_key_masked": _mask(get_value("MODEL_KEY")),
+        "api_base": get_value("MODEL_BASE_URL"),
+        "sections": _sections_view(get_value),
+    }
+
+
+def _collect_updates(form):
+    """Map submitted form values to .env keys.
+
+    - checkboxes always write True/False
+    - blank secret fields keep the existing value
+    """
+    env = _read_env_file()
+    updates = {}
+    for field in FIELDS:
+        key = field["key"]
+        if field["type"] == "checkbox":
+            updates[key] = "True" if form.get(key) else "False"
+            continue
+        value = (form.get(key) or "").strip()
+        if field.get("secret") and not value:
+            if key in env:
+                continue  # blank = keep existing secret
+            updates[key] = ""
+            continue
+        updates[key] = value
+    return updates
+
+
+def _validate_updates(updates):
+    """Return an error message, or None when everything looks sane."""
+    if _has_newline(*[str(v) for v in updates.values()]):
+        return "Line breaks are not allowed in values."
+
+    for key in NUMBER_KEYS:
+        value = updates.get(key, "")
+        if value:
+            try:
+                int(value)
+            except ValueError:
+                return f"{key} must be a number."
+
+    for key in JSON_KEYS:
+        value = updates.get(key, "")
+        if value:
+            try:
+                json.loads(value)
+            except ValueError:
+                return f"{key} must be valid JSON."
+
+    if not updates.get("MODEL"):
+        return "Model is required."
+
+    if not updates.get("MODEL_KEY") and not _read_env_file().get("MODEL_KEY"):
+        return "API key is required."
+
+    return None
+
+
+def _apply_to_settings(updates):
     """Hot-update the live settings object so all workers see it without restart."""
     from angel_claw.config.settings import settings
 
-    settings.model = model
-    if api_key:
-        settings.api_key = api_key
-    settings.api_base = api_base or None
+    aliases = {}
+    for name, field_info in type(settings).model_fields.items():
+        alias = getattr(field_info, "validation_alias", None) or name
+        aliases[str(alias).upper()] = name
+
+    if updates.get("MODEL"):
+        settings.model = updates["MODEL"]
+    if updates.get("MODEL_KEY"):
+        settings.api_key = updates["MODEL_KEY"]
+    if "MODEL_BASE_URL" in updates:
+        settings.api_base = updates["MODEL_BASE_URL"] or None
+
+    for key, value in updates.items():
+        if key in LLM_KEYS or key not in aliases:
+            continue
+        try:
+            if key in CHECKBOX_KEYS:
+                setattr(
+                    settings,
+                    aliases[key],
+                    str(value).lower() in ("true", "1", "yes", "on"),
+                )
+            elif key in NUMBER_KEYS:
+                setattr(settings, aliases[key], int(value))
+            else:
+                setattr(settings, aliases[key], value)
+        except (TypeError, ValueError, AttributeError):
+            logger.warning(f"could not hot-apply {key} to settings, restart needed")
 
 
 def _validate(model, api_key, api_base):
@@ -136,6 +285,7 @@ def _validate(model, api_key, api_base):
 @login_required
 @_admin_required
 def index():
+    _ensure_env_file()
     context = mhelp.context()
     context.update(
         {
@@ -151,19 +301,28 @@ def index():
 @login_required
 @_admin_required
 def test():
-    model = (request.form.get("model") or "").strip()
-    api_key = (request.form.get("api_key") or "").strip()
-    api_base = (request.form.get("api_base") or "").strip()
+    model = (request.form.get("MODEL") or "").strip()
+    api_key = (request.form.get("MODEL_KEY") or "").strip()
+    api_base = (request.form.get("MODEL_BASE_URL") or "").strip()
 
     if _has_newline(model, api_key, api_base):
-        return _render_form(error="Line breaks are not allowed in values.")
+        return _render_form(
+            config=_config_from_form(request.form),
+            error="Line breaks are not allowed in values.",
+        )
+
+    # Blank key field = test against the stored key
+    api_key = api_key or _read_env_file().get("MODEL_KEY", "")
 
     if not model or not api_key:
-        return _render_form(error="Model and API key are required for testing.")
+        return _render_form(
+            config=_config_from_form(request.form),
+            error="Model and API key are required for testing.",
+        )
 
     ok, msg = _validate(model, api_key, api_base)
     return _render_form(
-        config={"model": model, "api_key": api_key, "api_key_masked": "", "api_base": api_base},
+        config=_config_from_form(request.form),
         message=f"Test OK: {msg}" if ok else f"Test failed: {msg}",
         error=None if ok else f"Test failed: {msg}",
     )
@@ -173,37 +332,37 @@ def test():
 @login_required
 @_admin_required
 def save():
-    model = (request.form.get("model") or "").strip()
-    api_key = (request.form.get("api_key") or "").strip()
-    api_base = (request.form.get("api_base") or "").strip()
+    _ensure_env_file()
+    updates = _collect_updates(request.form)
 
-    if _has_newline(model, api_key, api_base):
-        return _render_form(error="Line breaks are not allowed in values.")
+    error = _validate_updates(updates)
+    if error:
+        return _render_form(config=_config_from_form(request.form), error=error)
 
-    if not model:
-        return _render_form(error="Model is required.")
-
-    # Empty key field = keep existing key
     env = _read_env_file()
-    existing_key = env.get("MODEL_KEY", "")
-    if not api_key:
-        api_key = existing_key
-    if not api_key:
-        return _render_form(error="API key is required.")
+    model = updates.get("MODEL", "")
+    api_key = updates.get("MODEL_KEY") or env.get("MODEL_KEY", "")
+    api_base = updates.get("MODEL_BASE_URL", "")
 
-    ok, msg = _validate(model, api_key, api_base)
-    if not ok:
-        return _render_form(
-            config={"model": model, "api_key": api_key, "api_key_masked": "", "api_base": api_base},
-            error=f"Validation failed, not saved: {msg}",
-        )
-
-    _upsert_env_file(
-        {"MODEL": model, "MODEL_KEY": api_key, "MODEL_BASE_URL": api_base}
+    # Only hit the network when the LLM settings actually changed
+    llm_changed = any(
+        (updates.get(key) or "") != (env.get(key, "") or "") for key in LLM_KEYS
     )
-    _apply_to_settings(model, api_key, api_base)
+    if llm_changed:
+        ok, msg = _validate(model, api_key, api_base)
+        if not ok:
+            return _render_form(
+                config=_config_from_form(request.form),
+                error=f"Validation failed, not saved: {msg}",
+            )
 
-    logger.info(f"Model config updated by {current_user.email}: {model} @ {api_base or 'default'}")
+    _upsert_env_file(updates)
+    _apply_to_settings(updates)
+
+    logger.info(
+        f"Config updated by {current_user.email}: "
+        f"{', '.join(sorted(updates))}"
+    )
     return _render_form(
         config=_current_config(),
         message="Saved to .env. Restart gunicorn to apply in all workers.",

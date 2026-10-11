@@ -140,7 +140,10 @@ class TestingConfig(BaseConfig):
     MAIL_DEFAULT_SENDER = "shopyofrom@test.com"
 
     # flask sqlalchemy configs
-    SQLALCHEMY_DATABASE_URI = _get_default_db_path()
+    # NOTE: tests must never touch the real user DB (~/.angelclaw/angelclaw.db),
+    # so TestingConfig defaults to the instance-local testing.db. The env var
+    # still wins so test fixtures can point at per-test databases.
+    SQLALCHEMY_DATABASE_URI = os.environ.get("SQLALCHEMY_DATABASE_URI") or "sqlite:///testing.db"
 
     # flask bycrpt configs
     BCRYPT_LOG_ROUNDS = 4

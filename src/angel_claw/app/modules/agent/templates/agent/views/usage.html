@@ -1,0 +1,181 @@
+<div x-data="usageData()" x-init="init()" class="flex flex-col h-full overflow-hidden">
+<header class="view-header">
+    <div class="flex items-center gap-4">
+        <button class="lg:hidden p-2 -ml-2 text-xl" @click="$store.viewManager.toggleSidebar()">
+            <i class="fas fa-bars"></i>
+        </button>
+        <h2 class="font-bold text-lg md:text-xl">Usage</h2>
+    </div>
+    <button @click="load()" class="p-2 text-zinc-500 hover:text-accent transition-colors" title="Refresh">
+        <i class="fas fa-sync-alt" :class="loading && 'fa-spin'"></i>
+    </button>
+</header>
+
+<div class="workspace">
+    <div class="max-w-5xl mx-auto w-full space-y-6">
+
+        <div x-show="loading" class="flex justify-center py-20">
+            <i class="fas fa-spinner fa-spin text-accent text-2xl"></i>
+        </div>
+
+        <div x-show="!loading && error" class="stat-card text-center py-10">
+            <p class="text-zinc-500 text-sm" x-text="error"></p>
+        </div>
+
+        <div x-show="!loading && !error" class="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div class="stat-card">
+                <p class="text-[10px] uppercase tracking-widest text-zinc-600 font-black">Events</p>
+                <p class="text-3xl font-black mt-1" x-text="data.total_events"></p>
+            </div>
+            <div class="stat-card">
+                <p class="text-[10px] uppercase tracking-widest text-zinc-600 font-black">Actions</p>
+                <p class="text-3xl font-black mt-1 text-accent" x-text="data.total_quantity"></p>
+            </div>
+            <div class="stat-card">
+                <p class="text-[10px] uppercase tracking-widest text-zinc-600 font-black">Users</p>
+                <p class="text-3xl font-black mt-1" x-text="data.by_user.length"></p>
+            </div>
+            <div class="stat-card">
+                <p class="text-[10px] uppercase tracking-widest text-zinc-600 font-black">Apps</p>
+                <p class="text-3xl font-black mt-1" x-text="data.by_app.length"></p>
+            </div>
+        </div>
+
+        <div x-show="!loading && !error" class="grid lg:grid-cols-2 gap-6">
+            <div class="stat-card">
+                <h3 class="font-bold uppercase text-[10px] tracking-widest text-zinc-500 mb-4">By User</h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead>
+                            <tr class="text-[10px] uppercase tracking-widest text-zinc-600 border-b border-white/5">
+                                <th class="px-2 py-2">User</th>
+                                <th class="px-2 py-2 text-right">Actions</th>
+                                <th class="px-2 py-2 text-right">Last used</th>
+                            </tr>
+                        </thead>
+                        <tbody class="text-sm">
+                            <template x-for="u in data.by_user" :key="u.user_id + u.email">
+                                <tr class="border-b border-white/5">
+                                    <td class="px-2 py-2.5 truncate max-w-[16rem]" x-text="u.email || u.user_id || 'anonymous'" :title="u.email || u.user_id"></td>
+                                    <td class="px-2 py-2.5 text-right font-bold tabular-nums text-accent" x-text="u.quantity"></td>
+                                    <td class="px-2 py-2.5 text-right text-zinc-500 text-xs" x-text="fmtDate(u.last_used)"></td>
+                                </tr>
+                            </template>
+                            <tr x-show="data.by_user.length === 0">
+                                <td colspan="3" class="px-2 py-8 text-center text-zinc-600 italic text-xs">No usage recorded yet.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <div class="stat-card">
+                <h3 class="font-bold uppercase text-[10px] tracking-widest text-zinc-500 mb-4">By App / Event</h3>
+                <div class="space-y-3">
+                    <template x-for="a in data.by_app" :key="'app:'+a.app">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="font-bold text-zinc-300" x-text="a.app"></span>
+                                <span class="tabular-nums text-zinc-500" x-text="a.quantity"></span>
+                            </div>
+                            <div class="h-1.5 rounded-full bg-white/5 overflow-hidden">
+                                <div class="h-full rounded-full bg-accent" :style="'width:' + pct(a.quantity, data.total_quantity) + '%'"></div>
+                            </div>
+                        </div>
+                    </template>
+                    <template x-for="e in data.by_event" :key="'ev:'+e.event">
+                        <div>
+                            <div class="flex justify-between text-xs mb-1">
+                                <span class="text-zinc-400" x-text="e.event"></span>
+                                <span class="tabular-nums text-zinc-600" x-text="e.quantity"></span>
+                            </div>
+                            <div class="h-1 rounded-full bg-white/5 overflow-hidden">
+                                <div class="h-full rounded-full bg-zinc-500" :style="'width:' + pct(e.quantity, data.total_quantity) + '%'"></div>
+                            </div>
+                        </div>
+                    </template>
+                    <p x-show="data.by_app.length === 0" class="text-zinc-600 italic text-xs py-4 text-center">Nothing reported yet.</p>
+                </div>
+            </div>
+        </div>
+
+        <div x-show="!loading && !error" class="stat-card">
+            <h3 class="font-bold uppercase text-[10px] tracking-widest text-zinc-500 mb-4">Recent Events</h3>
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse">
+                    <thead>
+                        <tr class="text-[10px] uppercase tracking-widest text-zinc-600 border-b border-white/5">
+                            <th class="px-2 py-2">When</th>
+                            <th class="px-2 py-2">App</th>
+                            <th class="px-2 py-2">Event</th>
+                            <th class="px-2 py-2">User</th>
+                            <th class="px-2 py-2 text-right">Qty</th>
+                            <th class="px-2 py-2">Detail</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        <template x-for="(r, i) in data.recent" :key="i">
+                            <tr class="border-b border-white/5">
+                                <td class="px-2 py-2 text-xs text-zinc-500 whitespace-nowrap" x-text="fmtDate(r.created_at)"></td>
+                                <td class="px-2 py-2 font-medium" x-text="r.app"></td>
+                                <td class="px-2 py-2">
+                                    <span class="px-2 py-0.5 rounded-full bg-accent/10 text-accent text-[10px] font-bold uppercase tracking-wider" x-text="r.event"></span>
+                                </td>
+                                <td class="px-2 py-2 text-zinc-400 text-xs truncate max-w-[12rem]" x-text="r.email || '—'"></td>
+                                <td class="px-2 py-2 text-right tabular-nums" x-text="r.quantity"></td>
+                                <td class="px-2 py-2 text-xs text-zinc-600 truncate max-w-[18rem]" x-text="detail(r.meta)" :title="detail(r.meta)"></td>
+                            </tr>
+                        </template>
+                        <tr x-show="data.recent.length === 0">
+                            <td colspan="6" class="px-2 py-8 text-center text-zinc-600 italic text-xs">No events yet — connect an app and it will show up here.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+</div>
+
+<script>
+function usageData() {
+    return {
+        loading: true,
+        error: null,
+        data: { total_events: 0, total_quantity: 0, by_app: [], by_event: [], by_user: [], daily: [], recent: [] },
+        async init() { await this.load(); },
+        async load() {
+            this.loading = true;
+            this.error = null;
+            try {
+                const r = await fetch('/api/usage/summary');
+                if (!r.ok) throw new Error('HTTP ' + r.status);
+                const d = await r.json();
+                if (d.status !== 'success') throw new Error(d.message || 'failed');
+                this.data = d;
+            } catch (e) {
+                this.error = 'Could not load usage: ' + e.message;
+            } finally {
+                this.loading = false;
+            }
+        },
+        fmtDate(s) {
+            if (!s) return '—';
+            try {
+                const d = new Date(s.includes('T') ? s : s.replace(' ', 'T'));
+                return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+            } catch (e) { return s; }
+        },
+        pct(v, total) { return total ? Math.max(2, Math.round((v / total) * 100)) : 0; },
+        detail(meta) {
+            if (!meta) return '';
+            const parts = [];
+            if (meta.query) parts.push('“' + meta.query + '”');
+            if (meta.hits !== undefined) parts.push(meta.hits + ' hits');
+            if (meta.ms !== undefined) parts.push(meta.ms + ' ms');
+            return parts.join(' · ') || JSON.stringify(meta);
+        }
+    }
+}
+</script>

@@ -76,6 +76,9 @@
             <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'api' }" @click="location.hash = '/api'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-code w-5 text-center"></i> API & MCP
             </a>
+            <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'usage' }" @click="location.hash = '/usage'; $store.viewManager.sidebarOpen = false">
+                <i class="fas fa-chart-line w-5 text-center"></i> Usage
+            </a>
             <a href="javascript:void(0)" class="nav-item" :class="{ 'active': $store.viewManager.activeView === 'integrations' }" @click="location.hash = '/integrations'; $store.viewManager.sidebarOpen = false">
                 <i class="fas fa-plug w-5 text-center"></i> Integrations
             </a>

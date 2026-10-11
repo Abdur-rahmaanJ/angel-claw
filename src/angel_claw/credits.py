@@ -1,7 +1,11 @@
 import logging
 from typing import Optional, Dict, Any
 from init import db
-from angel_claw.app.modules.agent.models import (
+# Import models under the same module name the Shopyo modules use
+# (``modules.agent.models``); ``angel_claw.app.modules.agent.models`` is a
+# second module identity that re-executes the model classes against the same
+# MetaData and ends up registering duplicate indexes.
+from modules.agent.models import (
     UserCredit,
     CreditAction,
 )
@@ -151,7 +155,7 @@ def check_sufficient_credits(user_id: str, action: str) -> tuple[bool, int]:
 
 def get_user_stats(user_id: str) -> Dict[str, Any]:
     """Get credit statistics for a user, initializing them if they don't exist."""
-    from angel_claw.app.modules.agent.models import CreditTransaction
+    from modules.agent.models import CreditTransaction
     from angel_claw.config.settings import settings
 
     credit = UserCredit.query.filter_by(user_id=user_id).first()

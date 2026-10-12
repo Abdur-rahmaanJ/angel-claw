@@ -7,6 +7,8 @@ from uuid import uuid4
 from flask import request
 from flask import jsonify
 from flask import current_app
+from flask import Response
+from flask import stream_with_context
 from flask_login import login_required
 from flask_login import current_user
 from itsdangerous import BadSignature
@@ -368,6 +370,40 @@ def mobile_list_messages():
         )
     return jsonify({"status": "success", "messages": results})
 
+def _chat_session_id(data):
+    """Resolve the session id for a mobile chat call, minting one if new.
+
+    Returns ``(session_id, ephemeral)``. Ephemeral runs (integrations like
+    ask-moris) get a unique one-shot id that never touches "Thread N" numbering.
+    """
+    session_id = data.get("session_id")
+    ephemeral = bool(data.get("ephemeral"))
+    if session_id:
+        return session_id, ephemeral
+    if ephemeral:
+        return f"e-{uuid4().hex[:12]}", True
+    # New chat: mint the next "Thread N" (same convention as the web UI),
+    # skipping existing threads so histories never collide.
+    sessions = engine.get_chat_sessions(request.user_context)
+    nums = []
+    for s in sessions:
+        sid = s.get("id", "")
+        if sid.startswith("Thread "):
+            try:
+                nums.append(int(sid.split(" ", 1)[1]))
+            except ValueError:
+                pass
+    return f"Thread {max(nums, default=0) + 1}", False
+
+
+def _scrub_session(user_context, session_id):
+    """Best-effort removal of an ephemeral session's messages."""
+    try:
+        engine.delete_chat_session(user_context, session_id)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning(f"Could not clear ephemeral session: {exc}")
+
+
 @blueprint.route("/mobile/chat", methods=["POST"])
 @csrf.exempt
 @token_auth_required
@@ -375,31 +411,11 @@ def mobile_chat():
     """Talk to the agent via mobile API."""
     data = request.get_json()
     message = data.get("message")
-    session_id = data.get("session_id")
-    # Integrations (ask-moris) send one-shot blend prompts: ephemeral sessions
-    # are scrubbed after the run so they never show up in the chat UI.
-    ephemeral = bool(data.get("ephemeral"))
 
     if not message:
         return jsonify({"status": "error", "message": "Message is required"}), 400
 
-    if not session_id:
-        if ephemeral:
-            # unique per request; never collides with "Thread N" numbering
-            session_id = f"e-{uuid4().hex[:12]}"
-        else:
-            # New chat: mint the next "Thread N" (same convention as the web UI),
-            # skipping existing threads so histories never collide.
-            sessions = engine.get_chat_sessions(request.user_context)
-            nums = []
-            for s in sessions:
-                sid = s.get("id", "")
-                if sid.startswith("Thread "):
-                    try:
-                        nums.append(int(sid.split(" ", 1)[1]))
-                    except ValueError:
-                        pass
-            session_id = f"Thread {max(nums, default=0) + 1}"
+    session_id, ephemeral = _chat_session_id(data)
 
     # UserContext is frozen, so use replace
     user_context = replace(
@@ -422,10 +438,48 @@ def mobile_chat():
         if ephemeral:
             # messages were written synchronously during execute; drop them so
             # the thread list (web + mobile) never shows integration traffic
-            try:
-                engine.delete_chat_session(user_context, session_id)
-            except Exception as exc:  # pragma: no cover - best effort
-                logger.warning(f"Could not clear ephemeral session: {exc}")
+            _scrub_session(user_context, session_id)
+
+
+@blueprint.route("/mobile/chat/stream", methods=["POST"])
+@csrf.exempt
+@token_auth_required
+def mobile_chat_stream():
+    """Streaming variant of /mobile/chat: SSE `chunk` events, then `done`.
+
+    Same request shape (including ``ephemeral``); integrations pipe the chunks
+    straight through to their own clients.
+    """
+    data = request.get_json()
+    message = data.get("message")
+
+    if not message:
+        return jsonify({"status": "error", "message": "Message is required"}), 400
+
+    session_id, ephemeral = _chat_session_id(data)
+    user_context = replace(
+        request.user_context,
+        channel_type="mobile",
+        channel_identifier=session_id
+    )
+
+    # imported lazily: the agent view module pulls in web-only machinery
+    from modules.agent.view import run_async_streaming
+
+    def generate():
+        try:
+            yield from run_async_streaming(user_context, message)
+        finally:
+            if ephemeral:
+                # the engine writes messages while the generator is consumed,
+                # so by now every write has landed — drop them all
+                _scrub_session(user_context, session_id)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 @blueprint.route("/mobile/commands", methods=["GET"])
 @csrf.exempt

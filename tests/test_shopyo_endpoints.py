@@ -10,14 +10,16 @@ from shopyo_auth.models import User
 from angel_claw.models import EngineResponse
 
 @pytest.fixture
-def app():
+def app(monkeypatch):
     from app import create_app
     import uuid
     import os
     db_file = f"testing_{uuid.uuid4().hex}.db"
-    db_path = f"sqlite:///{db_file}"
+    # Set the URI *before* create_app: the engine is created during app setup,
+    # so a post-hoc app.config override is ignored (it would otherwise hit
+    # ~/.angelclaw/angelclaw.db — the real user database).
+    monkeypatch.setenv("SQLALCHEMY_DATABASE_URI", f"sqlite:///{os.path.abspath(db_file)}")
     app = create_app("testing")
-    app.config["SQLALCHEMY_DATABASE_URI"] = db_path
     with app.app_context():
         # Ensure auth_mode is shopyo for these tests
         from angel_claw.config import settings
@@ -130,8 +132,9 @@ def test_api_key_endpoint(client, auth_user, app):
         print(response.get_json())
     assert response.status_code == 200
     data = response.get_json()
-    assert "api_key" in data
-    assert data["api_key"].startswith("ac_v1_")
+    # /api/api-key returns the raw key under "key"
+    assert "key" in data
+    assert data["key"].startswith("ac_v1_")
 
 def test_registration_template(client, app):
     response = client.get("/auth/register")

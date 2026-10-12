@@ -1,11 +1,19 @@
 import logging
+import time
 from functools import wraps, lru_cache
 from dataclasses import replace
+from uuid import uuid4
 
 from flask import request
 from flask import jsonify
+from flask import current_app
+from flask import Response
+from flask import stream_with_context
 from flask_login import login_required
 from flask_login import current_user
+from itsdangerous import BadSignature
+from itsdangerous import SignatureExpired
+from itsdangerous import URLSafeTimedSerializer
 from shopyo.api.module import ModuleHelp
 from asgiref.sync import async_to_sync
 
@@ -13,6 +21,8 @@ from angel_claw.engine import AngelClawEngine
 from angel_claw.models import UserContext
 from angel_claw.mobile_bridge import queue_mobile_command, get_and_clear_commands, set_user_capabilities, get_user_capabilities, pop_command_meta, set_user_device_info
 from init import csrf
+from init import db
+from modules.api.models import UsageEvent
 
 logger = logging.getLogger("angel-claw-api")
 
@@ -52,6 +62,7 @@ def api_version():
         "commit": _git_commit(),
     })
 
+
 def token_auth_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -68,6 +79,263 @@ def token_auth_required(f):
         request.user_context = context
         return f(*args, **kwargs)
     return decorated
+
+# --- SSO (AngelClaw as identity provider for integrated apps) ---
+
+SSO_SALT = "ask-moris-sso"
+SSO_MAX_AGE = 60 * 60 * 24 * 30  # signed tokens live 30 days
+
+_sso_failures = {}  # remote_ip -> [window_start, failed_attempts]
+
+
+def _sso_throttled(ip):
+    """Cheap per-IP brake: >=10 failed attempts within 60s blocks new tries."""
+    now = time.monotonic()
+    window, count = _sso_failures.get(ip, (now, 0))
+    if now - window > 60:
+        return False
+    return count >= 10
+
+
+def _sso_note_failure(ip):
+    now = time.monotonic()
+    window, count = _sso_failures.get(ip, (now, 0))
+    if now - window > 60:
+        window, count = now, 0
+    _sso_failures[ip] = [window, count + 1]
+
+
+def _sso_serializer():
+    return URLSafeTimedSerializer(current_app.config["SECRET_KEY"], salt=SSO_SALT)
+
+
+def _sso_user_payload(user):
+    return {
+        "id": str(user.id),
+        "email": user.email,
+        "username": user.username,
+        "name": user.first_name or user.username or user.email,
+    }
+
+
+@blueprint.route("/sso/token", methods=["POST"])
+@csrf.exempt
+def sso_token():
+    """Exchange AngelClaw credentials for a signed SSO token.
+
+    Lets integrated apps (e.g. ask-moris) sign people in with their
+    AngelClaw account without handling passwords themselves.
+    """
+    ip = request.remote_addr or "?"
+    if _sso_throttled(ip):
+        return jsonify({"status": "error", "message": "Too many attempts, try again later"}), 429
+
+    data = request.get_json(silent=True) or {}
+    email = (data.get("email") or "").strip()
+    password = data.get("password") or ""
+    if not email or not password:
+        return jsonify({"status": "error", "message": "Email and password required"}), 400
+
+    from shopyo_auth.models import User
+
+    user = User.get_by_email(email)
+    if user is None or not user.check_password(password):
+        _sso_note_failure(ip)
+        return jsonify({"status": "error", "message": "Invalid email or password"}), 401
+
+    _sso_failures.pop(ip, None)
+    token = _sso_serializer().dumps({"uid": str(user.id), "email": user.email})
+    return jsonify({
+        "status": "success",
+        "token": token,
+        "expires_in": SSO_MAX_AGE,
+        "user": _sso_user_payload(user),
+    })
+
+
+@blueprint.route("/sso/key", methods=["POST"])
+@csrf.exempt
+def sso_key():
+    """Resolve an AngelClaw API key to its owner's identity.
+
+    Bring-your-own-key SSO: integrated apps (e.g. ask-moris) sign users in
+    with a personal API key instead of asking for their password. The user
+    creates the key in their own AngelClaw dashboard and pastes it into the app.
+    """
+    data = request.get_json(silent=True) or {}
+    raw = (data.get("api_key") or "").strip()
+    if not raw:
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            raw = auth_header.split(" ", 1)[1].strip()
+    if not raw:
+        return jsonify({"status": "error", "message": "api_key required"}), 400
+
+    context = engine.validate_api_key(raw)
+    if not context:
+        return jsonify({"status": "error", "message": "Invalid API key"}), 401
+
+    from shopyo_auth.models import User
+
+    user = None
+    try:
+        user = db.session.get(User, int(context.user_id))
+    except (TypeError, ValueError):
+        pass
+    if user is not None:
+        payload = _sso_user_payload(user)
+    else:  # key owner no longer exists as a full user record
+        payload = {
+            "id": str(context.user_id),
+            "email": context.email,
+            "username": context.email,
+            "name": context.email,
+        }
+    return jsonify({"status": "success", "user": payload})
+
+
+@blueprint.route("/sso/verify", methods=["POST"])
+@csrf.exempt
+def sso_verify():
+    """Introspect a token issued by /api/sso/token."""
+    data = request.get_json(silent=True) or {}
+    token = data.get("token")
+    if not token:
+        return jsonify({"status": "error", "message": "token required"}), 400
+
+    try:
+        payload = _sso_serializer().loads(token, max_age=SSO_MAX_AGE)
+    except SignatureExpired:
+        return jsonify({"status": "error", "message": "Token expired"}), 401
+    except BadSignature:
+        return jsonify({"status": "error", "message": "Invalid token"}), 401
+
+    from shopyo_auth.models import User
+
+    user = db.session.get(User, payload.get("uid"))
+    if user is None:
+        return jsonify({"status": "error", "message": "Unknown user"}), 401
+    return jsonify({"status": "success", "user": _sso_user_payload(user)})
+
+
+# --- Usage reporting from integrated apps ---
+
+@blueprint.route("/usage", methods=["POST"])
+@csrf.exempt
+@token_auth_required
+def record_usage():
+    """Record a usage event reported by an integrated app (API-key auth)."""
+    data = request.get_json(silent=True) or {}
+    app_name = (data.get("app") or "").strip()
+    event = (data.get("event") or "").strip()
+    if not app_name or not event:
+        return jsonify({"status": "error", "message": "app and event required"}), 400
+
+    try:
+        quantity = int(data.get("quantity") or 1)
+    except (TypeError, ValueError):
+        quantity = 1
+
+    subject = data.get("user") or {}
+    meta = data.get("meta")
+    usage = UsageEvent(
+        user_id=str(subject.get("id") or ""),
+        email=str(subject.get("email") or ""),
+        app=app_name[:100],
+        event=event[:100],
+        quantity=max(quantity, 1),
+        reported_by=request.user_context.user_id,
+        meta_json=meta if isinstance(meta, dict) else None,
+    )
+    db.session.add(usage)
+    db.session.commit()
+    return jsonify({"status": "success", "id": usage.id})
+
+
+@blueprint.route("/usage/summary")
+def usage_summary():
+    """Usage aggregates — dashboard session or API-key auth."""
+    if not current_user.is_authenticated:
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return jsonify({"status": "error", "message": "unauthorized"}), 401
+        if not engine.validate_api_key(auth_header.split(" ", 1)[1]):
+            return jsonify({"status": "error", "message": "unauthorized"}), 401
+
+    from sqlalchemy import func
+
+    total_events, total_quantity = db.session.query(
+        func.count(UsageEvent.id), func.coalesce(func.sum(UsageEvent.quantity), 0)
+    ).one()
+
+    by_app = [
+        {"app": r[0], "events": r[1], "quantity": r[2]}
+        for r in db.session.query(
+            UsageEvent.app,
+            func.count(UsageEvent.id),
+            func.coalesce(func.sum(UsageEvent.quantity), 0),
+        ).group_by(UsageEvent.app).all()
+    ]
+    by_event = [
+        {"event": r[0], "events": r[1], "quantity": r[2]}
+        for r in db.session.query(
+            UsageEvent.event,
+            func.count(UsageEvent.id),
+            func.coalesce(func.sum(UsageEvent.quantity), 0),
+        ).group_by(UsageEvent.event).all()
+    ]
+    by_user = [
+        {
+            "user_id": r[0],
+            "email": r[1],
+            "events": r[2],
+            "quantity": r[3],
+            "last_used": r[4].isoformat(sep=" ", timespec="seconds") if r[4] else None,
+        }
+        for r in db.session.query(
+            UsageEvent.user_id,
+            UsageEvent.email,
+            func.count(UsageEvent.id),
+            func.coalesce(func.sum(UsageEvent.quantity), 0),
+            func.max(UsageEvent.created_at),
+        )
+        .group_by(UsageEvent.user_id, UsageEvent.email)
+        .order_by(func.coalesce(func.sum(UsageEvent.quantity), 0).desc())
+        .all()
+    ]
+    daily = [
+        {"day": str(r[0]), "quantity": r[1]}
+        for r in db.session.query(
+            func.date(UsageEvent.created_at),
+            func.coalesce(func.sum(UsageEvent.quantity), 0),
+        )
+        .group_by(func.date(UsageEvent.created_at))
+        .order_by(func.date(UsageEvent.created_at))
+        .all()
+    ]
+    recent = [
+        {
+            "app": r.app,
+            "event": r.event,
+            "email": r.email,
+            "quantity": r.quantity,
+            "created_at": r.created_at.isoformat(sep=" ", timespec="seconds") if r.created_at else None,
+            "meta": r.meta_json,
+        }
+        for r in UsageEvent.query.order_by(UsageEvent.id.desc()).limit(50).all()
+    ]
+
+    return jsonify({
+        "status": "success",
+        "total_events": int(total_events),
+        "total_quantity": int(total_quantity),
+        "by_app": by_app,
+        "by_event": by_event,
+        "by_user": by_user,
+        "daily": daily,
+        "recent": recent,
+    })
+
 
 # --- Mobile API Endpoints ---
 
@@ -102,6 +370,40 @@ def mobile_list_messages():
         )
     return jsonify({"status": "success", "messages": results})
 
+def _chat_session_id(data):
+    """Resolve the session id for a mobile chat call, minting one if new.
+
+    Returns ``(session_id, ephemeral)``. Ephemeral runs (integrations like
+    ask-moris) get a unique one-shot id that never touches "Thread N" numbering.
+    """
+    session_id = data.get("session_id")
+    ephemeral = bool(data.get("ephemeral"))
+    if session_id:
+        return session_id, ephemeral
+    if ephemeral:
+        return f"e-{uuid4().hex[:12]}", True
+    # New chat: mint the next "Thread N" (same convention as the web UI),
+    # skipping existing threads so histories never collide.
+    sessions = engine.get_chat_sessions(request.user_context)
+    nums = []
+    for s in sessions:
+        sid = s.get("id", "")
+        if sid.startswith("Thread "):
+            try:
+                nums.append(int(sid.split(" ", 1)[1]))
+            except ValueError:
+                pass
+    return f"Thread {max(nums, default=0) + 1}", False
+
+
+def _scrub_session(user_context, session_id):
+    """Best-effort removal of an ephemeral session's messages."""
+    try:
+        engine.delete_chat_session(user_context, session_id)
+    except Exception as exc:  # pragma: no cover - best effort
+        logger.warning(f"Could not clear ephemeral session: {exc}")
+
+
 @blueprint.route("/mobile/chat", methods=["POST"])
 @csrf.exempt
 @token_auth_required
@@ -109,24 +411,11 @@ def mobile_chat():
     """Talk to the agent via mobile API."""
     data = request.get_json()
     message = data.get("message")
-    session_id = data.get("session_id")
 
     if not message:
         return jsonify({"status": "error", "message": "Message is required"}), 400
 
-    if not session_id:
-        # New chat: mint the next "Thread N" (same convention as the web UI),
-        # skipping existing threads so histories never collide.
-        sessions = engine.get_chat_sessions(request.user_context)
-        nums = []
-        for s in sessions:
-            sid = s.get("id", "")
-            if sid.startswith("Thread "):
-                try:
-                    nums.append(int(sid.split(" ", 1)[1]))
-                except ValueError:
-                    pass
-        session_id = f"Thread {max(nums, default=0) + 1}"
+    session_id, ephemeral = _chat_session_id(data)
 
     # UserContext is frozen, so use replace
     user_context = replace(
@@ -145,6 +434,52 @@ def mobile_chat():
     except Exception as e:
         logger.error(f"Error in mobile chat: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        if ephemeral:
+            # messages were written synchronously during execute; drop them so
+            # the thread list (web + mobile) never shows integration traffic
+            _scrub_session(user_context, session_id)
+
+
+@blueprint.route("/mobile/chat/stream", methods=["POST"])
+@csrf.exempt
+@token_auth_required
+def mobile_chat_stream():
+    """Streaming variant of /mobile/chat: SSE `chunk` events, then `done`.
+
+    Same request shape (including ``ephemeral``); integrations pipe the chunks
+    straight through to their own clients.
+    """
+    data = request.get_json()
+    message = data.get("message")
+
+    if not message:
+        return jsonify({"status": "error", "message": "Message is required"}), 400
+
+    session_id, ephemeral = _chat_session_id(data)
+    user_context = replace(
+        request.user_context,
+        channel_type="mobile",
+        channel_identifier=session_id
+    )
+
+    # imported lazily: the agent view module pulls in web-only machinery
+    from modules.agent.view import run_async_streaming
+
+    def generate():
+        try:
+            yield from run_async_streaming(user_context, message)
+        finally:
+            if ephemeral:
+                # the engine writes messages while the generator is consumed,
+                # so by now every write has landed — drop them all
+                _scrub_session(user_context, session_id)
+
+    return Response(
+        stream_with_context(generate()),
+        mimetype="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 @blueprint.route("/mobile/commands", methods=["GET"])
 @csrf.exempt

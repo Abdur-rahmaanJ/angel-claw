@@ -437,7 +437,7 @@
                     this.generatePairingToken();
 
                     // Load view from URL hash (default: chat)
-                    const validViews = ['dashboard','chat','tasks','calendar','messages','reminders','soul','memory','skills','api','integrations','settings'];
+                    const validViews = ['dashboard','chat','tasks','calendar','messages','reminders','soul','memory','skills','api','usage','integrations','settings'];
                     const hashView = (location.hash || '').replace(/^#\/?/, '').split('/')[0];
                     this.activeView = validViews.includes(hashView) ? hashView : 'chat';
                     loadView(this.activeView).then(() => {

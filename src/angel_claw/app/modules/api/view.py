@@ -2,6 +2,7 @@ import logging
 import time
 from functools import wraps, lru_cache
 from dataclasses import replace
+from uuid import uuid4
 
 from flask import request
 from flask import jsonify
@@ -375,23 +376,30 @@ def mobile_chat():
     data = request.get_json()
     message = data.get("message")
     session_id = data.get("session_id")
+    # Integrations (ask-moris) send one-shot blend prompts: ephemeral sessions
+    # are scrubbed after the run so they never show up in the chat UI.
+    ephemeral = bool(data.get("ephemeral"))
 
     if not message:
         return jsonify({"status": "error", "message": "Message is required"}), 400
 
     if not session_id:
-        # New chat: mint the next "Thread N" (same convention as the web UI),
-        # skipping existing threads so histories never collide.
-        sessions = engine.get_chat_sessions(request.user_context)
-        nums = []
-        for s in sessions:
-            sid = s.get("id", "")
-            if sid.startswith("Thread "):
-                try:
-                    nums.append(int(sid.split(" ", 1)[1]))
-                except ValueError:
-                    pass
-        session_id = f"Thread {max(nums, default=0) + 1}"
+        if ephemeral:
+            # unique per request; never collides with "Thread N" numbering
+            session_id = f"e-{uuid4().hex[:12]}"
+        else:
+            # New chat: mint the next "Thread N" (same convention as the web UI),
+            # skipping existing threads so histories never collide.
+            sessions = engine.get_chat_sessions(request.user_context)
+            nums = []
+            for s in sessions:
+                sid = s.get("id", "")
+                if sid.startswith("Thread "):
+                    try:
+                        nums.append(int(sid.split(" ", 1)[1]))
+                    except ValueError:
+                        pass
+            session_id = f"Thread {max(nums, default=0) + 1}"
 
     # UserContext is frozen, so use replace
     user_context = replace(
@@ -410,6 +418,14 @@ def mobile_chat():
     except Exception as e:
         logger.error(f"Error in mobile chat: {e}", exc_info=True)
         return jsonify({"status": "error", "message": str(e)}), 500
+    finally:
+        if ephemeral:
+            # messages were written synchronously during execute; drop them so
+            # the thread list (web + mobile) never shows integration traffic
+            try:
+                engine.delete_chat_session(user_context, session_id)
+            except Exception as exc:  # pragma: no cover - best effort
+                logger.warning(f"Could not clear ephemeral session: {exc}")
 
 @blueprint.route("/mobile/commands", methods=["GET"])
 @csrf.exempt

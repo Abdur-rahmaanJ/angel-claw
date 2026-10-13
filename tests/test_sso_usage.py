@@ -172,6 +172,99 @@ def test_usage_summary_unauthorized(client, auth_user):
     assert client.get("/api/usage/summary").status_code == 401
 
 
+def test_usage_charges_api_key_owner(client, auth_user, app):
+    key = _create_api_key(client)
+    headers = {"Authorization": f"Bearer {key}"}
+
+    r = client.post(
+        "/api/usage",
+        json={"app": "ask-moris", "event": "search", "quantity": 3},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.get_json()
+    credits = r.get_json()["credits"]
+    assert credits["enabled"] is True
+    assert credits["ok"] is True
+    assert credits["charged"] == 3  # api_call cost 1 x quantity 3
+    assert credits["action"] == "api_call"
+
+    with app.app_context():
+        from modules.agent.models import UserCredit, CreditTransaction
+
+        credit = UserCredit.query.filter_by(
+            user_id=str(auth_user["id"])
+        ).first()
+        assert credit.balance == 1000 - 3
+        assert credit.lifetime_spent == 3
+
+        tx = CreditTransaction.query.filter_by(
+            user_id=str(auth_user["id"])
+        ).order_by(CreditTransaction.id.desc()).first()
+        assert tx.action == "api_call"
+        assert tx.amount == -3
+        assert tx.meta_json["app"] == "ask-moris"
+
+
+def test_usage_event_priced_by_credit_action(client, auth_user, app):
+    with app.app_context():
+        from modules.agent.models import CreditAction
+
+        db.session.add(CreditAction(name="search", cost=5, is_active=True))
+        db.session.commit()
+
+    key = _create_api_key(client)
+    headers = {"Authorization": f"Bearer {key}"}
+    r = client.post(
+        "/api/usage",
+        json={"app": "ask-moris", "event": "search", "quantity": 2},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.get_json()
+    credits = r.get_json()["credits"]
+    assert credits["ok"] is True
+    assert credits["action"] == "search"
+    assert credits["charged"] == 10  # 5 x 2
+
+    with app.app_context():
+        from modules.agent.models import UserCredit
+
+        credit = UserCredit.query.filter_by(
+            user_id=str(auth_user["id"])
+        ).first()
+        assert credit.balance == 1000 - 10
+
+
+def test_usage_recorded_even_when_credits_exhausted(client, auth_user, app):
+    with app.app_context():
+        from modules.agent.models import UserCredit
+
+        credit = UserCredit.get_or_create(str(auth_user["id"]), initial=1000)
+        credit.balance = 1
+        db.session.commit()
+
+    key = _create_api_key(client)
+    headers = {"Authorization": f"Bearer {key}"}
+    r = client.post(
+        "/api/usage",
+        json={"app": "ask-moris", "event": "search", "quantity": 5},
+        headers=headers,
+    )
+    assert r.status_code == 200, r.get_json()
+    body = r.get_json()
+    assert body["status"] == "success"
+    credits = body["credits"]
+    assert credits["ok"] is False
+    assert credits["charged"] == 0
+    assert "reason" in credits
+    assert credits["balance"] == 1  # untouched
+
+    # usage event still kept — audit trail survives failed charge
+    with app.app_context():
+        from modules.api.models import UsageEvent
+
+        assert UsageEvent.query.count() == 1
+
+
 def test_usage_requires_fields(client, auth_user):
     key = _create_api_key(client)
     headers = {"Authorization": f"Bearer {key}"}

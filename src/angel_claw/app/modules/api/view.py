@@ -220,6 +220,58 @@ def sso_verify():
 
 # --- Usage reporting from integrated apps ---
 
+def _usage_credit_cost(event: str, quantity: int) -> tuple[int, str]:
+    """Resolve (total_cost, action_name) for a reported usage event.
+
+    Priced by a CreditAction named after the event when one exists,
+    otherwise falls back to the generic ``api_call`` cost. Total is
+    per-unit cost x quantity.
+    """
+    from angel_claw.credits import get_action_cost
+    from modules.agent.models import CreditAction
+
+    priced = CreditAction.query.filter_by(name=event, is_active=True).first()
+    action_name = event if priced else "api_call"
+    unit = priced.cost if priced else get_action_cost("api_call")
+    return max(int(unit), 0) * max(quantity, 1), action_name
+
+
+def _charge_usage_credits(owner_id: str, app_name: str, event: str,
+                          quantity: int, usage_id: int) -> dict:
+    """Deduct credits from the API-key owner for reported usage.
+
+    Usage is always recorded (audit trail); charging is best-effort so an
+    exhausted balance never loses the event — the response reports it.
+    """
+    from angel_claw.credits import credits_enabled, deduct_credits, get_balance
+
+    if not credits_enabled():
+        return {"enabled": False}
+
+    cost, action_name = _usage_credit_cost(event, quantity)
+    meta = {
+        "app": app_name,
+        "event": event,
+        "quantity": quantity,
+        "usage_id": usage_id,
+    }
+    ok, msg = deduct_credits(owner_id, action_name, amount=cost, metadata=meta)
+    result = {
+        "enabled": True,
+        "charged": cost if ok else 0,
+        "action": action_name,
+        "ok": ok,
+        "balance": get_balance(owner_id),
+    }
+    if not ok:
+        result["reason"] = msg
+        logger.warning(
+            f"usage credit charge failed: user={owner_id}, "
+            f"app={app_name}, event={event}, cost={cost}: {msg}"
+        )
+    return result
+
+
 @blueprint.route("/usage", methods=["POST"])
 @csrf.exempt
 @token_auth_required
@@ -249,7 +301,15 @@ def record_usage():
     )
     db.session.add(usage)
     db.session.commit()
-    return jsonify({"status": "success", "id": usage.id})
+
+    credits = _charge_usage_credits(
+        owner_id=str(request.user_context.user_id),
+        app_name=app_name,
+        event=event,
+        quantity=usage.quantity,
+        usage_id=usage.id,
+    )
+    return jsonify({"status": "success", "id": usage.id, "credits": credits})
 
 
 @blueprint.route("/usage/summary")

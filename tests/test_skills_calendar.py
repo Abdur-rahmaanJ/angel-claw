@@ -27,12 +27,19 @@ def setup_calendar_test(monkeypatch):
     if os.path.exists(test_dir):
         shutil.rmtree(test_dir)
     os.makedirs(test_dir)
+    # _get_calendar_dir takes an optional user_id (multi-tenant paths)
     monkeypatch.setattr(
-        "angel_claw.skills.calendar._get_calendar_dir", lambda: test_dir
+        "angel_claw.skills.calendar._get_calendar_dir",
+        lambda user_id=None: test_dir,
     )
     yield
     if os.path.exists(test_dir):
         shutil.rmtree(test_dir)
+
+
+def titles(events):
+    """list_calendar_events returns event dicts, not a formatted string."""
+    return [e["title"] for e in events]
 
 
 def test_create_calendar_event():
@@ -63,7 +70,7 @@ def test_list_calendar_events():
     create_calendar_event(title="Event 1", date=future_date1, time="10:00")
     create_calendar_event(title="Event 2", date=future_date2, time="11:00")
 
-    res = list_calendar_events(days=7)
+    res = titles(list_calendar_events(days=7))
     assert "Event 1" in res
     assert "Event 2" in res
 
@@ -76,7 +83,7 @@ def test_delete_calendar_event():
     assert "Deleted" in res
 
     res = list_calendar_events(days=7)
-    assert "To Delete" not in res
+    assert "To Delete" not in titles(res)
 
 
 def test_update_calendar_event():
@@ -86,7 +93,7 @@ def test_update_calendar_event():
     res = update_calendar_event(event_id=1, title="Updated", time="14:00")
     assert "Updated" in res
 
-    res = list_calendar_events(days=7)
+    res = titles(list_calendar_events(days=7))
     assert "Updated" in res
     assert "Original" not in res
 
@@ -120,10 +127,10 @@ def test_session_isolation():
         title="Session 2 Event", date=future_date, session_id="session2"
     )
 
-    res1 = list_calendar_events(days=7, session_id="session1")
+    res1 = titles(list_calendar_events(days=7, session_id="session1"))
     assert "Session 1 Event" in res1
     assert "Session 2 Event" not in res1
 
-    res2 = list_calendar_events(days=7, session_id="session2")
+    res2 = titles(list_calendar_events(days=7, session_id="session2"))
     assert "Session 2 Event" in res2
     assert "Session 1 Event" not in res2

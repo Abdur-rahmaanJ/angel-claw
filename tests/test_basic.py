@@ -13,9 +13,10 @@ def cleanup_vaults():
     os.makedirs(vault_dir)
     # Monkeypatch settings
     from angel_claw.config import settings
-    settings.memory_persist_dir = vault_dir
+    original_root = settings.user_data_root
     settings.user_data_root = vault_dir
     yield
+    settings.user_data_root = original_root
     if os.path.exists(vault_dir):
         shutil.rmtree(vault_dir)
 
@@ -37,5 +38,6 @@ async def test_engine_memory_flow(cleanup_vaults):
     # But we can test if memory is being initialized
     memos = memory_manager.get_memos(user_id, session_id)
     assert memos is not None
-    # Memory path is now user-isolated: {user_data_root}/users/{user_id}/memory/{session_id}
-    assert os.path.exists(f"./test_vaults/users/{user_id}/memory/{session_id}")
+    # Memory path is now user-isolated: {user_data_root}/users/{user_id}/memory
+    # (threads share the user dir; MemOS namespaces isolate them)
+    assert os.path.exists(f"./test_vaults/users/{user_id}/memory")

@@ -73,7 +73,7 @@ async def test_cron_execution_trigger(test_cron_dir, monkeypatch):
     manager = CronManager(persist_dir=test_cron_dir)
     
     executed = False
-    async def mock_send(message, user_id):
+    async def mock_send(message, user_id, session_id="default"):
         nonlocal executed
         executed = True
     

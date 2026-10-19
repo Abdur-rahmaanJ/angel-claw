@@ -317,7 +317,7 @@
                         const token = document.getElementById('csrf_token')?.value;
                         const res = await fetch('/chat', {
                             method: 'POST',
-                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token },
+                            headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream', 'X-CSRFToken': token },
                             body: JSON.stringify({ 
                                 message: msg, 
                                 session_id: sid,

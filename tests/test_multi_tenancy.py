@@ -2,11 +2,30 @@ import asyncio
 import os
 import shutil
 from pathlib import Path
+import pytest
 from angel_claw.models import UserContext
 from angel_claw.runtime.manager import runtime_manager
 from angel_claw.models import Message, Role
 
-async def test_multi_tenant_isolation():
+
+@pytest.fixture
+def isolated_user_root(tmp_path, monkeypatch):
+    """Keep this test off the real ~/.angelclaw store.
+
+    Without this it writes history/vault files into the developer's own data
+    dir, and leftovers from earlier runs break the "exactly one message"
+    assertions below.
+    """
+    from angel_claw.config import settings
+
+    monkeypatch.setattr(settings, "user_data_root", str(tmp_path / "vault_root"))
+    runtime_manager._runtimes.clear()
+    yield tmp_path
+    runtime_manager._runtimes.clear()
+
+
+@pytest.mark.asyncio
+async def test_multi_tenant_isolation(isolated_user_root):
     # Setup
     user1_id = "user1_test"
     user2_id = "user2_test"
@@ -58,6 +77,3 @@ async def test_multi_tenant_isolation():
     assert r1_reloaded.vault.get("API_KEY") == "key1"
     
     print("Multi-tenant isolation tests PASSED!")
-
-if __name__ == "__main__":
-    asyncio.run(test_multi_tenant_isolation())

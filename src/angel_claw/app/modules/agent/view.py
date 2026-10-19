@@ -165,10 +165,25 @@ def chat():
     user_context = _build_context(session_id=session_id)
     logger.info(f"Chat from user: {user_context.user_id}, session: {session_id}")
 
-    def generate():
-        yield from run_async_streaming(user_context, message, use_global=use_global)
+    # Streaming is opt-in: the dashboard asks for it with an Accept header, so
+    # plain API clients keep getting the documented JSON response.
+    if "text/event-stream" in request.headers.get("Accept", ""):
 
-    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+        def generate():
+            yield from run_async_streaming(user_context, message, use_global=use_global)
+
+        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+    response = async_to_sync(engine.execute)(
+        user_context, message, use_global=use_global
+    )
+    return jsonify(
+        {
+            "response": response.content,
+            "tool_calls": response.tool_calls or [],
+            "session_id": session_id,
+        }
+    )
 
 
 @blueprint.route("/view/<view_name>")

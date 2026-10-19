@@ -7,21 +7,16 @@ import os
 import shutil
 import subprocess
 import importlib.resources
-import questionary
+
+# Everything heavyweight (gateway/FastAPI, litellm, telegram/whatsapp bridges,
+# MCP, lane queue, cron) is imported lazily by the command that needs it.
+# Importing it at module level made `angel-claw --help` build the whole gateway
+# -- and run every cron job loader side effect -- before printing one line, so
+# any slow/hung dependency (network, bridge libs, MCP) left help stuck.
 from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from .config import settings
-from .gateway import start as start_gateway
-from .cron import cron_manager
-from .telegram_bridge import telegram_bridge
-from .whatsapp_bridge import whatsapp_bridge
-from .mcp_manager import mcp_manager
-from .lane_queue.queue import lane_queue
-from .lane_queue.process import process_chat_request
-from .models import AgentRequest
-from .config.validator import is_config_complete
-from .config.wizard import run_wizard
 
 
 logger = logging.getLogger("angel-claw-cli")
@@ -84,9 +79,15 @@ def ensure_env():
     if "--skip-setup" in sys.argv:
         return
 
+    import questionary
+
+    from .config.validator import is_config_complete
+
     if not os.path.exists(".env") or not is_config_complete():
         print("Angel Claw is not configured yet.")
         if questionary.confirm("Do you want to run the setup wizard?").ask():
+            from .config.wizard import run_wizard
+
             run_wizard()
             # Re-load settings after wizard finishes
             from .config import settings
@@ -111,6 +112,14 @@ def ensure_env():
 
 
 async def interactive_chat(model: str = None, api_base: str = None):
+    from .cron import cron_manager
+    from .lane_queue.process import process_chat_request
+    from .lane_queue.queue import lane_queue
+    from .mcp_manager import mcp_manager
+    from .models import AgentRequest
+    from .telegram_bridge import telegram_bridge
+    from .whatsapp_bridge import whatsapp_bridge
+
     # Register CLI proactive handler
     def cli_proactive_handler(message: str, user_id: str, session_id: str):
         if session_id == "cli-default":
@@ -277,6 +286,8 @@ def run_flask_command(cmd_list, quiet=False):
 
 def start_web_server(port=5000, debug=False, migrate=False):
     """Initializes and starts the Shopyo web application."""
+    from .lane_queue.queue import lane_queue
+
     ensure_env()
 
     app_dir = importlib.resources.files("angel_claw").joinpath("app")
@@ -388,9 +399,24 @@ def start_web_server(port=5000, debug=False, migrate=False):
     app.run(host="0.0.0.0", port=port, debug=debug, use_reloader=False)
 
 
+def print_usage():
+    print("🪽 Angel Claw CLI")
+    print(
+        "Usage: angel-claw [chat|serve|tutorial|login-whatsapp|confirm-user|promote-user|create-admin|update-password|setup|list-users|bridges|locate-static|mcp]"
+    )
+
+
 def main():
+    # Handle help first: it must never touch the gateway/bridge/cron import
+    # chain (that is what used to make `angel-claw --help` hang).
+    if len(sys.argv) > 1 and sys.argv[1] in ("-h", "--help"):
+        print_usage()
+        return
+
     if len(sys.argv) > 1 and sys.argv[1] == "chat":
         if "--reconfigure" in sys.argv:
+            from .config.wizard import run_wizard
+
             run_wizard()
 
         ensure_env()
@@ -451,6 +477,8 @@ def main():
         else:
             print("Usage: angel-claw create-admin <email> <password>")
     elif len(sys.argv) > 1 and sys.argv[1] == "setup":
+        import questionary
+
         print("🪽  Starting Angel Claw Setup...")
         
         # Parse flags
@@ -527,6 +555,8 @@ def main():
         else:
             print("Usage: angel-claw update-password <email> <new_password>")
     elif len(sys.argv) > 1 and sys.argv[1] == "bridges":
+        from .lane_queue.queue import lane_queue
+
         ensure_env()
         print("🪽  Angel Claw Bridge Worker starting...")
         print("🤖 Telegram, WhatsApp, and Cron bridges active.")
@@ -566,6 +596,8 @@ def main():
         if len(sys.argv) > 2 and sys.argv[2] == "list":
 
             async def list_mcp():
+                from .mcp_manager import mcp_manager
+
                 await mcp_manager.connect()
                 tools = await mcp_manager.get_tool_definitions()
                 print(f"\n--- Discovered {len(tools)} MCP Tools ---")
@@ -578,6 +610,7 @@ def main():
 
             async def test_diagnostics():
                 from .config.validator import validate_llm
+                from .mcp_manager import mcp_manager
 
                 print("\n--- Angel Claw Diagnostics ---")
 
@@ -612,10 +645,11 @@ def main():
             print("Usage: angel-claw mcp [list|test]")
     elif len(sys.argv) == 1:
         # Default to starting the gateway if no subcommand
+        from .gateway import start as start_gateway
+
         start_gateway()
     else:
-        print("🪽 Angel Claw CLI")
-        print("Usage: angel-claw [chat|serve|tutorial|login-whatsapp|confirm-user|promote-user|create-admin|update-password|setup|list-users|bridges|locate-static|mcp]")
+        print_usage()
 
 
 if __name__ == "__main__":

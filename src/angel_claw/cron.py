@@ -70,8 +70,10 @@ class CronManager:
 
     async def save_job_async(self, job: Job):
         # Always compute next_run before persisting, otherwise one-shot "at"
-        # jobs created at runtime never enter the execution loop.
-        self._calculate_next_run(job)
+        # jobs created at runtime never enter the execution loop. Never clobber
+        # a schedule the caller already set (e.g. a job forced to run now).
+        if job.next_run is None:
+            self._calculate_next_run(job)
         async with self._jobs_lock:
             self.jobs[job.name] = job
         file_path = os.path.join(self.persist_dir, f"{job.name}.json")
@@ -79,7 +81,9 @@ class CronManager:
             f.write(job.model_dump_json(indent=2))
 
     def save_job(self, job: Job):
-        self._calculate_next_run(job)
+        # See save_job_async: respect an explicit next_run, else compute it.
+        if job.next_run is None:
+            self._calculate_next_run(job)
         self.jobs[job.name] = job
         file_path = os.path.join(self.persist_dir, f"{job.name}.json")
         with open(file_path, "w") as f:

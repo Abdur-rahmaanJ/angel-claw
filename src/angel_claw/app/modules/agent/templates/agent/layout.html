@@ -4,10 +4,13 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Angel Claw | Control Panel</title>
-    <link rel="manifest" href="/static/manifest.json">
+    <link rel="manifest" href="/manifest.webmanifest">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" id="theme-meta" :content="($store.viewManager?.theme || 'dark') === 'dark' ? '#09090b' : '#f4f4f5'">
     <link rel="icon" type="image/png" href="/static/wing.png">
-    <link rel="apple-touch-icon" href="/static/wing.png">
+    <link rel="apple-touch-icon" href="/static/pwa/icon-192.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
     
@@ -92,6 +95,36 @@
         
         // Define data functions before Alpine loads
         document.addEventListener('alpine:init', () => {
+            // PWA install: captures the browser prompt and offers an Install button
+            Alpine.data('pwaInstall', () => ({
+                deferredPrompt: null,
+                canInstall: false,
+                init() {
+                    const standalone = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+                    this.canInstall = !standalone;
+                    window.addEventListener('beforeinstallprompt', (e) => {
+                        e.preventDefault();
+                        this.deferredPrompt = e;
+                        this.canInstall = true;
+                    });
+                    window.addEventListener('appinstalled', () => {
+                        this.deferredPrompt = null;
+                        this.canInstall = false;
+                        Alpine.store('ui').toast('Angel Claw installed');
+                    });
+                },
+                async install() {
+                    if (!this.deferredPrompt) {
+                        Alpine.store('ui').toast('Use your browser menu: Install app / Add to Home Screen', 'error');
+                        return;
+                    }
+                    this.deferredPrompt.prompt();
+                    const { outcome } = await this.deferredPrompt.userChoice;
+                    if (outcome === 'accepted') Alpine.store('ui').toast('Installing Angel Claw...');
+                    this.deferredPrompt = null;
+                    this.canInstall = false;
+                }
+            }));
             Alpine.data('dashboardData', () => ({                todosCount: '--', todosTotal: 0, eventsCount: '--', eventsDays: 7,
                 credits: { balance: 0, limit: 1000, lifetime_spent: 0 },
                 creditsError: false, todosError: false, eventsError: false,

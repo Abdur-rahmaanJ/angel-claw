@@ -740,14 +740,21 @@ def api_toggle_skill():
 @login_required
 def mobile_add_command():
     """Add a command to the mobile queue (called from Web UI)."""
-    data = request.get_json()
-    target_user_id = data.get("user_id", str(current_user.id))
-    command = data.get("command")
-    
+    data = request.get_json() or {}
+    target_user_id = str(data.get("user_id") or current_user.id)
+    if target_user_id != str(current_user.id) and not getattr(
+        current_user, "is_admin", False
+    ):
+        return jsonify({"status": "error", "message": "Forbidden"}), 403
+
+    command = data.get("command") or {}
+    if not command.get("type"):
+        return jsonify({"status": "error", "message": "Command type required"}), 400
+
     queue_mobile_command(
-        target_user_id, 
-        command.get("type"), 
-        command.get("params")
+        target_user_id,
+        command.get("type"),
+        command.get("params") or {},
     )
     return jsonify({"status": "success"})
 

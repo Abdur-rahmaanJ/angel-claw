@@ -118,6 +118,25 @@ def test_pair_token_endpoint(client, auth_user, app):
     assert len(data["token"]) == 12
     assert data["token"].isdigit()
 
+def test_mobile_command_is_limited_to_own_user(client, auth_user):
+    client.post(
+        "/auth/login",
+        data={"email": "test@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    forbidden = client.post(
+        "/api/mobile/command/add",
+        json={"user_id": "99999", "command": {"type": "click", "params": {}}},
+    )
+    assert forbidden.status_code == 403
+
+    allowed = client.post(
+        "/api/mobile/command/add",
+        json={"command": {"type": "click", "params": {}}},
+    )
+    assert allowed.status_code == 200
+
+
 def test_api_key_endpoint(client, auth_user, app):
     # Login
     client.post("/auth/login", data={

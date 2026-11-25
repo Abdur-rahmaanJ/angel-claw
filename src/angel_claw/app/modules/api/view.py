@@ -75,14 +75,25 @@ _auth_failures = {}  # (bucket, remote_ip) -> [window_start, failed_attempts]
 def _throttled(ip, bucket="sso", limit=10):
     """Cheap per-IP brake: N failed attempts within 60s blocks new tries."""
     now = time.monotonic()
+    if len(_auth_failures) > 512:
+        _prune_failures(now)
     window, count = _auth_failures.get((bucket, ip), (now, 0))
     if now - window > 60:
         return False
     return count >= limit
 
 
+def _prune_failures(now):
+    """Drop expired entries so the failure map cannot grow without bound."""
+    for key, (window, _) in list(_auth_failures.items()):
+        if now - window > 60:
+            _auth_failures.pop(key, None)
+
+
 def _note_failure(ip, bucket="sso"):
     now = time.monotonic()
+    if len(_auth_failures) > 512:
+        _prune_failures(now)
     window, count = _auth_failures.get((bucket, ip), (now, 0))
     if now - window > 60:
         window, count = now, 0

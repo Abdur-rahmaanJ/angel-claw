@@ -19,13 +19,21 @@ def _get_upload_dir() -> str:
     return UPLOAD_DIR
 
 
+def _upload_path(filename: str) -> str:
+    """Resolve a file strictly inside the upload directory."""
+    upload_dir = os.path.realpath(_get_upload_dir())
+    safe_name = os.path.basename(filename or "")
+    if not safe_name:
+        raise ValueError("invalid filename")
+    filepath = os.path.realpath(os.path.join(upload_dir, safe_name))
+    if os.path.dirname(filepath) != upload_dir:
+        raise ValueError("invalid filename")
+    return filepath
+
+
 def _save_file(file_data: str, filename: str) -> str:
     """Save a base64-encoded file."""
-    upload_dir = _get_upload_dir()
-
-    # Sanitize filename
-    safe_name = os.path.basename(filename)
-    filepath = os.path.join(upload_dir, safe_name)
+    filepath = _upload_path(filename)
 
     # Handle base64 data
     if "," in file_data:
@@ -84,8 +92,7 @@ def get_file_info(filename: str) -> str:
     Gets information about a file.
     - filename: Name of the file in .angelclaw/uploads/
     """
-    upload_dir = _get_upload_dir()
-    filepath = os.path.join(upload_dir, filename)
+    filepath = _upload_path(filename)
 
     if not os.path.exists(filepath):
         return f"Error: File '{filename}' not found. Upload it first with save_file()."
@@ -146,8 +153,7 @@ def delete_file(filename: str) -> str:
     Deletes an uploaded file.
     - filename: Name of the file to delete
     """
-    upload_dir = _get_upload_dir()
-    filepath = os.path.join(upload_dir, filename)
+    filepath = _upload_path(filename)
 
     if not os.path.exists(filepath):
         return f"Error: File '{filename}' not found."
@@ -165,8 +171,7 @@ def extract_pdf_text(filename: str) -> str:
     Extracts text from a PDF file.
     - filename: Name of the PDF file in .angelclaw/uploads/
     """
-    upload_dir = _get_upload_dir()
-    filepath = os.path.join(upload_dir, filename)
+    filepath = _upload_path(filename)
 
     if not os.path.exists(filepath):
         return f"Error: File '{filename}' not found. Upload it first with save_file()."
@@ -211,8 +216,7 @@ def analyze_image(
     - filename: Name of the image file in .angelclaw/uploads/
     - question: What to ask about the image
     """
-    upload_dir = _get_upload_dir()
-    filepath = os.path.join(upload_dir, filename)
+    filepath = _upload_path(filename)
 
     if not os.path.exists(filepath):
         return f"Error: File '{filename}' not found. Upload it first with save_file()."
@@ -271,8 +275,7 @@ def extract_text_from_image(filename: str) -> str:
     Extracts text from an image using OCR.
     - filename: Name of the image file in .angelclaw/uploads/
     """
-    upload_dir = _get_upload_dir()
-    filepath = os.path.join(upload_dir, filename)
+    filepath = _upload_path(filename)
 
     if not os.path.exists(filepath):
         return f"Error: File '{filename}' not found. Upload it first with save_file()."

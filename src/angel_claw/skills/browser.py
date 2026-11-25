@@ -1,7 +1,9 @@
 from playwright.async_api import async_playwright
+import ipaddress
 import os
 import asyncio
 import httpx
+from urllib.parse import urlparse
 from angel_claw.config import settings
 from angel_claw.skills.manager import skill
 
@@ -17,10 +19,39 @@ async def _get_page():
         _page = await _browser.new_page()
     return _page
 
+def _validate_url(url: str) -> None:
+    """Only public http(s): the browser must not reach internal services."""
+    parsed = urlparse(url or "")
+    if parsed.scheme not in ("http", "https"):
+        raise ValueError("only http and https URLs are allowed")
+    host = (parsed.hostname or "").lower()
+    if not host or host == "localhost" or host.endswith(".local"):
+        raise ValueError("internal hosts are not allowed")
+    try:
+        ip = ipaddress.ip_address(host)
+    except ValueError:
+        return
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved:
+        raise ValueError("internal addresses are not allowed")
+
+
+def _screenshot_path(path: str) -> str:
+    """Keep screenshots in the user data dir, never arbitrary filesystem paths."""
+    from angel_claw.config import settings
+
+    out_dir = settings.data_dir / "screenshots"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    name = os.path.basename(path or "screenshot.png")
+    if not name:
+        name = "screenshot.png"
+    return str(out_dir / name)
+
+
 @skill
 async def browser_navigate(url: str) -> str:
     """Navigates to a URL and returns the page text content."""
     try:
+        _validate_url(url)
         page = await _get_page()
         await page.goto(url)
         # Instead of raw HTML, return a text summary or accessibility snapshot
@@ -57,8 +88,9 @@ async def browser_screenshot(path: str = "screenshot.png") -> str:
     """Takes a screenshot of the current page."""
     try:
         page = await _get_page()
-        await page.screenshot(path=path)
-        return f"Screenshot saved to {os.path.abspath(path)}."
+        target = _screenshot_path(path)
+        await page.screenshot(path=target)
+        return f"Screenshot saved to {target}."
     except Exception as e:
         print(f"DEBUG: Error in browser_screenshot: {e}")
         return f"Error taking screenshot: {e}"

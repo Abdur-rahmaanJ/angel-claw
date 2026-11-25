@@ -790,5 +790,14 @@
             </div>
         </div>
     {% endblock %}
+
+    <script>
+        // Register the root-scope service worker (offline shell + installability)
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').catch(() => {});
+            });
+        }
+    </script>
 </body>
 </html>

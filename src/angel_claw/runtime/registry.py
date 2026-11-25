@@ -69,6 +69,10 @@ class TieredSkillRegistry:
                 if "user_id" not in arguments:
                     arguments["user_id"] = self.context.user_id
 
+            if "email" in sig.parameters:
+                if "email" not in arguments:
+                    arguments["email"] = self.context.email
+
             if "roles" in sig.parameters:
                 if "roles" not in arguments:
                     arguments["roles"] = self.context.roles

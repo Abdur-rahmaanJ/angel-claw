@@ -366,6 +366,12 @@ def custom_commands(db, app):
 
         user = User.query.filter_by(email=admin_email).first()
         if not user:
+            generated = False
+            if not admin_pass:
+                import secrets
+
+                admin_pass = secrets.token_urlsafe(12)
+                generated = True
             user = User()
             user.email = admin_email
             user.password = admin_pass
@@ -373,6 +379,13 @@ def custom_commands(db, app):
             user.is_email_confirmed = True
             db.session.add(user)
             db.session.commit()
+            if generated:
+                # Printed once, never stored in a config default.
+                print(
+                    f"\n[angel-claw] Seeded admin {admin_email} with a generated "
+                    f"password: {admin_pass}\n"
+                    "Set SEED_ADMIN_PASSWORD or change it after first login.\n"
+                )
             logger.debug(f"Created seed admin: {admin_email}")
 
         if admin_role not in user.roles:

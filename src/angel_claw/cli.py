@@ -381,7 +381,10 @@ def start_web_server(port=5000, debug=False, migrate=False):
 
     table.add_row("🔗  URL:", f"http://127.0.0.1:{port}")
     table.add_row("👤  User:", "admin@admin.com")
-    table.add_row("🔑  Pass:", "admin")
+    if os.environ.get("SEED_ADMIN_PASSWORD"):
+        table.add_row("🔑  Pass:", os.environ["SEED_ADMIN_PASSWORD"])
+    else:
+        table.add_row("🔑  Pass:", "shown on first run / reset via CLI")
     table.add_row("", "")
     table.add_row("🤖  Bridges:", "[green]active in background[/green]")
     table.add_row("⚙️   Mode:", f"[yellow]{'Debug' if debug else 'Production'}[/yellow]")

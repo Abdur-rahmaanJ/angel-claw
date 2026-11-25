@@ -102,3 +102,75 @@ async def test_cron_execution_trigger(test_cron_dir, monkeypatch):
         
     assert executed
     assert job.enabled == False # 'at' jobs should be disabled after run
+
+
+@pytest.mark.asyncio
+async def test_scheduler_fires_one_shot_job(test_cron_dir, monkeypatch):
+    """The APScheduler-backed run() must actually execute a due job."""
+    manager = CronManager(persist_dir=test_cron_dir)
+
+    fired = asyncio.Event()
+
+    async def mock_send(message, user_id, session_id="default"):
+        fired.set()
+
+    monkeypatch.setattr(manager, "_send_proactive_message", mock_send)
+
+    job = Job(
+        name="oneshot_job",
+        schedule=JobSchedule(kind="in", value="1s"),
+        payload=JobPayload(kind="message", content="soon"),
+        enabled=True,
+    )
+    manager.save_job(job)
+
+    task = asyncio.create_task(manager.run())
+    try:
+        await asyncio.wait_for(fired.wait(), timeout=10)
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    assert manager.jobs["oneshot_job"].enabled is False
+    assert manager.jobs["oneshot_job"].next_run is None
+
+
+@pytest.mark.asyncio
+async def test_scheduler_fires_recurring_job(test_cron_dir, monkeypatch):
+    """A repeating 'every' job must fire more than once."""
+    manager = CronManager(persist_dir=test_cron_dir)
+
+    count = 0
+
+    async def mock_send(message, user_id, session_id="default"):
+        nonlocal count
+        count += 1
+
+    monkeypatch.setattr(manager, "_send_proactive_message", mock_send)
+
+    job = Job(
+        name="tick_job",
+        schedule=JobSchedule(kind="every", value="1s"),
+        payload=JobPayload(kind="message", content="tick"),
+        enabled=True,
+    )
+    manager.save_job(job)
+
+    task = asyncio.create_task(manager.run())
+    try:
+        deadline = asyncio.get_event_loop().time() + 15
+        while count < 2 and asyncio.get_event_loop().time() < deadline:
+            await asyncio.sleep(0.1)
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    assert count >= 2, f"expected recurring job to fire twice, fired {count} times"
+    assert manager.jobs["tick_job"].next_run is not None
+    assert manager.jobs["tick_job"].next_run > datetime.now()

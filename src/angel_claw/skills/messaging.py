@@ -1,11 +1,33 @@
 from typing import Optional, List
 from datetime import datetime
+from collections import defaultdict, deque
 import logging
+import threading
+import time
 import traceback
 from angel_claw.skills.manager import skill
 from angel_claw.config import settings
 
 logger = logging.getLogger("angel-claw-messaging")
+
+# Any user may DM any other user; cap that so it cannot become a spam or
+# phishing firehose.
+CROSS_USER_MESSAGE_LIMIT = 20
+CROSS_USER_MESSAGE_WINDOW_SECONDS = 3600
+_send_times = defaultdict(deque)
+_send_times_lock = threading.Lock()
+
+
+def _allow_cross_user_send(sender_id: str) -> bool:
+    now = time.time()
+    with _send_times_lock:
+        times = _send_times[sender_id]
+        while times and now - times[0] > CROSS_USER_MESSAGE_WINDOW_SECONDS:
+            times.popleft()
+        if len(times) >= CROSS_USER_MESSAGE_LIMIT:
+            return False
+        times.append(now)
+        return True
 
 
 @skill
@@ -42,6 +64,14 @@ async def send_internal_message(to_user: str, content: str, user_id: str = None)
             recipient = User.get_by_email(to_user)
             if not recipient:
                 return f"Error: User '{to_user}' not found."
+
+            if str(recipient.id) != str(user_id) and not _allow_cross_user_send(
+                str(user_id)
+            ):
+                return (
+                    "Error: Too many messages to other users. "
+                    "Try again later."
+                )
 
             new_msg = InternalMessage(
                 sender_id=user_id,

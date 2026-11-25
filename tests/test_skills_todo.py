@@ -20,7 +20,9 @@ def setup_todo_test(monkeypatch):
     if os.path.exists(test_dir):
         shutil.rmtree(test_dir)
     os.makedirs(test_dir)
-    monkeypatch.setattr("angel_claw.skills.todo._get_todos_dir", lambda: test_dir)
+    monkeypatch.setattr(
+        "angel_claw.skills.todo._get_todos_dir", lambda user_id=None: test_dir
+    )
     yield
     if os.path.exists(test_dir):
         shutil.rmtree(test_dir)

@@ -1,4 +1,6 @@
 import logging
+import os
+from datetime import datetime
 
 from flask import render_template
 from flask import request
@@ -9,7 +11,6 @@ from flask import send_from_directory
 from flask import current_app
 from flask_login import login_required
 from flask_login import current_user
-from init import csrf
 from shopyo.api.module import ModuleHelp
 from asgiref.sync import async_to_sync
 
@@ -69,7 +70,7 @@ def index():
         context = mhelp.context()
         # Filter out None values that can't be JSON serialized
         context = {k: v for k, v in context.items() if v is not None}
-    except:
+    except Exception:
         context = {}
     user_context = _build_context()
     # history = engine.get_history(user_context) # Cleared on reload per request
@@ -98,7 +99,7 @@ def index():
     if skill_config_file.exists():
         try:
             skill_config = json.load(open(skill_config_file))
-        except:
+        except Exception:
             pass
 
     # Ensure skill_config is a dict
@@ -435,17 +436,141 @@ def me():
 @login_required
 def get_todos():
     user_context = _build_context()
-    from angel_claw.skills.todo import list_todos
+    from angel_claw.skills.todo import _load_todos, list_todos
 
     result = list_todos(
         session_id=user_context.channel_identifier, user_id=user_context.user_id
     )
     if request.args.get("format") == "html":
         return render_template("agent/partials/_todo_list.html", todos=result)
-    # Return JSON for dashboard
+    # Return JSON for dashboard and the tasks tab. To-dos are stored per chat
+    # session, so the tasks tab must merge every session of this user.
+    from angel_claw.skills.todo import _get_todos_dir
+
+    todos = []
+    todos_dir = _get_todos_dir(user_context.user_id)
+    for filename in sorted(os.listdir(todos_dir)):
+        if not filename.endswith(".json"):
+            continue
+        session_id = filename[: -len(".json")]
+        for todo in _load_todos(session_id, user_id=user_context.user_id):
+            todos.append({**todo, "session": session_id})
     pending = result.count("⬜")
     total = result.count("⬜") + result.count("✅")
-    return jsonify({"pending": pending, "total": max(total, 1)})
+    return jsonify(
+        {
+            "pending": pending,
+            "total": max(total, 1),
+            "todos": todos,
+        }
+    )
+
+
+@blueprint.route("/todos/<path:session_id>/<int:todo_id>/toggle", methods=["POST"])
+@login_required
+def toggle_todo(session_id, todo_id):
+    from angel_claw.skills.todo import _load_todos, _save_todos
+
+    user_id = str(current_user.id)
+    todos = _load_todos(session_id, user_id=user_id)
+    for todo in todos:
+        if todo["id"] != todo_id:
+            continue
+        todo["completed"] = not todo.get("completed")
+        if todo["completed"]:
+            todo["completed_at"] = datetime.now().isoformat()
+        else:
+            todo.pop("completed_at", None)
+        _save_todos(session_id, todos, user_id=user_id)
+        return jsonify({"result": "success", "completed": todo["completed"]})
+    return jsonify({"error": "Todo not found"}), 404
+
+
+@blueprint.route("/todos/<path:session_id>/<int:todo_id>/delete", methods=["POST"])
+@login_required
+def delete_todo(session_id, todo_id):
+    from angel_claw.skills.todo import delete_todo as delete_todo_skill
+
+    result = delete_todo_skill(
+        todo_id=todo_id,
+        session_id=session_id,
+        user_id=str(current_user.id),
+    )
+    if result.startswith("Error"):
+        return jsonify({"error": result}), 404
+    return jsonify({"result": "success"})
+
+
+@blueprint.route("/cron/jobs")
+@login_required
+def get_cron_jobs():
+    """Scheduled cron jobs for the current user, shown in the tasks tab."""
+    from angel_claw.cron import cron_manager
+
+    user_id = str(current_user.id)
+    jobs = []
+    for job in cron_manager.jobs.values():
+        if job.user_id != user_id:
+            continue
+        jobs.append(
+            {
+                "name": job.name,
+                "kind": job.schedule.kind,
+                "value": job.schedule.value,
+                "payload": job.payload.content or job.payload.skill_name or job.payload.kind,
+                "enabled": job.enabled,
+                "last_run": job.last_run.isoformat() if job.last_run else None,
+                "next_run": job.next_run.isoformat() if job.next_run else None,
+            }
+        )
+    jobs.sort(key=lambda j: j["next_run"] or "")
+    return jsonify({"jobs": jobs})
+
+
+@blueprint.route("/cron/jobs/<path:name>/toggle", methods=["POST"])
+@login_required
+def toggle_cron_job(name):
+    from angel_claw.cron import cron_manager
+
+    user_id = str(current_user.id)
+    job = cron_manager.jobs.get(name)
+    if not job or job.user_id != user_id:
+        return jsonify({"error": "Task not found"}), 404
+
+    if job.enabled:
+        job.enabled = False
+        job.next_run = None
+    else:
+        # A finished one-shot would fire immediately on resume.
+        if job.schedule.kind in ("at", "in"):
+            return jsonify({"error": "Completed one-shot task cannot be resumed"}), 400
+        job.enabled = True
+        job.next_run = None
+
+    async_to_sync(cron_manager.save_job_async)(job)
+    return jsonify({"result": "success", "enabled": job.enabled})
+
+
+@blueprint.route("/cron/jobs/<path:name>/delete", methods=["POST"])
+@login_required
+def delete_cron_job(name):
+    from angel_claw.cron import cron_manager
+    from modules.agent.models import Reminder
+    from init import db
+
+    user_id = str(current_user.id)
+    job = cron_manager.jobs.get(name)
+    if not job or job.user_id != user_id:
+        return jsonify({"error": "Task not found"}), 404
+
+    # Keep the reminders tab in sync when its backing job is removed.
+    reminder = Reminder.query.filter_by(job_name=name, user_id=user_id).first()
+    if reminder:
+        db.session.delete(reminder)
+        db.session.commit()
+
+    cron_manager.delete_job(name)
+    return jsonify({"result": "success"})
 
 
 @blueprint.route("/calendar")
@@ -489,7 +614,7 @@ def get_reminders():
 @blueprint.route("/reminders/delete/<int:reminder_id>", methods=["POST"])
 @login_required
 def delete_reminder(reminder_id):
-    from modules.agent.models import Reminder
+    from modules.agent.models import Reminder, InternalMessage
     from init import db
     from angel_claw.cron import cron_manager
 
@@ -497,6 +622,12 @@ def delete_reminder(reminder_id):
     if reminder:
         if reminder.job_name:
             cron_manager.delete_job(reminder.job_name)
+        # Deleting the reminder should also clear the message it delivered,
+        # otherwise the bell keeps an orphaned "REMINDER" entry forever.
+        InternalMessage.query.filter_by(
+            recipient_id=str(current_user.id),
+            content=f"🔔 REMINDER: {reminder.message}",
+        ).delete()
         db.session.delete(reminder)
         db.session.commit()
         return jsonify({"result": "success"})
@@ -565,7 +696,7 @@ def get_skills():
     if skill_config_file.exists():
         try:
             skill_config = json.load(open(skill_config_file))
-        except:
+        except Exception:
             pass
 
     # Get skill field definitions from skill modules
@@ -577,7 +708,7 @@ def get_skills():
             if hasattr(mod, "SKILL_CONFIG"):
                 # SKILL_CONFIG is {"fields": [...]}, extract the fields array
                 skill_field_defs[skill_name] = mod.SKILL_CONFIG.get("fields", [])
-        except:
+        except Exception:
             pass
 
     if request.args.get("format") == "html":
@@ -656,7 +787,13 @@ def upload_skill():
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    if file and file.filename.endswith(".py"):
+    from werkzeug.utils import secure_filename
+
+    safe_name = secure_filename(file.filename or "")
+    # secure_filename strips directories but can still yield "py"/"" for odd
+    # inputs, so check the extension on the sanitized name and never escape the
+    # user's skills directory.
+    if safe_name.endswith(".py"):
         user_context = _build_context()
         from angel_claw.utils import get_user_root
 
@@ -664,7 +801,10 @@ def upload_skill():
         skills_dir = user_root / "skills"
         skills_dir.mkdir(parents=True, exist_ok=True)
 
-        file_path = skills_dir / file.filename
+        file_path = (skills_dir / safe_name).resolve()
+        if skills_dir.resolve() not in file_path.parents:
+            return jsonify({"error": "Invalid file name"}), 400
+
         file.save(str(file_path))
 
         # Force reload the registry for this user
@@ -673,7 +813,7 @@ def upload_skill():
         runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
         runtime.skills.reload()
 
-        return jsonify({"result": "success", "filename": file.filename})
+        return jsonify({"result": "success", "filename": safe_name})
 
     return jsonify({"error": "Only .py files are allowed"}), 400
 
@@ -779,150 +919,3 @@ def get_mcp_status():
     from angel_claw.mcp_manager import mcp_manager
 
     return jsonify({"servers": mcp_manager.get_diagnostics()})
-
-
-# --- Mobile API Endpoints ---
-
-
-from functools import wraps
-
-
-def token_auth_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"status": "error", "message": "Missing or invalid token"}), 401
-        
-        token = auth_header.split(" ")[1]
-        context = engine.validate_api_key(token)
-        if not context:
-            return jsonify({"status": "error", "message": "Invalid token"}), 401
-            
-        # Attach context to request for use in route
-        request.user_context = context
-        return f(*args, **kwargs)
-    return decorated
-
-
-@blueprint.route("/api/mobile/messages", methods=["GET"])
-@csrf.exempt
-@token_auth_required
-def mobile_list_messages():
-    """List internal messages for the authenticated user."""
-    from modules.agent.models import InternalMessage
-    from shopyo_auth.models import User
-    from init import db
-
-    user_id = request.user_context.user_id
-    messages = (
-        InternalMessage.query.filter_by(recipient_id=user_id)
-        .order_by(InternalMessage.created_at.desc())
-        .limit(50)
-        .all()
-    )
-
-    results = []
-    for msg in messages:
-        sender = db.session.get(User, msg.sender_id)
-        results.append(
-            {
-                "id": msg.id,
-                "sender_email": sender.email if sender else "Unknown",
-                "content": msg.content,
-                "created_at": msg.created_at.isoformat(),
-                "is_read": msg.is_read,
-            }
-        )
-    return jsonify({"status": "success", "messages": results})
-
-
-# Note: /api/mobile/commands and /api/mobile/commands/result are owned by the
-# api module (url_prefix "/api"), which reads the shared mobile_bridge queue that
-# skills write to. Registering them here too caused a split brain: whichever route
-# won, one queue stayed invisible. Keep command intake below on mobile_bridge.
-
-
-@blueprint.route("/api/mobile/command/add", methods=["POST"])
-@login_required
-def mobile_add_command():
-    """Add a command to the mobile queue (called from Web UI)."""
-    data = request.get_json()
-    target_user_id = data.get("user_id", str(current_user.id))
-    command = data.get("command") # { "id": "...", "type": "click", "params": {...} }
-
-    from angel_claw.mobile_bridge import queue_mobile_command
-    queue_mobile_command(target_user_id, command.get("type"), command.get("params", {}))
-    return jsonify({"status": "success"})
-
-
-@blueprint.route("/api/mobile/pair", methods=["POST"])
-@csrf.exempt
-def mobile_pair():
-    """Exchange a pairing token for a permanent API key."""
-    data = request.get_json()
-    token = data.get("token")
-    device_name = data.get("device_name", "Android Device")
-
-    if not token:
-        return jsonify({"status": "error", "message": "Token is required"}), 400
-
-    user_id = engine.validate_pair_token(token)
-    if not user_id:
-        return jsonify({"status": "error", "message": "Invalid or expired token"}), 401
-
-    # Get user context for API key generation
-    from shopyo_auth.models import User
-    from init import db
-
-    user = db.session.get(User, user_id)
-    context = UserContext(
-        user_id=str(user.id),
-        email=user.email,
-        roles=[r.name for r in user.roles],
-        channel_type="api",
-        channel_identifier=f"mobile-{device_name}",
-    )
-
-    api_key = engine.create_api_key(context, f"Mobile: {device_name}")
-
-    # Mark token as consumed (validate_pair_token does this in some implementations, 
-    # but let's ensure it here if needed)
-    from modules.agent.models import PairingToken
-    pt = PairingToken.query.filter_by(token=token).first()
-    if pt:
-        pt.consumed = True
-        db.session.commit()
-
-    return jsonify({"status": "success", "api_key": api_key})
-
-
-@blueprint.route("/api/mobile/login", methods=["POST"])
-@csrf.exempt
-def mobile_login():
-    """Authenticate with email/password and return a permanent API key."""
-    data = request.get_json()
-    email = data.get("email")
-    password = data.get("pass")
-    device_name = data.get("device_name", "Android Device")
-
-    if not email or not password:
-        return jsonify({"status": "error", "message": "Email and password required"}), 400
-
-    from shopyo_auth.models import User
-
-    user = User.get_by_email(email)
-    if user is None or not user.check_password(password):
-        return jsonify({"status": "error", "message": "Invalid credentials"}), 401
-
-    context = UserContext(
-        user_id=str(user.id),
-        email=user.email,
-        roles=[r.name for r in user.roles],
-        channel_type="api",
-        channel_identifier=f"mobile-{device_name}",
-    )
-
-    api_key = engine.create_api_key(context, f"Mobile: {device_name}")
-
-    return jsonify({"status": "success", "api_key": api_key})

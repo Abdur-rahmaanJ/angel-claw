@@ -15,12 +15,45 @@ configs = {
 }
 """
 
+import logging
 import os
+import secrets
 from pathlib import Path
+
+logger = logging.getLogger("angel-claw-app-config")
 
 
 def _get_default_db_path():
     return f"sqlite:///{Path('~/.angelclaw/angelclaw.db').expanduser()}"
+
+
+def _secret_key():
+    """SECRET_KEY from the environment, or a persisted random one.
+
+    A hardcoded fallback would let anyone forge session cookies and SSO
+    tokens, so a missing key is generated once and kept private instead.
+    """
+    env_key = os.environ.get("SECRET_KEY")
+    if env_key:
+        return env_key
+
+    data_root = Path(os.environ.get("USER_DATA_ROOT", "~/.angelclaw")).expanduser()
+    key_file = data_root / "secret_key"
+    try:
+        data_root.mkdir(parents=True, exist_ok=True)
+        if key_file.exists():
+            return key_file.read_text().strip()
+        key = secrets.token_hex(32)
+        key_file.write_text(key)
+        os.chmod(key_file, 0o600)
+        logger.warning(
+            "SECRET_KEY not set; generated %s (set SECRET_KEY to keep it stable)",
+            key_file,
+        )
+        return key
+    except OSError as exc:  # pragma: no cover - read-only data dir
+        logger.error("Could not persist SECRET_KEY (%s); using ephemeral key", exc)
+        return secrets.token_hex(32)
 
 
 base_path = os.path.dirname(os.path.abspath(__file__))
@@ -39,7 +72,9 @@ class BaseConfig:
 
     # Seeding
     SEED_ADMIN_EMAIL = os.environ.get("SEED_ADMIN_EMAIL", "admin@admin.com")
-    SEED_ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD", "admin")
+    # No default password: app.py generates a random one for the first admin
+    # account when this is unset and prints it once.
+    SEED_ADMIN_PASSWORD = os.environ.get("SEED_ADMIN_PASSWORD")
     SEED_SETTINGS = {
         "APP_NAME": "Angel Claw",
         "ACTIVE_FRONT_THEME": "blogus",
@@ -53,8 +88,8 @@ class BaseConfig:
     EMAIL_CONFIRMATION_DISABLED = True
 
     # Session / Persistent Login
-    PERMANENT_SESSION_LIFETIME = 31536000  # 1 year in seconds
-    REMEMBER_COOKIE_DURATION = 31536000  # 1 year in seconds
+    PERMANENT_SESSION_LIFETIME = 30 * 24 * 3600  # 30 days in seconds
+    REMEMBER_COOKIE_DURATION = 30 * 24 * 3600  # 30 days in seconds
     REMEMBER_COOKIE_REFRESH_EACH_REQUEST = True
     SESSION_PROTECTION = "basic"
     SHOPYO_AUTH_LOGIN_TEMPLATE = "agent/login.html"
@@ -66,7 +101,19 @@ class ProductionConfig(BaseConfig):
 
     # built in flask configs
     ENV = "production"
-    SECRET_KEY = os.environ.get("SECRET_KEY") or "dev-secret-key-change-in-production"
+    SECRET_KEY = _secret_key()
+
+    # Throttle login/register/password endpoints provided by shopyo-auth.
+    SHOPYO_AUTH_RATE_LIMIT_ENABLED = True
+    SHOPYO_AUTH_RATE_LIMIT = "10 per minute"
+
+    # Session cookies travel over TLS in production only.
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = True
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
 
     # control email confirmation for user registration
     EMAIL_CONFIRMATION_DISABLED = True

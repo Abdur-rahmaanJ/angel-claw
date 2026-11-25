@@ -27,13 +27,18 @@ async def get_current_user(auth: HTTPAuthorizationCredentials = Security(securit
     return context
 
 
+# asyncio keeps only weak references to tasks: hold the handles or the cron
+# worker can be garbage collected and the scheduler silently stops.
+_background_tasks: list = []
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Start background workers
     lane_queue.start_workers()
-    asyncio.create_task(cron_manager.run())
-    asyncio.create_task(telegram_bridge.run())
-    asyncio.create_task(whatsapp_bridge.run())
+    _background_tasks.append(asyncio.create_task(cron_manager.run()))
+    _background_tasks.append(asyncio.create_task(telegram_bridge.run()))
+    _background_tasks.append(asyncio.create_task(whatsapp_bridge.run()))
     yield
     # Shutdown logic
     await whatsapp_bridge.close()

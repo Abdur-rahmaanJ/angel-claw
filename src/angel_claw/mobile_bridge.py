@@ -20,7 +20,7 @@ def _store_path(name: str) -> str:
 
 def _with_store(name: str, mutate):
     """Read-modify-write a JSON store under an exclusive cross-process lock."""
-    os.makedirs(_STORE_DIR, exist_ok=True)
+    os.makedirs(_STORE_DIR, exist_ok=True, mode=0o700)
     with open(_lock_path(name), "w") as lock_file:
         fcntl.flock(lock_file, fcntl.LOCK_EX)
         try:
@@ -33,6 +33,10 @@ def _with_store(name: str, mutate):
             tmp_path = _store_path(name) + f".tmp.{os.getpid()}"
             with open(tmp_path, "w") as f:
                 json.dump(data, f)
+            try:
+                os.chmod(tmp_path, 0o600)
+            except OSError:
+                pass
             os.replace(tmp_path, _store_path(name))
             return result
         finally:

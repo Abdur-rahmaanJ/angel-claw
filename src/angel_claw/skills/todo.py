@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, List
 from angel_claw.skills.manager import skill
 from angel_claw.config import settings
-from angel_claw.utils import get_user_root
+from angel_claw.utils import get_user_root, safe_filename_part
 
 def _get_todos_dir(user_id: Optional[str] = None) -> str:
     if user_id:
@@ -19,7 +19,9 @@ def _get_todos_dir(user_id: Optional[str] = None) -> str:
     return str(todos_dir)
 
 def _get_todos_file(session_id: str, user_id: Optional[str] = None) -> str:
-    return os.path.join(_get_todos_dir(user_id), f"{session_id}.json")
+    return os.path.join(
+        _get_todos_dir(user_id), f"{safe_filename_part(session_id)}.json"
+    )
 
 def _load_todos(session_id: str, user_id: Optional[str] = None) -> List[dict]:
     filepath = _get_todos_file(session_id, user_id)
@@ -81,6 +83,19 @@ def complete_todo(todo_id: int, session_id: str = "cli-default", user_id: Option
             _save_todos(session_id, todos, user_id)
             return f"✅ Completed todo {todo_id}: '{todo['content']}'"
     return f"Error: Todo {todo_id} not found."
+
+@skill
+def clear_completed_todos(session_id: str = "cli-default", user_id: Optional[str] = None) -> str:
+    todos = _load_todos(session_id, user_id)
+    remaining = [t for t in todos if not t.get("completed")]
+    cleared = len(todos) - len(remaining)
+    if not cleared:
+        return "No completed todos to clear."
+    for i, todo in enumerate(remaining, 1):
+        todo["id"] = i
+    _save_todos(session_id, remaining, user_id)
+    return f"🗑️ Cleared {cleared} completed todo(s)."
+
 
 @skill
 def delete_todo(todo_id: int, session_id: str = "cli-default", user_id: Optional[str] = None) -> str:

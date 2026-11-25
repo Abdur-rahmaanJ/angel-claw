@@ -12,7 +12,9 @@
     <link rel="icon" type="image/png" href="/static/wing.png">
     <link rel="apple-touch-icon" href="/static/pwa/icon-192.png">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"
+            integrity="sha384-/TQbtLCAerC3jgaim+N78RZSDYV7ryeoBCVqTuzRrFec2akfBkHS7ACQ3PQhvMVi"
+            crossorigin="anonymous"></script>
     
     <script src="/static/js/tailwind.min.js"></script>
     <script>
@@ -33,12 +35,39 @@
         // Initialize Alpine placeholder before it loads
         window.Alpine = window.Alpine || {};
         
+        window.escapeHtml = function(text) {
+            return String(text ?? '').replace(/[&<>"']/g, function(c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        };
+
+        // Model output and other users' messages are untrusted: strip active
+        // markup before it reaches x-html.
+        window.sanitizeHtml = function(html) {
+            const tpl = document.createElement('template');
+            tpl.innerHTML = html;
+            const blocked = 'script,style,iframe,object,embed,form,link,meta,base,svg,math';
+            tpl.content.querySelectorAll(blocked).forEach(function(el) { el.remove(); });
+            tpl.content.querySelectorAll('*').forEach(function(el) {
+                Array.from(el.attributes).forEach(function(attr) {
+                    const name = attr.name.toLowerCase();
+                    const value = attr.value.trim().toLowerCase();
+                    if (name.indexOf('on') === 0) { el.removeAttribute(attr.name); return; }
+                    if (['href', 'src', 'xlink:href', 'action', 'formaction'].indexOf(name) !== -1 &&
+                        /^(javascript|data|vbscript):/.test(value)) {
+                        el.removeAttribute(attr.name);
+                    }
+                });
+            });
+            return tpl.innerHTML;
+        };
+
         window.formatContent = function(text) {
             if (!text) return '';
             try {
-                return marked.parse(text, { breaks: true, gfm: true });
+                return window.sanitizeHtml(marked.parse(text, { breaks: true, gfm: true }));
             } catch (e) {
-                return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                return window.escapeHtml(text).replace(/\n/g, '<br>');
             }
         };
 
@@ -135,11 +164,15 @@
             }));
 
             Alpine.data('tasksData', () => ({
-                todos: [], loading: true, error: false,
-                async init() { await this.loadTodos(); },
-                async loadTodos() { this.error = false; try { const r = await fetch('/todos?format=json'); if (!r.ok) throw new Error(); const d = await r.json(); this.todos = this.parseTodos(d.events || ''); } catch(e) { this.error = true; } finally { this.loading = false; } },
-                parseTodos(text) { if (!text || text.includes('No todos')) return []; const lines = text.split('\n'), results = []; for (let i = 1; i < lines.length; i++) { const line = lines[i].trim(); if (line && !line.startsWith('##')) { const completed = line.includes('✅'); const content = line.replace(/^[✅⬜]\s*/, '').replace(/^\[\w+\]\s*\d+\.\s*/, ''); results.push({ id: i, content: content, completed: completed, priority: 'medium' }); } } return results; },
-                async toggleTodo(id) { console.log('Toggle todo:', id); }
+                todos: [], jobs: [], loading: true, error: false,
+                async init() { await Promise.all([this.loadTodos(), this.loadJobs()]); },
+                async loadTodos() { this.error = false; try { const r = await fetch('/todos?format=json'); if (!r.ok) throw new Error(); const d = await r.json(); this.todos = d.todos || []; } catch(e) { this.error = true; } finally { this.loading = false; } },
+                async loadJobs() { try { const r = await fetch('/cron/jobs'); if (!r.ok) throw new Error(); const d = await r.json(); this.jobs = d.jobs || []; } catch(e) { this.jobs = []; } },
+                async toggleTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/toggle`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not update task', 'error'); } },
+                async deleteTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
+                async toggleJob(job) { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/cron/jobs/${encodeURIComponent(job.name)}/toggle`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); const d = await r.json().catch(() => ({})); if (!r.ok) { Alpine.store('ui').toast(d.error || 'Could not update task', 'error'); return; } await this.loadJobs(); },
+                async deleteJob(job) { const token = document.getElementById('csrf_token')?.value; try { await fetch(`/cron/jobs/${encodeURIComponent(job.name)}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); await this.loadJobs(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
+                formatDate(ts) { if (!ts) return '—'; try { return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) { return ts; } }
             }));
 
             Alpine.data('calendarData', () => ({
@@ -379,7 +412,7 @@
                                         const data = JSON.parse(trimmed.slice(6));
                                         if (data.chunk) {
                                             if (data.chunk.startsWith('[TOOL_CALL:')) {
-                                                this.logs.push(`<span class="text-accent">Executing:</span> ${data.chunk.replace('[TOOL_CALL:', '').replace(']', '')}`);
+                                                this.logs.push(`<span class="text-accent">Executing:</span> ${window.escapeHtml(data.chunk.replace('[TOOL_CALL:', '').replace(']', ''))}`);
                                             } else {
                                                 this.streamingContent += data.chunk;
                                             }

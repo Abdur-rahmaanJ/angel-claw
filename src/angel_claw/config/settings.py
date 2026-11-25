@@ -22,6 +22,9 @@ class Settings(BaseSettings):
 
     # Auth Settings
     auth_mode: str = Field("shopyo", validation_alias="ANGEL_CLAW_AUTH_MODE")
+    # Open signup is opt-in: a self-registered account gets a full agent with
+    # tool and skill-upload access, so it must be a deliberate choice.
+    allow_registration: bool = Field(False, validation_alias="ALLOW_REGISTRATION")
 
     # Data & Persistence Settings
     user_data_root: str = Field("~/.angelclaw", validation_alias="USER_DATA_ROOT")
@@ -29,7 +32,12 @@ class Settings(BaseSettings):
     @property
     def data_dir(self) -> Path:
         p = Path(self.user_data_root).expanduser()
-        p.mkdir(parents=True, exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # Holds API keys, chat history and secrets: owner-only.
+        try:
+            p.chmod(0o700)
+        except OSError:
+            pass
         return p
 
     @property

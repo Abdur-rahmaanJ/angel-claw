@@ -115,7 +115,27 @@ def test_pair_token_endpoint(client, auth_user, app):
     assert response.status_code == 200
     data = response.get_json()
     assert "token" in data
-    assert len(data["token"]) == 8
+    assert len(data["token"]) == 12
+    assert data["token"].isdigit()
+
+def test_mobile_command_is_limited_to_own_user(client, auth_user):
+    client.post(
+        "/auth/login",
+        data={"email": "test@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    forbidden = client.post(
+        "/api/mobile/command/add",
+        json={"user_id": "99999", "command": {"type": "click", "params": {}}},
+    )
+    assert forbidden.status_code == 403
+
+    allowed = client.post(
+        "/api/mobile/command/add",
+        json={"command": {"type": "click", "params": {}}},
+    )
+    assert allowed.status_code == 200
+
 
 def test_api_key_endpoint(client, auth_user, app):
     # Login
@@ -136,7 +156,14 @@ def test_api_key_endpoint(client, auth_user, app):
     assert "key" in data
     assert data["key"].startswith("ac_v1_")
 
-def test_registration_template(client, app):
+def test_registration_disabled_by_default(client, app):
+    assert client.get("/auth/register").status_code == 404
+
+
+def test_registration_template(client, app, monkeypatch):
+    from angel_claw.config import settings
+
+    monkeypatch.setattr(settings, "allow_registration", True)
     response = client.get("/auth/register")
     assert response.status_code == 200
     html = response.get_data(as_text=True)

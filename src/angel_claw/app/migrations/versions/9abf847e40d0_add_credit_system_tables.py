@@ -59,7 +59,7 @@ def downgrade():
     # Use try-except for credit_transactions as well to be safe
     try:
         op.drop_table('credit_transactions')
-    except:
+    except Exception:
         pass
     op.drop_table('user_credits')
     # ### end Alembic commands ###

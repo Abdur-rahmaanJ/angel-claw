@@ -1,6 +1,6 @@
 import logging
 import time
-from functools import wraps, lru_cache
+from functools import wraps
 from dataclasses import replace
 from uuid import uuid4
 
@@ -32,22 +32,6 @@ blueprint = mhelp.blueprint
 engine = AngelClawEngine()
 
 
-@lru_cache(maxsize=1)
-def _git_commit() -> str:
-    """Short commit hash of the running code; 'unknown' outside a git checkout."""
-    try:
-        import subprocess
-        from pathlib import Path
-        root = Path(__file__).resolve().parents[4]
-        out = subprocess.run(
-            ["git", "rev-parse", "--short", "HEAD"],
-            cwd=root, capture_output=True, text=True, timeout=5,
-        )
-        return out.stdout.strip() or "unknown"
-    except Exception:
-        return "unknown"
-
-
 @blueprint.route("/version", methods=["GET"])
 def api_version():
     """Public build/version probe so clients can verify what's deployed."""
@@ -56,10 +40,10 @@ def api_version():
         ver = pkg_version("angel-claw")
     except Exception:
         ver = "unknown"
+    # No commit hash: deployment identifiers should not be public.
     return jsonify({
         "status": "success",
         "version": ver,
-        "commit": _git_commit(),
     })
 
 
@@ -85,24 +69,39 @@ def token_auth_required(f):
 SSO_SALT = "ask-moris-sso"
 SSO_MAX_AGE = 60 * 60 * 24 * 30  # signed tokens live 30 days
 
-_sso_failures = {}  # remote_ip -> [window_start, failed_attempts]
+_auth_failures = {}  # (bucket, remote_ip) -> [window_start, failed_attempts]
 
 
-def _sso_throttled(ip):
-    """Cheap per-IP brake: >=10 failed attempts within 60s blocks new tries."""
+def _throttled(ip, bucket="sso", limit=10):
+    """Cheap per-IP brake: N failed attempts within 60s blocks new tries."""
     now = time.monotonic()
-    window, count = _sso_failures.get(ip, (now, 0))
+    if len(_auth_failures) > 512:
+        _prune_failures(now)
+    window, count = _auth_failures.get((bucket, ip), (now, 0))
     if now - window > 60:
         return False
-    return count >= 10
+    return count >= limit
 
 
-def _sso_note_failure(ip):
+def _prune_failures(now):
+    """Drop expired entries so the failure map cannot grow without bound."""
+    for key, (window, _) in list(_auth_failures.items()):
+        if now - window > 60:
+            _auth_failures.pop(key, None)
+
+
+def _note_failure(ip, bucket="sso"):
     now = time.monotonic()
-    window, count = _sso_failures.get(ip, (now, 0))
+    if len(_auth_failures) > 512:
+        _prune_failures(now)
+    window, count = _auth_failures.get((bucket, ip), (now, 0))
     if now - window > 60:
         window, count = now, 0
-    _sso_failures[ip] = [window, count + 1]
+    _auth_failures[(bucket, ip)] = [window, count + 1]
+
+
+def _clear_failures(ip, bucket="sso"):
+    _auth_failures.pop((bucket, ip), None)
 
 
 def _sso_serializer():
@@ -127,7 +126,7 @@ def sso_token():
     AngelClaw account without handling passwords themselves.
     """
     ip = request.remote_addr or "?"
-    if _sso_throttled(ip):
+    if _throttled(ip, "sso"):
         return jsonify({"status": "error", "message": "Too many attempts, try again later"}), 429
 
     data = request.get_json(silent=True) or {}
@@ -140,10 +139,10 @@ def sso_token():
 
     user = User.get_by_email(email)
     if user is None or not user.check_password(password):
-        _sso_note_failure(ip)
+        _note_failure(ip, "sso")
         return jsonify({"status": "error", "message": "Invalid email or password"}), 401
 
-    _sso_failures.pop(ip, None)
+    _clear_failures(ip, "sso")
     token = _sso_serializer().dumps({"uid": str(user.id), "email": user.email})
     return jsonify({
         "status": "success",
@@ -314,19 +313,38 @@ def record_usage():
 
 @blueprint.route("/usage/summary")
 def usage_summary():
-    """Usage aggregates — dashboard session or API-key auth."""
-    if not current_user.is_authenticated:
+    """Usage aggregates — dashboard session or API-key auth.
+
+    Admins see every user's events; everyone else only what they reported or
+    what belongs to them.
+    """
+    if current_user.is_authenticated:
+        viewer_id = str(current_user.id)
+        viewer_is_admin = bool(getattr(current_user, "is_admin", False))
+    else:
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return jsonify({"status": "error", "message": "unauthorized"}), 401
-        if not engine.validate_api_key(auth_header.split(" ", 1)[1]):
+        context = engine.validate_api_key(auth_header.split(" ", 1)[1])
+        if not context:
             return jsonify({"status": "error", "message": "unauthorized"}), 401
+        viewer_id = str(context.user_id)
+        viewer_is_admin = bool(context.is_admin)
 
-    from sqlalchemy import func
+    from sqlalchemy import func, or_
+
+    scope = []
+    if not viewer_is_admin:
+        scope = [
+            or_(
+                UsageEvent.reported_by == viewer_id,
+                UsageEvent.user_id == viewer_id,
+            )
+        ]
 
     total_events, total_quantity = db.session.query(
         func.count(UsageEvent.id), func.coalesce(func.sum(UsageEvent.quantity), 0)
-    ).one()
+    ).filter(*scope).one()
 
     by_app = [
         {"app": r[0], "events": r[1], "quantity": r[2]}
@@ -334,7 +352,10 @@ def usage_summary():
             UsageEvent.app,
             func.count(UsageEvent.id),
             func.coalesce(func.sum(UsageEvent.quantity), 0),
-        ).group_by(UsageEvent.app).all()
+        )
+        .filter(*scope)
+        .group_by(UsageEvent.app)
+        .all()
     ]
     by_event = [
         {"event": r[0], "events": r[1], "quantity": r[2]}
@@ -342,7 +363,10 @@ def usage_summary():
             UsageEvent.event,
             func.count(UsageEvent.id),
             func.coalesce(func.sum(UsageEvent.quantity), 0),
-        ).group_by(UsageEvent.event).all()
+        )
+        .filter(*scope)
+        .group_by(UsageEvent.event)
+        .all()
     ]
     by_user = [
         {
@@ -359,6 +383,7 @@ def usage_summary():
             func.coalesce(func.sum(UsageEvent.quantity), 0),
             func.max(UsageEvent.created_at),
         )
+        .filter(*scope)
         .group_by(UsageEvent.user_id, UsageEvent.email)
         .order_by(func.coalesce(func.sum(UsageEvent.quantity), 0).desc())
         .all()
@@ -369,6 +394,7 @@ def usage_summary():
             func.date(UsageEvent.created_at),
             func.coalesce(func.sum(UsageEvent.quantity), 0),
         )
+        .filter(*scope)
         .group_by(func.date(UsageEvent.created_at))
         .order_by(func.date(UsageEvent.created_at))
         .all()
@@ -382,7 +408,10 @@ def usage_summary():
             "created_at": r.created_at.isoformat(sep=" ", timespec="seconds") if r.created_at else None,
             "meta": r.meta_json,
         }
-        for r in UsageEvent.query.order_by(UsageEvent.id.desc()).limit(50).all()
+        for r in UsageEvent.query.filter(*scope)
+        .order_by(UsageEvent.id.desc())
+        .limit(50)
+        .all()
     ]
 
     return jsonify({
@@ -650,7 +679,7 @@ def api_get_skills():
     if skill_config_file.exists():
         try:
             skill_config = json.load(open(skill_config_file))
-        except:
+        except Exception:
             pass
 
     skills_list = []
@@ -687,7 +716,7 @@ def api_toggle_skill():
     if skill_config_file.exists():
         try:
             skill_config = json.load(open(skill_config_file))
-        except:
+        except Exception:
             pass
 
     if skill_name not in skill_config:
@@ -706,14 +735,21 @@ def api_toggle_skill():
 @login_required
 def mobile_add_command():
     """Add a command to the mobile queue (called from Web UI)."""
-    data = request.get_json()
-    target_user_id = data.get("user_id", str(current_user.id))
-    command = data.get("command")
-    
+    data = request.get_json() or {}
+    target_user_id = str(data.get("user_id") or current_user.id)
+    if target_user_id != str(current_user.id) and not getattr(
+        current_user, "is_admin", False
+    ):
+        return jsonify({"status": "error", "message": "Forbidden"}), 403
+
+    command = data.get("command") or {}
+    if not command.get("type"):
+        return jsonify({"status": "error", "message": "Command type required"}), 400
+
     queue_mobile_command(
-        target_user_id, 
-        command.get("type"), 
-        command.get("params")
+        target_user_id,
+        command.get("type"),
+        command.get("params") or {},
     )
     return jsonify({"status": "success"})
 
@@ -721,6 +757,10 @@ def mobile_add_command():
 @csrf.exempt
 def mobile_pair():
     """Exchange a pairing token for a permanent API key."""
+    ip = request.remote_addr or "?"
+    if _throttled(ip, "pair"):
+        return jsonify({"status": "error", "message": "Too many attempts, try again later"}), 429
+
     data = request.get_json()
     token = data.get("token")
     device_name = data.get("device_name", "Android Device")
@@ -736,12 +776,16 @@ def mobile_pair():
 
     user_id = engine.validate_pair_token(token)
     if not user_id:
+        _note_failure(ip, "pair")
         return jsonify({"status": "error", "message": "Invalid or expired token"}), 401
+    _clear_failures(ip, "pair")
 
     from shopyo_auth.models import User
     from init import db
 
     user = db.session.get(User, user_id)
+    if user is None:
+        return jsonify({"status": "error", "message": "Unknown user"}), 401
     context = UserContext(
         user_id=str(user.id),
         email=user.email,
@@ -764,6 +808,10 @@ def mobile_pair():
 @csrf.exempt
 def mobile_login():
     """Authenticate with email/password and return a permanent API key."""
+    ip = request.remote_addr or "?"
+    if _throttled(ip, "mobile-login"):
+        return jsonify({"status": "error", "message": "Too many attempts, try again later"}), 429
+
     data = request.get_json()
     email = data.get("email")
     password = data.get("pass")
@@ -776,7 +824,9 @@ def mobile_login():
 
     user = User.get_by_email(email)
     if user is None or not user.check_password(password):
+        _note_failure(ip, "mobile-login")
         return jsonify({"status": "error", "message": "Invalid credentials"}), 401
+    _clear_failures(ip, "mobile-login")
 
     context = UserContext(
         user_id=str(user.id),

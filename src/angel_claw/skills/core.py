@@ -33,8 +33,22 @@ def _filter_by_session(chats: str, session_filter: str) -> str:
     return "\n".join(filtered)
 
 
+def _user_skills_dir(user_id: str) -> str:
+    """Skills this user owns; never the shared package working directory."""
+    from angel_claw.utils import get_user_root
+
+    skills_dir = get_user_root(user_id) / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    return str(skills_dir)
+
+
 @skill
-def create_skill(name: str, code: str, is_admin: bool = False) -> str:
+def create_skill(
+    name: str,
+    code: str,
+    is_admin: bool = False,
+    user_id: str = None,
+) -> str:
     """
     Creates a new Python skill for Angel Claw.
     'name' should be the filename (without .py).
@@ -43,23 +57,43 @@ def create_skill(name: str, code: str, is_admin: bool = False) -> str:
     """
     if not is_admin:
         return "Error: Only administrators can create skills."
+    if not user_id:
+        return "Error: Could not determine the user for this skill."
 
-    skills_dir = os.path.join(os.getcwd(), "skills")
-    if not os.path.exists(skills_dir):
-        os.makedirs(skills_dir)
+    from werkzeug.utils import secure_filename
 
-    file_path = os.path.join(skills_dir, f"{name}.py")
+    safe_name = secure_filename(name or "").removesuffix(".py")
+    if not safe_name:
+        return "Error: Invalid skill name."
 
     try:
+        skills_dir = _user_skills_dir(user_id)
+        file_path = os.path.join(skills_dir, f"{safe_name}.py")
+        if os.path.dirname(os.path.abspath(file_path)) != os.path.abspath(skills_dir):
+            return "Error: Invalid skill name."
         with open(file_path, "w") as f:
             f.write(code)
-        return f"Skill '{name}' created successfully at {file_path}."
+        return f"Skill '{safe_name}' created successfully at {file_path}."
     except Exception as e:
         return f"Error creating skill: {e}"
 
 
+def _validate_repo_url(repo_url: str) -> str:
+    """Only plain https git URLs: ext:: and other transports can run commands."""
+    url = (repo_url or "").strip()
+    if url.startswith("-") or "::" in url:
+        raise ValueError("unsupported repository URL")
+    if not url.startswith("https://"):
+        raise ValueError("only https:// repository URLs are allowed")
+    return url
+
+
 @skill
-def install_skill_from_github(repo_url: str, is_admin: bool = False) -> str:
+def install_skill_from_github(
+    repo_url: str,
+    is_admin: bool = False,
+    user_id: str = None,
+) -> str:
     """
     Installs skills from a GitHub repository.
     The repo should contain .py files with skills.
@@ -67,33 +101,46 @@ def install_skill_from_github(repo_url: str, is_admin: bool = False) -> str:
     """
     if not is_admin:
         return "Error: Only administrators can install skills from GitHub."
+    if not user_id:
+        return "Error: Could not determine the user for this skill."
 
-    temp_dir = os.path.join(os.path.dirname(__file__), "_temp_repo")
-    skills_dir = os.path.join(os.getcwd(), "skills")
-    if not os.path.exists(skills_dir):
-        os.makedirs(skills_dir)
+    import tempfile
+    from werkzeug.utils import secure_filename
 
     try:
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
+        url = _validate_repo_url(repo_url)
+    except ValueError as e:
+        return f"Error: {e}."
 
-        subprocess.run(["git", "clone", repo_url, temp_dir], check=True)
+    skills_dir = _user_skills_dir(user_id)
+    env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        try:
+            subprocess.run(
+                ["git", "clone", "--depth", "1", "--", url, temp_dir],
+                check=True,
+                capture_output=True,
+                timeout=120,
+                env=env,
+            )
+        except Exception as e:
+            return f"Error installing skill from GitHub: {e}"
 
         installed_files = []
         for root, dirs, files in os.walk(temp_dir):
             for file in files:
-                if file.endswith(".py") and file != "__init__.py":
-                    src = os.path.join(root, file)
-                    dst = os.path.join(skills_dir, file)
-                    shutil.copy(src, dst)
-                    installed_files.append(file)
+                if not file.endswith(".py") or file == "__init__.py":
+                    continue
+                safe_file = secure_filename(file)
+                if not safe_file:
+                    continue
+                shutil.copy(os.path.join(root, file), os.path.join(skills_dir, safe_file))
+                installed_files.append(safe_file)
 
-        shutil.rmtree(temp_dir)
+        if not installed_files:
+            return "No .py skills found in that repository."
         return f"Successfully installed skills: {', '.join(installed_files)}"
-    except Exception as e:
-        if os.path.exists(temp_dir):
-            shutil.rmtree(temp_dir)
-        return f"Error installing skill from GitHub: {e}"
 
 
 @skill
@@ -106,12 +153,12 @@ def import_skills_from_directory(path: str = "skills", is_admin: bool = False) -
     if not is_admin:
         return "Error: Only administrators can import skills from directory."
 
-    root_dir = os.getcwd()
-    target_dir = os.path.join(root_dir, path)
+    root_dir = os.path.realpath(os.getcwd())
+    target_dir = os.path.realpath(os.path.join(root_dir, path))
+    if target_dir != root_dir and not target_dir.startswith(root_dir + os.sep):
+        return "Error: Directory must be inside the project."
 
-    if not os.path.exists(target_dir):
-        # Try relative to project root if called from elsewhere
-        # (Though current working dir should be project root)
+    if not os.path.isdir(target_dir):
         return f"Error: Directory {target_dir} not found."
 
     found_skills = []

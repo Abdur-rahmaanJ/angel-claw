@@ -21,6 +21,11 @@ from .config import settings
 
 logger = logging.getLogger("angel-claw-cli")
 
+# asyncio only keeps weak references to tasks. Without a strong reference a
+# long-lived bridge/cron task is garbage collected and silently stops, so keep
+# every background task handle alive for the life of the process.
+_background_tasks: list = []
+
 
 # Custom formatter for clean CLI progress output
 class CLIProgressFormatter(logging.Formatter):
@@ -351,9 +356,9 @@ def start_web_server(port=5000, debug=False, migrate=False):
                 # These must be called INSIDE the running loop
                 logger.info("Bridge thread: starting workers and bridges")
                 lane_queue.start_workers()
-                asyncio.create_task(telegram_bridge.run())
-                asyncio.create_task(whatsapp_bridge.run())
-                asyncio.create_task(cron_manager.run())
+                _background_tasks.append(asyncio.create_task(telegram_bridge.run()))
+                _background_tasks.append(asyncio.create_task(whatsapp_bridge.run()))
+                _background_tasks.append(asyncio.create_task(cron_manager.run()))
                 logger.info("Bridge thread: tasks created")
             except Exception as e:
                 logger.error(f"Error starting bridges: {e}")
@@ -376,7 +381,10 @@ def start_web_server(port=5000, debug=False, migrate=False):
 
     table.add_row("🔗  URL:", f"http://127.0.0.1:{port}")
     table.add_row("👤  User:", "admin@admin.com")
-    table.add_row("🔑  Pass:", "admin")
+    if os.environ.get("SEED_ADMIN_PASSWORD"):
+        table.add_row("🔑  Pass:", os.environ["SEED_ADMIN_PASSWORD"])
+    else:
+        table.add_row("🔑  Pass:", "shown on first run / reset via CLI")
     table.add_row("", "")
     table.add_row("🤖  Bridges:", "[green]active in background[/green]")
     table.add_row("⚙️   Mode:", f"[yellow]{'Debug' if debug else 'Production'}[/yellow]")

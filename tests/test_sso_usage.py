@@ -172,6 +172,39 @@ def test_usage_summary_unauthorized(client, auth_user):
     assert client.get("/api/usage/summary").status_code == 401
 
 
+def test_usage_summary_hides_other_users_events(client, auth_user, app):
+    key = _create_api_key(client)
+    client.post(
+        "/api/usage",
+        json={
+            "app": "ask-moris",
+            "event": "search",
+            "user": {"id": str(auth_user["id"]), "email": auth_user["email"]},
+        },
+        headers={"Authorization": f"Bearer {key}"},
+    )
+
+    with app.app_context():
+        from shopyo_auth.models import User
+
+        other = User()
+        other.email = "other@example.com"
+        other.password = "password"
+        other.is_email_confirmed = True
+        db.session.add(other)
+        db.session.commit()
+
+    other_client = app.test_client()
+    other_client.post(
+        "/auth/login",
+        data={"email": "other@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    summary = other_client.get("/api/usage/summary").get_json()
+    assert summary["total_events"] == 0
+    assert summary["recent"] == []
+
+
 def test_usage_charges_api_key_owner(client, auth_user, app):
     key = _create_api_key(client)
     headers = {"Authorization": f"Bearer {key}"}

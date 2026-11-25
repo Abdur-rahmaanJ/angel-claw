@@ -9,8 +9,37 @@
 </header>
 
 <div class="workspace">
-    <div class="max-w-4xl mx-auto w-full">
+    <div class="max-w-4xl mx-auto w-full space-y-4">
         <div class="stat-card">
+            <h3 class="font-bold uppercase text-[10px] tracking-widest text-zinc-500 mb-4">Scheduled Tasks</h3>
+            <div class="space-y-2">
+                <template x-for="job in jobs" :key="job.name">
+                    <div class="flex items-center gap-3 p-3 bg-white/5 border border-white/5 rounded-xl">
+                        <i class="fas" :class="job.enabled ? 'fa-clock text-accent' : 'fa-clock text-zinc-600'"></i>
+                        <div class="flex-grow min-w-0">
+                            <p class="text-sm truncate" :class="job.enabled ? 'text-zinc-300' : 'text-zinc-500'" x-text="job.payload"></p>
+                            <p class="text-xs text-zinc-600" x-text="job.kind + ': ' + job.value"></p>
+                        </div>
+                        <div class="text-right shrink-0">
+                            <p class="text-xs text-zinc-400" x-text="job.enabled ? 'Next: ' + formatDate(job.next_run) : 'Paused'"></p>
+                            <p x-show="job.last_run" class="text-[10px] text-zinc-600" x-text="'Last: ' + formatDate(job.last_run)"></p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button @click="toggleJob(job)" class="text-zinc-500 hover:text-accent transition-colors" :title="job.enabled ? 'Pause' : 'Resume'">
+                                <i class="fas text-xs" :class="job.enabled ? 'fa-pause' : 'fa-play'"></i>
+                            </button>
+                            <button @click="deleteJob(job)" class="text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
+                                <i class="fas fa-trash text-xs"></i>
+                            </button>
+                        </div>
+                    </div>
+                </template>
+                <p x-show="jobs.length === 0" class="text-zinc-600 italic text-sm text-center py-6">No scheduled tasks.</p>
+            </div>
+        </div>
+
+        <div class="stat-card">
+            <h3 class="font-bold uppercase text-[10px] tracking-widest text-zinc-500 mb-4">To-Dos</h3>
             <div x-show="loading" class="space-y-3">
                 <template x-for="i in 3" :key="i">
                     <div class="skeleton h-14 w-full"></div>
@@ -20,9 +49,9 @@
                 Couldn't load tasks. <button class="text-accent underline" @click="loadTodos()">Retry</button>
             </div>
             <div x-show="!loading && !error" class="space-y-3">
-                <template x-for="todo in todos" :key="todo.id">
+                <template x-for="todo in todos" :key="todo.session + '-' + todo.id">
                     <div class="flex items-start gap-3 p-3 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20 transition-all group">
-                        <button @click="toggleTodo(todo.id)" class="mt-1">
+                        <button @click="toggleTodo(todo)" class="mt-1">
                             <i :class="todo.completed ? 'fas fa-check-circle text-accent' : 'far fa-circle text-zinc-600 group-hover:text-accent/50'"></i>
                         </button>
                         <div class="flex-grow" :class="todo.completed ? 'text-zinc-500 line-through' : 'text-zinc-300'">
@@ -30,6 +59,9 @@
                             <span x-show="todo.due_date" class="ml-2 text-xs text-zinc-500" x-text="'Due: ' + todo.due_date"></span>
                         </div>
                         <span class="text-xs px-2 py-1 rounded" :class="todo.priority === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-zinc-700 text-zinc-400'" x-text="todo.priority"></span>
+                        <button @click="deleteTodo(todo)" class="text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
+                            <i class="fas fa-trash text-xs"></i>
+                        </button>
                     </div>
                 </template>
                 <p x-show="todos.length === 0" class="text-zinc-600 italic text-sm text-center py-8">No pending tasks.</p>

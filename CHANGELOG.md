@@ -2,6 +2,124 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.0] - 2026-11-26
+
+### Added
+
+- Cron worker now reloads the shared job directory every 15s, so reminders created by the web app or CLI are picked up without a restart; job files are written atomically.
+- A runner lease (`.cron_worker.lock`) keeps a single cron owner per data directory, preventing double-fired jobs when `serve` and `bridges` both run.
+- Scheduled tasks appear in the Tasks tab, with pause/resume and delete actions, plus user-wide to-dos with working complete/delete.
+- Skipped stale one-shot jobs are reported to the user instead of silently disappearing.
+- `clear_completed_todos` todo skill restored.
+
+### Fixed
+
+- Cron worker task was garbage-collected at startup, silently stopping the scheduler; background task handles are now retained (`cli.py`, `gateway.py`).
+- Jobs persisted on disk were never scheduled after a restart; the worker now schedules all loaded jobs on startup.
+- Tasks tab read the wrong JSON shape and only ever showed the current session's to-dos.
+- Deleting a reminder now removes its delivered internal message.
+- Duplicate-reminder detection checks both sides of the target time.
+
+### Security
+
+- Registration is opt-in (`ALLOW_REGISTRATION`); self-signup is hidden by default.
+- Skill uploads use sanitized file names and cannot escape the user's skills directory.
+- Markdown and tool-log output are sanitized before rendering (stored XSS), and `marked` is pinned with an SRI hash.
+- Usage summary is scoped to the viewer unless admin; mobile commands can only target the caller's own account.
+- Mobile API routes have a single owning module.
+- `SECRET_KEY` is generated and persisted instead of a public default; no default admin password.
+- Login, registration and pairing attempts are throttled; pairing tokens are 12 digits and expire in 5 minutes.
+- Skill installs are restricted to `https://` repositories and write to the user's skills directory; file tools and the browser stay inside uploads/public URLs.
+- Session ids are sanitized before being used as file names; secrets, history and job files are owner-only (`0600`/`0700`).
+- Pairing tokens are no longer logged; cross-user internal messages are rate-limited.
+- Production cookies are `Secure`/`HttpOnly`/`SameSite=Lax` with 30-day sessions; `/api/version` no longer leaks the commit hash; SSO failure tracking is pruned.
+- Bare `except:` handlers replaced with `except Exception:`.
+
+## [0.15.3] - 2026-11-25
+
+### Added
+
+- Scheduling now runs on APScheduler (date, interval and cron triggers) instead of a hand-rolled poll loop.
+- Installable PWA: service worker, install button and manifest served from the site root.
+
+### Fixed
+
+- One-shot reminders and repeating jobs now fire through the scheduler.
+
+## [0.15.2] - 2026-10-20
+
+### Fixed
+
+- Restored the stale calendar skill tests and fixed core test failures around cron schedule clobbering, `/chat` JSON clients and test isolation.
+
+## [0.15.1] - 2026-10-19
+
+### Fixed
+
+- `angel-claw --help` no longer hangs on heavy imports.
+
+### Changed
+
+- Credit usage now updates for integrated apps; added 0.15.0 release notes.
+
+## [0.15.0] - 2026-10-13
+
+### Added
+
+- Streaming mobile chat over SSE under token auth.
+- Ephemeral mobile chats so integrations do not appear in the chat UI.
+- SSO `key`/`token`/`verify` endpoints and usage tracking for ask-moris.
+
+## [0.14.0] - 2026-10-08
+
+### Added
+
+- Admin model configuration UI with an opt-in env writer (atomic replace, newline-injection guard, secret masking).
+- Shared mobile bridge state across gunicorn workers via a file-backed store.
+- Direct API-key pairing for the mobile app, plus device info context and command-result follow-ups.
+- Live phone capability reporting, automatic thread creation for mobile chats, and a public `/api/version` probe.
+- Web UI polish: skeleton loaders and retryable error states, toast/confirm modals, unread badge, hash routing, markdown copy support and Android support.
+
+### Fixed
+
+- Reminder delivery skipped because the runtime manager lacks `_app`.
+- One-shot reminders never firing; reminder and chat loading regressions.
+- Mobile chat history `TypeError` and mobile chat error logging (traceback added).
+- Dead "Create Key" button, copy-to-clipboard null `querySelector`, send-button alignment, markdown display/scroll and delete-thread behaviour.
+
+## [0.13.0] - 2026-04-10
+
+### Added
+
+- Skills: upload, per-skill configuration UI and skill listing.
+- SOUL.md customization UI for per-user agent personas.
+- Mail-style chat UI with thread selection, memory deletion and improved tabs.
+
+### Fixed
+
+- Chat history not shown after switching threads and generator context errors.
+- Internal messaging, soul loading, tab selection and console errors.
+- Memory visibility/sync, double-noted memories, global memory and preference bugs.
+- Credit display and chat response rendering issues.
+
+## [0.12.0] - 2026-04-06
+
+### Added
+
+- Chat threads with per-thread history and sidebar navigation.
+- PWA support, persistent login and a custom login UI.
+- Calendar view, internal-message deletion, dashboard counters and unread status.
+- `create-admin` and `update-password` CLI commands and a setup wizard with flags.
+- Optional Redis lane queue, Redis-backed LLM response cache and centralized SQLAlchemy history.
+- Telegram image receiving and user-specific chat directories under `~/.angelclaw/users/{user_id}/chats`.
+
+### Fixed
+
+- Streaming chat, credits accounting and mobile responsiveness.
+- DB initialization, Pydantic v2 compatibility, absolute DB path and gateway isolation.
+- High CPU usage in the lane worker loop, internal messaging app-context errors and a `UserContext` `TypeError`.
+- Missing auth migrations and gitignore handling for database files.
+
 ## [0.11.0] - 2026-03-06
 
 ### Added

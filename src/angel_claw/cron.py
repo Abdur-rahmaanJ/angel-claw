@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import asyncio
 import logging
 import httpx
@@ -14,6 +15,16 @@ from apscheduler.triggers.interval import IntervalTrigger
 from .config import settings
 
 logger = logging.getLogger("angel-claw-cron")
+
+# How often the worker re-reads the shared job directory to pick up jobs
+# created by another process (web app, CLI).
+JOB_RELOAD_INTERVAL_SECONDS = 15
+
+# Only one process may execute jobs from a given directory (otherwise `serve`
+# and `bridges` would each fire every reminder). The owner heartbeat-touches
+# this file; a worker that dies leaves a lease that expires after the TTL.
+WORKER_LEASE_FILE = ".cron_worker.lock"
+WORKER_LEASE_TTL_SECONDS = 3 * JOB_RELOAD_INTERVAL_SECONDS
 
 seconds = lambda x: timedelta(seconds=x)
 minutes = lambda x: timedelta(minutes=x)
@@ -53,9 +64,14 @@ class CronManager:
             os.makedirs(self.persist_dir)
         self.jobs: Dict[str, Job] = {}
         self._jobs_lock = asyncio.Lock()
+        # Modification times of the job files this manager last read or wrote.
+        # Used to notice jobs another process (e.g. the web app) created.
+        self._job_mtimes: Dict[str, float] = {}
         # Scheduling engine: APScheduler replaces the hand-rolled poll loop.
         # Created here, started later inside run() (needs a running loop).
         self.scheduler = AsyncIOScheduler()
+        # One-shot jobs dropped as stale while loading; reported by run().
+        self.missed_jobs: List[Job] = []
         self.load_jobs()
         self.proactive_handlers: List[Callable] = []
 
@@ -65,15 +81,38 @@ class CronManager:
     def load_jobs(self):
         for filename in os.listdir(self.persist_dir):
             if filename.endswith(".json"):
+                path = os.path.join(self.persist_dir, filename)
                 try:
-                    with open(os.path.join(self.persist_dir, filename), "r") as f:
+                    with open(path, "r") as f:
                         data = json.load(f)
                         job = Job(**data)
                         if job.enabled:
                             self._calculate_next_run(job)
                         self.jobs[job.name] = job
+                        # mtimes are keyed by filename: a hand-written job file
+                        # may not match its inner name.
+                        self._job_mtimes[filename[: -len(".json")]] = (
+                            os.path.getmtime(path)
+                        )
                 except Exception as e:
                     logger.error(f"Error loading job {filename}: {e}")
+
+    def _write_job_file(self, job: Job):
+        path = os.path.join(self.persist_dir, f"{job.name}.json")
+        tmp_path = f"{path}.tmp"
+        # Atomic replace: a reader in another process must never see a
+        # half-written file.
+        with open(tmp_path, "w") as f:
+            f.write(job.model_dump_json(indent=2))
+        try:
+            os.chmod(tmp_path, 0o600)
+        except OSError:
+            pass
+        os.replace(tmp_path, path)
+        try:
+            self._job_mtimes[job.name] = os.path.getmtime(path)
+        except OSError:
+            pass
 
     async def save_job_async(self, job: Job):
         # Always compute next_run before persisting, otherwise one-shot "at"
@@ -83,9 +122,7 @@ class CronManager:
             self._calculate_next_run(job)
         async with self._jobs_lock:
             self.jobs[job.name] = job
-        file_path = os.path.join(self.persist_dir, f"{job.name}.json")
-        with open(file_path, "w") as f:
-            f.write(job.model_dump_json(indent=2))
+        self._write_job_file(job)
         self._sync_job(job)
 
     def save_job(self, job: Job):
@@ -93,9 +130,7 @@ class CronManager:
         if job.next_run is None:
             self._calculate_next_run(job)
         self.jobs[job.name] = job
-        file_path = os.path.join(self.persist_dir, f"{job.name}.json")
-        with open(file_path, "w") as f:
-            f.write(job.model_dump_json(indent=2))
+        self._write_job_file(job)
         self._sync_job(job)
 
     async def delete_job_async(self, name: str):
@@ -105,6 +140,7 @@ class CronManager:
         file_path = os.path.join(self.persist_dir, f"{name}.json")
         if os.path.exists(file_path):
             os.remove(file_path)
+        self._job_mtimes.pop(name, None)
         self._unschedule(name)
 
     def delete_job(self, name: str):
@@ -113,7 +149,155 @@ class CronManager:
         file_path = os.path.join(self.persist_dir, f"{name}.json")
         if os.path.exists(file_path):
             os.remove(file_path)
+        self._job_mtimes.pop(name, None)
         self._unschedule(name)
+
+    def reload_jobs_from_disk(self):
+        """Adopt jobs created, changed or deleted by another process.
+
+        The persist directory is shared with the web app (and the CLI), so a
+        reminder set in the UI lands in a JSON file that the cron worker never
+        loaded. Polling the file mtimes makes those jobs visible without
+        restarting the worker, and equally drops jobs deleted elsewhere.
+        """
+        if not os.path.isdir(self.persist_dir):
+            return
+
+        seen = set()
+        for filename in os.listdir(self.persist_dir):
+            if not filename.endswith(".json"):
+                continue
+            path = os.path.join(self.persist_dir, filename)
+            name = filename[: -len(".json")]
+            try:
+                mtime = os.path.getmtime(path)
+            except OSError:
+                continue
+            # A file we cannot parse yet (mid-write) is still present: mark it
+            # seen so a transient read error does not delete the live job.
+            seen.add(name)
+            if self._job_mtimes.get(name) == mtime:
+                continue
+            try:
+                with open(path, "r") as f:
+                    job = Job(**json.load(f))
+            except Exception as e:
+                logger.debug(f"Could not reload job {filename} yet: {e}")
+                continue
+            self._job_mtimes[name] = mtime
+            seen.add(job.name)
+            if job.enabled:
+                self._calculate_next_run(job)
+            self.jobs[job.name] = job
+            self._sync_job(job)
+            logger.info(f"Picked up job {job.name} from disk")
+
+        for name in list(self.jobs):
+            if name in seen:
+                continue
+            logger.info(f"Dropping job {name}: no longer on disk")
+            del self.jobs[name]
+            self._job_mtimes.pop(name, None)
+            self._unschedule(name)
+
+    @property
+    def _lease_path(self) -> str:
+        return os.path.join(self.persist_dir, WORKER_LEASE_FILE)
+
+    def _acquire_lease(self) -> bool:
+        """Become the only worker allowed to execute jobs in this directory."""
+        path = self._lease_path
+        try:
+            fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+        except FileExistsError:
+            try:
+                age = time.time() - os.path.getmtime(path)
+            except OSError:
+                return False
+            if age <= WORKER_LEASE_TTL_SECONDS:
+                return False
+            logger.warning("Taking over stale cron worker lease")
+            try:
+                os.remove(path)
+                fd = os.open(path, os.O_CREAT | os.O_EXCL | os.O_WRONLY, 0o644)
+            except OSError:
+                return False
+        with os.fdopen(fd, "w") as f:
+            f.write(str(os.getpid()))
+        return True
+
+    def _renew_lease(self) -> bool:
+        try:
+            with open(self._lease_path, "r") as f:
+                if f.read().strip() != str(os.getpid()):
+                    return False
+            os.utime(self._lease_path, None)
+            return True
+        except OSError:
+            return False
+
+    def _release_lease(self):
+        try:
+            with open(self._lease_path, "r") as f:
+                if f.read().strip() != str(os.getpid()):
+                    return
+            os.remove(self._lease_path)
+        except OSError:
+            pass
+
+    async def _notify_missed_jobs(self):
+        """Tell the user about one-shot jobs skipped as too old."""
+        missed = list(self.missed_jobs)
+        self.missed_jobs.clear()
+        for job in missed:
+            content = job.payload.content or job.payload.skill_name or job.name
+            message = f"⚠️ Missed task: {content} (was due {job.schedule.value})"
+            if job.name.startswith("reminder_"):
+                try:
+                    from angel_claw.engine.app_context import (
+                        create_app_context_manager,
+                    )
+                    from angel_claw.config import settings
+
+                    ctx_manager = create_app_context_manager(settings)
+                    with ctx_manager._app_context() as app:
+                        if app is not None:
+                            from modules.agent.models import InternalMessage
+                            from shopyo_auth.models import User
+                            from init import db
+
+                            user_key = (
+                                int(job.user_id)
+                                if str(job.user_id).isdigit()
+                                else job.user_id
+                            )
+                            user = db.session.get(User, user_key)
+                            if user:
+                                db.session.add(
+                                    InternalMessage(
+                                        sender_id="system",
+                                        recipient_id=str(user.id),
+                                        recipient_email=user.email,
+                                        content=message,
+                                    )
+                                )
+                                db.session.commit()
+                except Exception as e:
+                    logger.error(f"Error storing missed-task notice: {e}")
+            await self._send_proactive_message(
+                message, job.user_id, job.session_id
+            )
+
+    async def _reload_loop(self):
+        while True:
+            await asyncio.sleep(JOB_RELOAD_INTERVAL_SECONDS)
+            try:
+                self.reload_jobs_from_disk()
+            except Exception as e:
+                logger.error(f"Error reloading cron jobs from disk: {e}")
+            if not self._renew_lease():
+                logger.error("Lost the cron worker lease; another worker owns it")
+                return
 
     # --- APScheduler wiring -------------------------------------------
 
@@ -167,6 +351,7 @@ class CronManager:
                     else:
                         job.next_run = None
                         job.enabled = False
+                        self.missed_jobs.append(job)
                         logger.warning(
                             f"Disabling stale one-shot job {job.name} scheduled for {dt}"
                         )
@@ -394,13 +579,30 @@ class CronManager:
             await asyncio.Event().wait()
             return
 
+        while not self._acquire_lease():
+            logger.info(
+                "Another cron worker owns this job directory; waiting for the lease."
+            )
+            await asyncio.sleep(JOB_RELOAD_INTERVAL_SECONDS)
+
         logger.info("Cron worker started (APScheduler).")
+        reload_task = None
         try:
             self.scheduler.start()  # flushes jobs queued before start
+            # Jobs loaded from disk were never added to the scheduler; without
+            # this they would sit enabled in the JSON files and never fire.
+            self._schedule_all_jobs()
+            if self.missed_jobs:
+                await self._notify_missed_jobs()
+            # Keep watching the shared directory for jobs another process adds.
+            reload_task = asyncio.create_task(self._reload_loop())
             await asyncio.Event().wait()
         finally:
+            if reload_task is not None:
+                reload_task.cancel()
             if self.scheduler.running:
                 self.scheduler.shutdown(wait=False)
+            self._release_lease()
 
 
 cron_manager = CronManager()

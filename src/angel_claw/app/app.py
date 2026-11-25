@@ -124,6 +124,23 @@ def create_app(config_name="development"):
         if current_user.is_authenticated:
             session.permanent = True
 
+    @app.before_request
+    def block_public_registration():
+        """Hide self-signup unless ALLOW_REGISTRATION is explicitly on.
+
+        A self-registered account gets a full agent with tool and skill
+        access, so open signup is effectively open code execution.
+        """
+        from flask import abort, request
+        from angel_claw.config.settings import settings
+
+        if settings.allow_registration:
+            return None
+        auth_url = app.config.get("SHOPYO_AUTH_URL", "/auth").rstrip("/")
+        if request.path.rstrip("/") == f"{auth_url}/register":
+            abort(404)
+        return None
+
     @app.route("/")
     def home_redirect():
         return redirect(url_for("agent.index"))
@@ -349,6 +366,12 @@ def custom_commands(db, app):
 
         user = User.query.filter_by(email=admin_email).first()
         if not user:
+            generated = False
+            if not admin_pass:
+                import secrets
+
+                admin_pass = secrets.token_urlsafe(12)
+                generated = True
             user = User()
             user.email = admin_email
             user.password = admin_pass
@@ -356,6 +379,13 @@ def custom_commands(db, app):
             user.is_email_confirmed = True
             db.session.add(user)
             db.session.commit()
+            if generated:
+                # Printed once, never stored in a config default.
+                print(
+                    f"\n[angel-claw] Seeded admin {admin_email} with a generated "
+                    f"password: {admin_pass}\n"
+                    "Set SEED_ADMIN_PASSWORD or change it after first login.\n"
+                )
             logger.debug(f"Created seed admin: {admin_email}")
 
         if admin_role not in user.roles:

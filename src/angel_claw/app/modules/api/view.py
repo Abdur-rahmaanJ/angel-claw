@@ -773,6 +773,8 @@ def mobile_pair():
     from init import db
 
     user = db.session.get(User, user_id)
+    if user is None:
+        return jsonify({"status": "error", "message": "Unknown user"}), 401
     context = UserContext(
         user_id=str(user.id),
         email=user.email,

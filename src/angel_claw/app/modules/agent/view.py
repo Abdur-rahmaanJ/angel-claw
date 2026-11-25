@@ -435,17 +435,52 @@ def me():
 @login_required
 def get_todos():
     user_context = _build_context()
-    from angel_claw.skills.todo import list_todos
+    from angel_claw.skills.todo import _load_todos, list_todos
 
     result = list_todos(
         session_id=user_context.channel_identifier, user_id=user_context.user_id
     )
     if request.args.get("format") == "html":
         return render_template("agent/partials/_todo_list.html", todos=result)
-    # Return JSON for dashboard
+    # Return JSON for dashboard and the tasks tab
+    todos = _load_todos(
+        user_context.channel_identifier, user_id=user_context.user_id
+    )
     pending = result.count("⬜")
     total = result.count("⬜") + result.count("✅")
-    return jsonify({"pending": pending, "total": max(total, 1)})
+    return jsonify(
+        {
+            "pending": pending,
+            "total": max(total, 1),
+            "todos": todos,
+        }
+    )
+
+
+@blueprint.route("/cron/jobs")
+@login_required
+def get_cron_jobs():
+    """Scheduled cron jobs for the current user, shown in the tasks tab."""
+    from angel_claw.cron import cron_manager
+
+    user_id = str(current_user.id)
+    jobs = []
+    for job in cron_manager.jobs.values():
+        if job.user_id != user_id:
+            continue
+        jobs.append(
+            {
+                "name": job.name,
+                "kind": job.schedule.kind,
+                "value": job.schedule.value,
+                "payload": job.payload.content or job.payload.skill_name or job.payload.kind,
+                "enabled": job.enabled,
+                "last_run": job.last_run.isoformat() if job.last_run else None,
+                "next_run": job.next_run.isoformat() if job.next_run else None,
+            }
+        )
+    jobs.sort(key=lambda j: j["next_run"] or "")
+    return jsonify({"jobs": jobs})
 
 
 @blueprint.route("/calendar")

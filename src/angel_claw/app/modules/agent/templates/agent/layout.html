@@ -135,11 +135,12 @@
             }));
 
             Alpine.data('tasksData', () => ({
-                todos: [], loading: true, error: false,
-                async init() { await this.loadTodos(); },
-                async loadTodos() { this.error = false; try { const r = await fetch('/todos?format=json'); if (!r.ok) throw new Error(); const d = await r.json(); this.todos = this.parseTodos(d.events || ''); } catch(e) { this.error = true; } finally { this.loading = false; } },
-                parseTodos(text) { if (!text || text.includes('No todos')) return []; const lines = text.split('\n'), results = []; for (let i = 1; i < lines.length; i++) { const line = lines[i].trim(); if (line && !line.startsWith('##')) { const completed = line.includes('✅'); const content = line.replace(/^[✅⬜]\s*/, '').replace(/^\[\w+\]\s*\d+\.\s*/, ''); results.push({ id: i, content: content, completed: completed, priority: 'medium' }); } } return results; },
-                async toggleTodo(id) { console.log('Toggle todo:', id); }
+                todos: [], jobs: [], loading: true, error: false,
+                async init() { await Promise.all([this.loadTodos(), this.loadJobs()]); },
+                async loadTodos() { this.error = false; try { const r = await fetch('/todos?format=json'); if (!r.ok) throw new Error(); const d = await r.json(); this.todos = d.todos || []; } catch(e) { this.error = true; } finally { this.loading = false; } },
+                async loadJobs() { try { const r = await fetch('/cron/jobs'); if (!r.ok) throw new Error(); const d = await r.json(); this.jobs = d.jobs || []; } catch(e) { this.jobs = []; } },
+                async toggleTodo(id) { console.log('Toggle todo:', id); },
+                formatDate(ts) { if (!ts) return '—'; try { return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) { return ts; } }
             }));
 
             Alpine.data('calendarData', () => ({

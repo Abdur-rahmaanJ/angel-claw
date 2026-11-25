@@ -397,6 +397,9 @@ class CronManager:
         logger.info("Cron worker started (APScheduler).")
         try:
             self.scheduler.start()  # flushes jobs queued before start
+            # Jobs loaded from disk were never added to the scheduler; without
+            # this they would sit enabled in the JSON files and never fire.
+            self._schedule_all_jobs()
             await asyncio.Event().wait()
         finally:
             if self.scheduler.running:

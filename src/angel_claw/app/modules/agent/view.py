@@ -528,6 +528,52 @@ def get_cron_jobs():
     return jsonify({"jobs": jobs})
 
 
+@blueprint.route("/cron/jobs/<path:name>/toggle", methods=["POST"])
+@login_required
+def toggle_cron_job(name):
+    from angel_claw.cron import cron_manager
+
+    user_id = str(current_user.id)
+    job = cron_manager.jobs.get(name)
+    if not job or job.user_id != user_id:
+        return jsonify({"error": "Task not found"}), 404
+
+    if job.enabled:
+        job.enabled = False
+        job.next_run = None
+    else:
+        # A finished one-shot would fire immediately on resume.
+        if job.schedule.kind in ("at", "in"):
+            return jsonify({"error": "Completed one-shot task cannot be resumed"}), 400
+        job.enabled = True
+        job.next_run = None
+
+    async_to_sync(cron_manager.save_job_async)(job)
+    return jsonify({"result": "success", "enabled": job.enabled})
+
+
+@blueprint.route("/cron/jobs/<path:name>/delete", methods=["POST"])
+@login_required
+def delete_cron_job(name):
+    from angel_claw.cron import cron_manager
+    from modules.agent.models import Reminder
+    from init import db
+
+    user_id = str(current_user.id)
+    job = cron_manager.jobs.get(name)
+    if not job or job.user_id != user_id:
+        return jsonify({"error": "Task not found"}), 404
+
+    # Keep the reminders tab in sync when its backing job is removed.
+    reminder = Reminder.query.filter_by(job_name=name, user_id=user_id).first()
+    if reminder:
+        db.session.delete(reminder)
+        db.session.commit()
+
+    cron_manager.delete_job(name)
+    return jsonify({"result": "success"})
+
+
 @blueprint.route("/calendar")
 @login_required
 def get_calendar():

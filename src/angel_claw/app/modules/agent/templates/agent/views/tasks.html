@@ -21,8 +21,16 @@
                             <p class="text-xs text-zinc-600" x-text="job.kind + ': ' + job.value"></p>
                         </div>
                         <div class="text-right shrink-0">
-                            <p class="text-xs text-zinc-400" x-text="job.enabled ? 'Next: ' + formatDate(job.next_run) : 'Done'"></p>
+                            <p class="text-xs text-zinc-400" x-text="job.enabled ? 'Next: ' + formatDate(job.next_run) : 'Paused'"></p>
                             <p x-show="job.last_run" class="text-[10px] text-zinc-600" x-text="'Last: ' + formatDate(job.last_run)"></p>
+                        </div>
+                        <div class="flex items-center gap-2 shrink-0">
+                            <button @click="toggleJob(job)" class="text-zinc-500 hover:text-accent transition-colors" :title="job.enabled ? 'Pause' : 'Resume'">
+                                <i class="fas text-xs" :class="job.enabled ? 'fa-pause' : 'fa-play'"></i>
+                            </button>
+                            <button @click="deleteJob(job)" class="text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
+                                <i class="fas fa-trash text-xs"></i>
+                            </button>
                         </div>
                     </div>
                 </template>

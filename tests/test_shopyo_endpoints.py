@@ -136,7 +136,14 @@ def test_api_key_endpoint(client, auth_user, app):
     assert "key" in data
     assert data["key"].startswith("ac_v1_")
 
-def test_registration_template(client, app):
+def test_registration_disabled_by_default(client, app):
+    assert client.get("/auth/register").status_code == 404
+
+
+def test_registration_template(client, app, monkeypatch):
+    from angel_claw.config import settings
+
+    monkeypatch.setattr(settings, "allow_registration", True)
     response = client.get("/auth/register")
     assert response.status_code == 200
     html = response.get_data(as_text=True)

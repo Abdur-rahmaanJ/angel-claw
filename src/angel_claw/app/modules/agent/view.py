@@ -788,7 +788,13 @@ def upload_skill():
     if file.filename == "":
         return jsonify({"error": "No selected file"}), 400
 
-    if file and file.filename.endswith(".py"):
+    from werkzeug.utils import secure_filename
+
+    safe_name = secure_filename(file.filename or "")
+    # secure_filename strips directories but can still yield "py"/"" for odd
+    # inputs, so check the extension on the sanitized name and never escape the
+    # user's skills directory.
+    if safe_name.endswith(".py"):
         user_context = _build_context()
         from angel_claw.utils import get_user_root
 
@@ -796,7 +802,10 @@ def upload_skill():
         skills_dir = user_root / "skills"
         skills_dir.mkdir(parents=True, exist_ok=True)
 
-        file_path = skills_dir / file.filename
+        file_path = (skills_dir / safe_name).resolve()
+        if skills_dir.resolve() not in file_path.parents:
+            return jsonify({"error": "Invalid file name"}), 400
+
         file.save(str(file_path))
 
         # Force reload the registry for this user
@@ -805,7 +814,7 @@ def upload_skill():
         runtime = async_to_sync(runtime_manager.get_runtime)(user_context)
         runtime.skills.reload()
 
-        return jsonify({"result": "success", "filename": file.filename})
+        return jsonify({"result": "success", "filename": safe_name})
 
     return jsonify({"error": "Only .py files are allowed"}), 400
 

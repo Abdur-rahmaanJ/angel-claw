@@ -124,6 +124,23 @@ def create_app(config_name="development"):
         if current_user.is_authenticated:
             session.permanent = True
 
+    @app.before_request
+    def block_public_registration():
+        """Hide self-signup unless ALLOW_REGISTRATION is explicitly on.
+
+        A self-registered account gets a full agent with tool and skill
+        access, so open signup is effectively open code execution.
+        """
+        from flask import abort, request
+        from angel_claw.config.settings import settings
+
+        if settings.allow_registration:
+            return None
+        auth_url = app.config.get("SHOPYO_AUTH_URL", "/auth").rstrip("/")
+        if request.path.rstrip("/") == f"{auth_url}/register":
+            abort(404)
+        return None
+
     @app.route("/")
     def home_redirect():
         return redirect(url_for("agent.index"))

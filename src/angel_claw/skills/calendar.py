@@ -4,7 +4,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from angel_claw.skills.manager import skill
 from angel_claw.config import settings
-from angel_claw.utils import get_user_root
+from angel_claw.utils import get_user_root, safe_filename_part
 
 
 
@@ -20,7 +20,9 @@ def _get_calendar_dir(user_id: Optional[str] = None) -> str:
 
 def _get_calendar_file(session_id: str, user_id: Optional[str] = None) -> str:
     """Get the calendar file path for a session."""
-    return os.path.join(_get_calendar_dir(user_id), f"{session_id}.json")
+    return os.path.join(
+        _get_calendar_dir(user_id), f"{safe_filename_part(session_id)}.json"
+    )
 
 
 def _load_events(session_id: str, user_id: Optional[str] = None) -> List[dict]:

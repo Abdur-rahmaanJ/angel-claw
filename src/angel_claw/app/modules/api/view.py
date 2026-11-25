@@ -314,19 +314,38 @@ def record_usage():
 
 @blueprint.route("/usage/summary")
 def usage_summary():
-    """Usage aggregates — dashboard session or API-key auth."""
-    if not current_user.is_authenticated:
+    """Usage aggregates — dashboard session or API-key auth.
+
+    Admins see every user's events; everyone else only what they reported or
+    what belongs to them.
+    """
+    if current_user.is_authenticated:
+        viewer_id = str(current_user.id)
+        viewer_is_admin = bool(getattr(current_user, "is_admin", False))
+    else:
         auth_header = request.headers.get("Authorization", "")
         if not auth_header.startswith("Bearer "):
             return jsonify({"status": "error", "message": "unauthorized"}), 401
-        if not engine.validate_api_key(auth_header.split(" ", 1)[1]):
+        context = engine.validate_api_key(auth_header.split(" ", 1)[1])
+        if not context:
             return jsonify({"status": "error", "message": "unauthorized"}), 401
+        viewer_id = str(context.user_id)
+        viewer_is_admin = bool(context.is_admin)
 
-    from sqlalchemy import func
+    from sqlalchemy import func, or_
+
+    scope = []
+    if not viewer_is_admin:
+        scope = [
+            or_(
+                UsageEvent.reported_by == viewer_id,
+                UsageEvent.user_id == viewer_id,
+            )
+        ]
 
     total_events, total_quantity = db.session.query(
         func.count(UsageEvent.id), func.coalesce(func.sum(UsageEvent.quantity), 0)
-    ).one()
+    ).filter(*scope).one()
 
     by_app = [
         {"app": r[0], "events": r[1], "quantity": r[2]}
@@ -334,7 +353,10 @@ def usage_summary():
             UsageEvent.app,
             func.count(UsageEvent.id),
             func.coalesce(func.sum(UsageEvent.quantity), 0),
-        ).group_by(UsageEvent.app).all()
+        )
+        .filter(*scope)
+        .group_by(UsageEvent.app)
+        .all()
     ]
     by_event = [
         {"event": r[0], "events": r[1], "quantity": r[2]}
@@ -342,7 +364,10 @@ def usage_summary():
             UsageEvent.event,
             func.count(UsageEvent.id),
             func.coalesce(func.sum(UsageEvent.quantity), 0),
-        ).group_by(UsageEvent.event).all()
+        )
+        .filter(*scope)
+        .group_by(UsageEvent.event)
+        .all()
     ]
     by_user = [
         {
@@ -359,6 +384,7 @@ def usage_summary():
             func.coalesce(func.sum(UsageEvent.quantity), 0),
             func.max(UsageEvent.created_at),
         )
+        .filter(*scope)
         .group_by(UsageEvent.user_id, UsageEvent.email)
         .order_by(func.coalesce(func.sum(UsageEvent.quantity), 0).desc())
         .all()
@@ -369,6 +395,7 @@ def usage_summary():
             func.date(UsageEvent.created_at),
             func.coalesce(func.sum(UsageEvent.quantity), 0),
         )
+        .filter(*scope)
         .group_by(func.date(UsageEvent.created_at))
         .order_by(func.date(UsageEvent.created_at))
         .all()
@@ -382,7 +409,10 @@ def usage_summary():
             "created_at": r.created_at.isoformat(sep=" ", timespec="seconds") if r.created_at else None,
             "meta": r.meta_json,
         }
-        for r in UsageEvent.query.order_by(UsageEvent.id.desc()).limit(50).all()
+        for r in UsageEvent.query.filter(*scope)
+        .order_by(UsageEvent.id.desc())
+        .limit(50)
+        .all()
     ]
 
     return jsonify({

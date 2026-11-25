@@ -88,8 +88,8 @@ class BaseConfig:
     EMAIL_CONFIRMATION_DISABLED = True
 
     # Session / Persistent Login
-    PERMANENT_SESSION_LIFETIME = 31536000  # 1 year in seconds
-    REMEMBER_COOKIE_DURATION = 31536000  # 1 year in seconds
+    PERMANENT_SESSION_LIFETIME = 30 * 24 * 3600  # 30 days in seconds
+    REMEMBER_COOKIE_DURATION = 30 * 24 * 3600  # 30 days in seconds
     REMEMBER_COOKIE_REFRESH_EACH_REQUEST = True
     SESSION_PROTECTION = "basic"
     SHOPYO_AUTH_LOGIN_TEMPLATE = "agent/login.html"
@@ -106,6 +106,14 @@ class ProductionConfig(BaseConfig):
     # Throttle login/register/password endpoints provided by shopyo-auth.
     SHOPYO_AUTH_RATE_LIMIT_ENABLED = True
     SHOPYO_AUTH_RATE_LIMIT = "10 per minute"
+
+    # Session cookies travel over TLS in production only.
+    SESSION_COOKIE_SECURE = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = "Lax"
+    REMEMBER_COOKIE_SECURE = True
+    REMEMBER_COOKIE_HTTPONLY = True
+    REMEMBER_COOKIE_SAMESITE = "Lax"
 
     # control email confirmation for user registration
     EMAIL_CONFIRMATION_DISABLED = True

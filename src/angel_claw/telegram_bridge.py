@@ -374,7 +374,7 @@ class TelegramBridge:
                          await self.app.bot.send_message(chat_id=chat_id, text=message)
                          logger.info(f"Sent proactive message to Telegram chat {chat_id} (fallback)")
                          found = True
-                     except:
+                     except Exception:
                          pass
             
             if not found:

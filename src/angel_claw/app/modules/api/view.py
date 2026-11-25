@@ -679,7 +679,7 @@ def api_get_skills():
     if skill_config_file.exists():
         try:
             skill_config = json.load(open(skill_config_file))
-        except:
+        except Exception:
             pass
 
     skills_list = []
@@ -716,7 +716,7 @@ def api_toggle_skill():
     if skill_config_file.exists():
         try:
             skill_config = json.load(open(skill_config_file))
-        except:
+        except Exception:
             pass
 
     if skill_name not in skill_config:

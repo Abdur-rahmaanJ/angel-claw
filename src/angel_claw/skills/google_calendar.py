@@ -176,7 +176,7 @@ def gcal_list_events(days: int = 7) -> str:
             try:
                 start_dt = datetime.fromisoformat(start.replace("Z", "+00:00"))
                 date_str = start_dt.strftime("%a, %b %d at %H:%M")
-            except:
+            except Exception:
                 date_str = start
 
             lines.append(f"📅 **{date_str}**: {summary}")

@@ -21,7 +21,7 @@ def _get_user_config(user_id):
     if config_file.exists():
         try:
             return json.load(open(config_file))
-        except:
+        except Exception:
             pass
     return {}
 

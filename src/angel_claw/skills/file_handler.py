@@ -113,7 +113,7 @@ def get_file_info(filename: str) -> str:
                 with Image.open(filepath) as img:
                     lines.append(f"- Dimensions: {img.size[0]} x {img.size[1]} px")
                     lines.append(f"- Format: {img.format}")
-            except:
+            except Exception:
                 pass
 
         return "\n".join(lines)

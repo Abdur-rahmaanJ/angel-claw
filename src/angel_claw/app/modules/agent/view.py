@@ -70,7 +70,7 @@ def index():
         context = mhelp.context()
         # Filter out None values that can't be JSON serialized
         context = {k: v for k, v in context.items() if v is not None}
-    except:
+    except Exception:
         context = {}
     user_context = _build_context()
     # history = engine.get_history(user_context) # Cleared on reload per request
@@ -99,7 +99,7 @@ def index():
     if skill_config_file.exists():
         try:
             skill_config = json.load(open(skill_config_file))
-        except:
+        except Exception:
             pass
 
     # Ensure skill_config is a dict
@@ -696,7 +696,7 @@ def get_skills():
     if skill_config_file.exists():
         try:
             skill_config = json.load(open(skill_config_file))
-        except:
+        except Exception:
             pass
 
     # Get skill field definitions from skill modules
@@ -708,7 +708,7 @@ def get_skills():
             if hasattr(mod, "SKILL_CONFIG"):
                 # SKILL_CONFIG is {"fields": [...]}, extract the fields array
                 skill_field_defs[skill_name] = mod.SKILL_CONFIG.get("fields", [])
-        except:
+        except Exception:
             pass
 
     if request.args.get("format") == "html":

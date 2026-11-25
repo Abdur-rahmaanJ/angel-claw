@@ -121,7 +121,7 @@ def list_reminders(user_id: Optional[str] = None) -> str:
             from flask import current_user
             if current_user and current_user.is_authenticated:
                 user_id = str(current_user.id)
-        except: pass
+        except Exception: pass
         
     if not user_id:
         return "Error: user_id is required."

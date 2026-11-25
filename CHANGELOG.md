@@ -2,6 +2,39 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.0] - 2026-11-26
+
+### Added
+
+- Cron worker now reloads the shared job directory every 15s, so reminders created by the web app or CLI are picked up without a restart; job files are written atomically.
+- A runner lease (`.cron_worker.lock`) keeps a single cron owner per data directory, preventing double-fired jobs when `serve` and `bridges` both run.
+- Scheduled tasks appear in the Tasks tab, with pause/resume and delete actions, plus user-wide to-dos with working complete/delete.
+- Skipped stale one-shot jobs are reported to the user instead of silently disappearing.
+- `clear_completed_todos` todo skill restored.
+
+### Fixed
+
+- Cron worker task was garbage-collected at startup, silently stopping the scheduler; background task handles are now retained (`cli.py`, `gateway.py`).
+- Jobs persisted on disk were never scheduled after a restart; the worker now schedules all loaded jobs on startup.
+- Tasks tab read the wrong JSON shape and only ever showed the current session's to-dos.
+- Deleting a reminder now removes its delivered internal message.
+- Duplicate-reminder detection checks both sides of the target time.
+
+### Security
+
+- Registration is opt-in (`ALLOW_REGISTRATION`); self-signup is hidden by default.
+- Skill uploads use sanitized file names and cannot escape the user's skills directory.
+- Markdown and tool-log output are sanitized before rendering (stored XSS), and `marked` is pinned with an SRI hash.
+- Usage summary is scoped to the viewer unless admin; mobile commands can only target the caller's own account.
+- Mobile API routes have a single owning module.
+- `SECRET_KEY` is generated and persisted instead of a public default; no default admin password.
+- Login, registration and pairing attempts are throttled; pairing tokens are 12 digits and expire in 5 minutes.
+- Skill installs are restricted to `https://` repositories and write to the user's skills directory; file tools and the browser stay inside uploads/public URLs.
+- Session ids are sanitized before being used as file names; secrets, history and job files are owner-only (`0600`/`0700`).
+- Pairing tokens are no longer logged; cross-user internal messages are rate-limited.
+- Production cookies are `Secure`/`HttpOnly`/`SameSite=Lax` with 30-day sessions; `/api/version` no longer leaks the commit hash; SSO failure tracking is pruned.
+- Bare `except:` handlers replaced with `except Exception:`.
+
 ## [0.11.0] - 2026-03-06
 
 ### Added

@@ -33,12 +33,39 @@
         // Initialize Alpine placeholder before it loads
         window.Alpine = window.Alpine || {};
         
+        window.escapeHtml = function(text) {
+            return String(text ?? '').replace(/[&<>"']/g, function(c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        };
+
+        // Model output and other users' messages are untrusted: strip active
+        // markup before it reaches x-html.
+        window.sanitizeHtml = function(html) {
+            const tpl = document.createElement('template');
+            tpl.innerHTML = html;
+            const blocked = 'script,style,iframe,object,embed,form,link,meta,base,svg,math';
+            tpl.content.querySelectorAll(blocked).forEach(function(el) { el.remove(); });
+            tpl.content.querySelectorAll('*').forEach(function(el) {
+                Array.from(el.attributes).forEach(function(attr) {
+                    const name = attr.name.toLowerCase();
+                    const value = attr.value.trim().toLowerCase();
+                    if (name.indexOf('on') === 0) { el.removeAttribute(attr.name); return; }
+                    if (['href', 'src', 'xlink:href', 'action', 'formaction'].indexOf(name) !== -1 &&
+                        /^(javascript|data|vbscript):/.test(value)) {
+                        el.removeAttribute(attr.name);
+                    }
+                });
+            });
+            return tpl.innerHTML;
+        };
+
         window.formatContent = function(text) {
             if (!text) return '';
             try {
-                return marked.parse(text, { breaks: true, gfm: true });
+                return window.sanitizeHtml(marked.parse(text, { breaks: true, gfm: true }));
             } catch (e) {
-                return text.replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/\n/g, '<br>');
+                return window.escapeHtml(text).replace(/\n/g, '<br>');
             }
         };
 
@@ -383,7 +410,7 @@
                                         const data = JSON.parse(trimmed.slice(6));
                                         if (data.chunk) {
                                             if (data.chunk.startsWith('[TOOL_CALL:')) {
-                                                this.logs.push(`<span class="text-accent">Executing:</span> ${data.chunk.replace('[TOOL_CALL:', '').replace(']', '')}`);
+                                                this.logs.push(`<span class="text-accent">Executing:</span> ${window.escapeHtml(data.chunk.replace('[TOOL_CALL:', '').replace(']', ''))}`);
                                             } else {
                                                 this.streamingContent += data.chunk;
                                             }

@@ -46,6 +46,10 @@ class ChatLogger:
 
         with open(file_path, "a", encoding="utf-8") as f:
             f.write(content)
+        try:
+            os.chmod(file_path, 0o600)
+        except OSError:
+            pass
 
     def get_chats_for_date(self, user_id: str, date: datetime = None) -> str:
         date = date or datetime.now()

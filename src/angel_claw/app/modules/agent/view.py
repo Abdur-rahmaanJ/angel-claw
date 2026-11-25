@@ -1,4 +1,6 @@
 import logging
+import os
+from datetime import datetime
 
 from flask import render_template
 from flask import request
@@ -442,10 +444,18 @@ def get_todos():
     )
     if request.args.get("format") == "html":
         return render_template("agent/partials/_todo_list.html", todos=result)
-    # Return JSON for dashboard and the tasks tab
-    todos = _load_todos(
-        user_context.channel_identifier, user_id=user_context.user_id
-    )
+    # Return JSON for dashboard and the tasks tab. To-dos are stored per chat
+    # session, so the tasks tab must merge every session of this user.
+    from angel_claw.skills.todo import _get_todos_dir
+
+    todos = []
+    todos_dir = _get_todos_dir(user_context.user_id)
+    for filename in sorted(os.listdir(todos_dir)):
+        if not filename.endswith(".json"):
+            continue
+        session_id = filename[: -len(".json")]
+        for todo in _load_todos(session_id, user_id=user_context.user_id):
+            todos.append({**todo, "session": session_id})
     pending = result.count("⬜")
     total = result.count("⬜") + result.count("✅")
     return jsonify(
@@ -455,6 +465,41 @@ def get_todos():
             "todos": todos,
         }
     )
+
+
+@blueprint.route("/todos/<path:session_id>/<int:todo_id>/toggle", methods=["POST"])
+@login_required
+def toggle_todo(session_id, todo_id):
+    from angel_claw.skills.todo import _load_todos, _save_todos
+
+    user_id = str(current_user.id)
+    todos = _load_todos(session_id, user_id=user_id)
+    for todo in todos:
+        if todo["id"] != todo_id:
+            continue
+        todo["completed"] = not todo.get("completed")
+        if todo["completed"]:
+            todo["completed_at"] = datetime.now().isoformat()
+        else:
+            todo.pop("completed_at", None)
+        _save_todos(session_id, todos, user_id=user_id)
+        return jsonify({"result": "success", "completed": todo["completed"]})
+    return jsonify({"error": "Todo not found"}), 404
+
+
+@blueprint.route("/todos/<path:session_id>/<int:todo_id>/delete", methods=["POST"])
+@login_required
+def delete_todo(session_id, todo_id):
+    from angel_claw.skills.todo import delete_todo as delete_todo_skill
+
+    result = delete_todo_skill(
+        todo_id=todo_id,
+        session_id=session_id,
+        user_id=str(current_user.id),
+    )
+    if result.startswith("Error"):
+        return jsonify({"error": result}), 404
+    return jsonify({"result": "success"})
 
 
 @blueprint.route("/cron/jobs")

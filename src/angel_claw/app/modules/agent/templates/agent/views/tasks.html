@@ -41,9 +41,9 @@
                 Couldn't load tasks. <button class="text-accent underline" @click="loadTodos()">Retry</button>
             </div>
             <div x-show="!loading && !error" class="space-y-3">
-                <template x-for="todo in todos" :key="todo.id">
+                <template x-for="todo in todos" :key="todo.session + '-' + todo.id">
                     <div class="flex items-start gap-3 p-3 bg-white/5 border border-white/5 rounded-xl hover:border-accent/20 transition-all group">
-                        <button @click="toggleTodo(todo.id)" class="mt-1">
+                        <button @click="toggleTodo(todo)" class="mt-1">
                             <i :class="todo.completed ? 'fas fa-check-circle text-accent' : 'far fa-circle text-zinc-600 group-hover:text-accent/50'"></i>
                         </button>
                         <div class="flex-grow" :class="todo.completed ? 'text-zinc-500 line-through' : 'text-zinc-300'">
@@ -51,6 +51,9 @@
                             <span x-show="todo.due_date" class="ml-2 text-xs text-zinc-500" x-text="'Due: ' + todo.due_date"></span>
                         </div>
                         <span class="text-xs px-2 py-1 rounded" :class="todo.priority === 'high' ? 'bg-red-500/20 text-red-400' : 'bg-zinc-700 text-zinc-400'" x-text="todo.priority"></span>
+                        <button @click="deleteTodo(todo)" class="text-zinc-600 hover:text-red-400 transition-colors" title="Delete">
+                            <i class="fas fa-trash text-xs"></i>
+                        </button>
                     </div>
                 </template>
                 <p x-show="todos.length === 0" class="text-zinc-600 italic text-sm text-center py-8">No pending tasks.</p>

@@ -1,21 +1,54 @@
 {
-  "name": "Angel Claw",
+  "name": "Angel Claw — Agent OS",
   "short_name": "Angel Claw",
   "description": "The Multi-Tenant Agent Operating System",
+  "id": "/",
   "start_url": "/",
+  "scope": "/",
   "display": "standalone",
-  "background_color": "#f5f7fa",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#09090b",
   "theme_color": "#09090b",
+  "categories": ["productivity", "utilities"],
   "icons": [
     {
-      "src": "/static/wing.png",
+      "src": "/static/pwa/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
-      "src": "/static/wing.png",
+      "src": "/static/pwa/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/static/pwa/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Chat",
+      "short_name": "Chat",
+      "url": "/#/chat",
+      "icons": [{ "src": "/static/pwa/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Tasks",
+      "short_name": "Tasks",
+      "url": "/#/tasks",
+      "icons": [{ "src": "/static/pwa/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Reminders",
+      "short_name": "Reminders",
+      "url": "/#/reminders",
+      "icons": [{ "src": "/static/pwa/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

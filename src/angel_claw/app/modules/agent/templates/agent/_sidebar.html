@@ -92,6 +92,12 @@
             {% endif %}
         </nav>
 
+        <div x-data="pwaInstall()" x-show="canInstall" x-cloak class="mt-4">
+            <button type="button" @click="install()" class="nav-item w-full text-left">
+                <i class="fas fa-arrow-down-to-line w-5 text-center"></i> Install app
+            </button>
+        </div>
+
         <div class="mt-auto pt-6 border-t border-[var(--border-color)]">
             <div class="flex items-center gap-3 px-4 py-3 bg-black/20 rounded-2xl border border-zinc-800/50">
                 <div class="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center text-accent font-bold">

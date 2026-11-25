@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Offline | Angel Claw</title>
+    <style>
+        body {
+            margin: 0;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: #09090b;
+            color: #e4e4e7;
+            font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+            text-align: center;
+        }
+        .card { padding: 2rem; max-width: 26rem; }
+        img { width: 72px; height: 72px; object-fit: contain; margin-bottom: 1.25rem; }
+        h1 { font-size: 1.25rem; font-weight: 800; margin: 0 0 .5rem; letter-spacing: -0.02em; }
+        p { color: #71717a; font-size: .9rem; line-height: 1.5; margin: 0 0 1.5rem; }
+        button {
+            background: #16a34a; color: #fff; border: 0; border-radius: .75rem;
+            padding: .65rem 1.25rem; font-size: .875rem; font-weight: 700; cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <img src="/static/pwa/icon-192.png" alt="Angel Claw">
+        <h1>You are offline</h1>
+        <p>Angel Claw cannot reach the server right now. Your chats are safe — reconnect to continue.</p>
+        <button onclick="location.reload()">Try again</button>
+    </div>
+</body>
+</html>

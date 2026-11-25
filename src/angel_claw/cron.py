@@ -5,8 +5,12 @@ import logging
 import httpx
 from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional, Callable
-from pydantic import BaseModel, Field
-from croniter import croniter
+from pydantic import BaseModel
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from apscheduler.triggers.base import BaseTrigger
+from apscheduler.triggers.cron import CronTrigger
+from apscheduler.triggers.date import DateTrigger
+from apscheduler.triggers.interval import IntervalTrigger
 from .config import settings
 
 logger = logging.getLogger("angel-claw-cron")
@@ -49,6 +53,9 @@ class CronManager:
             os.makedirs(self.persist_dir)
         self.jobs: Dict[str, Job] = {}
         self._jobs_lock = asyncio.Lock()
+        # Scheduling engine: APScheduler replaces the hand-rolled poll loop.
+        # Created here, started later inside run() (needs a running loop).
+        self.scheduler = AsyncIOScheduler()
         self.load_jobs()
         self.proactive_handlers: List[Callable] = []
 
@@ -79,6 +86,7 @@ class CronManager:
         file_path = os.path.join(self.persist_dir, f"{job.name}.json")
         with open(file_path, "w") as f:
             f.write(job.model_dump_json(indent=2))
+        self._sync_job(job)
 
     def save_job(self, job: Job):
         # See save_job_async: respect an explicit next_run, else compute it.
@@ -88,6 +96,7 @@ class CronManager:
         file_path = os.path.join(self.persist_dir, f"{job.name}.json")
         with open(file_path, "w") as f:
             f.write(job.model_dump_json(indent=2))
+        self._sync_job(job)
 
     async def delete_job_async(self, name: str):
         async with self._jobs_lock:
@@ -96,6 +105,7 @@ class CronManager:
         file_path = os.path.join(self.persist_dir, f"{name}.json")
         if os.path.exists(file_path):
             os.remove(file_path)
+        self._unschedule(name)
 
     def delete_job(self, name: str):
         if name in self.jobs:
@@ -103,12 +113,49 @@ class CronManager:
         file_path = os.path.join(self.persist_dir, f"{name}.json")
         if os.path.exists(file_path):
             os.remove(file_path)
+        self._unschedule(name)
+
+    # --- APScheduler wiring -------------------------------------------
+
+    @staticmethod
+    def _parse_delta(value: str) -> timedelta:
+        unit = value[-1]
+        amount = int(value[:-1])
+        return {"s": seconds, "m": minutes, "h": hours, "d": days}[unit](amount)
+
+    @staticmethod
+    def _naive(dt: Optional[datetime]) -> Optional[datetime]:
+        # Triggers return tz-aware datetimes; jobs, files and the rest of the
+        # codebase use naive local time.
+        if dt is not None and dt.tzinfo is not None:
+            dt = dt.astimezone().replace(tzinfo=None)
+        return dt
+
+    def _build_trigger(self, job: Job) -> BaseTrigger:
+        """Map a JobSchedule onto an APScheduler trigger."""
+        kind, value = job.schedule.kind, job.schedule.value
+        if kind == "at":
+            # next_run wins: it may be "now" for a late one-shot job
+            return DateTrigger(run_date=job.next_run or datetime.fromisoformat(value))
+        if kind == "in":
+            return DateTrigger(
+                run_date=job.next_run or datetime.now() + self._parse_delta(value)
+            )
+        if kind == "cron":
+            return CronTrigger.from_crontab(value)
+        if kind == "every":
+            delta = self._parse_delta(value)
+            start = job.last_run + delta if job.last_run else datetime.now() + delta
+            return IntervalTrigger(seconds=delta.total_seconds(), start_date=start)
+        raise ValueError(f"unknown schedule kind: {kind}")
 
     def _calculate_next_run(self, job: Job):
         now = datetime.now()
-        if job.schedule.kind == "at":
-            try:
-                dt = datetime.fromisoformat(job.schedule.value)
+        kind = job.schedule.kind
+        value = job.schedule.value
+        try:
+            if kind == "at":
+                dt = datetime.fromisoformat(value)
                 if dt > now:
                     job.next_run = dt
                 elif job.last_run is None and job.enabled:
@@ -125,42 +172,64 @@ class CronManager:
                         )
                 else:
                     job.next_run = None
-            except ValueError:
-                logger.error(
-                    f"Invalid 'at' schedule for job {job.name}: {job.schedule.value}"
+                return
+            if kind == "in":
+                if job.last_run:
+                    # one-shot "in" job that already fired: nothing left to do
+                    job.next_run = None
+                    job.enabled = False
+                    return
+                job.enabled = True
+            # APScheduler triggers expect a tz-aware "now"
+            job.next_run = self._naive(
+                self._build_trigger(job).get_next_fire_time(
+                    None, datetime.now().astimezone()
                 )
-        elif job.schedule.kind in ["every", "in"]:
-            value = job.schedule.value
-            try:
-                unit = value[-1]
-                amount = int(value[:-1])
-                deltas = {"s": seconds, "m": minutes, "h": hours, "d": days}
-                delta = deltas[unit](amount)
+            )
+        except Exception as e:
+            logger.error(
+                f"Invalid {kind} schedule for job {job.name}: {value} - {e}"
+            )
 
-                if job.schedule.kind == "in":
-                    if not job.last_run:
-                        job.next_run = now + delta
-                        job.enabled = True
-                    else:
-                        job.next_run = None
-                        job.enabled = False
-                else:
-                    job.next_run = (
-                        (job.last_run + delta) if job.last_run else (now + delta)
-                    )
-            except (KeyError, ValueError):
-                logger.error(
-                    f"Invalid {job.schedule.kind} schedule for job {job.name}: {job.schedule.value}"
-                )
-        elif job.schedule.kind == "cron":
-            try:
-                base = job.last_run or now
-                iter = croniter(job.schedule.value, base)
-                job.next_run = iter.get_next(datetime)
-            except Exception as e:
-                logger.error(
-                    f"Invalid cron expression for job {job.name}: {job.schedule.value} - {e}"
-                )
+    def _sync_job(self, job: Job):
+        """Add or refresh one job inside the scheduler."""
+        self._unschedule(job.name)
+        if not job.enabled or not job.next_run:
+            return
+        try:
+            trigger = self._build_trigger(job)
+        except Exception as e:
+            logger.error(f"Cannot schedule job {job.name}: {e}")
+            return
+        self.scheduler.add_job(
+            self._run_job,
+            trigger=trigger,
+            args=[job.name],
+            id=job.name,
+            replace_existing=True,
+            coalesce=True,
+            # Run overdue jobs instead of dropping them: APScheduler's default
+            # grace period is 1s, which loses jobs on a busy event loop.
+            misfire_grace_time=None,
+            max_instances=1,
+        )
+
+    def _unschedule(self, name: str):
+        try:
+            self.scheduler.remove_job(name)
+        except Exception:
+            pass  # not scheduled yet, or scheduler not running
+
+    def _schedule_all_jobs(self):
+        for job in list(self.jobs.values()):
+            self._sync_job(job)
+
+    async def _run_job(self, job_name: str):
+        job = self.jobs.get(job_name)
+        if job is None or not job.enabled:
+            self._unschedule(job_name)
+            return
+        await self._execute_job(job)
 
     async def _execute_job(self, job: Job):
         logger.info(f"Executing job: {job.name}")
@@ -319,30 +388,19 @@ class CronManager:
             print(f"\n[PROACTIVE] {user_id} ({clean_sid}): {message}", flush=True)
 
     async def run(self):
-        logger.info("Cron worker started.")
-        while True:
-            # Always work with naive datetime to match schedule values
-            now = datetime.now().replace(microsecond=0)
-            jobs_to_run = []
+        """Start APScheduler and block until this task is cancelled."""
+        if self.scheduler.running:
+            # another run() call already owns the scheduler
+            await asyncio.Event().wait()
+            return
 
-            async with self._jobs_lock:
-                for job in list(self.jobs.values()):
-                    if job.next_run:
-                        # Ensure next_run is also naive for comparison
-                        next_run = job.next_run.replace(microsecond=0)
-                        if next_run <= now:
-                            logger.info(f"Cron: Found job '{job.name}' ready (scheduled: {next_run}, now: {now})")
-                            jobs_to_run.append(job)
-                        else:
-                            logger.debug(f"Cron: Job '{job.name}' not ready (scheduled: {next_run}, now: {now})")
-
-            for job in jobs_to_run:
-                # Force-enable for execution if it was a one-shot scheduled job
-                job.enabled = True
-                logger.info(f"Cron worker triggering job: {job.name}, scheduled for {job.next_run}, now {now}")
-                await self._execute_job(job)
-
-            await asyncio.sleep(5)  # Faster polling to ensure responsiveness
+        logger.info("Cron worker started (APScheduler).")
+        try:
+            self.scheduler.start()  # flushes jobs queued before start
+            await asyncio.Event().wait()
+        finally:
+            if self.scheduler.running:
+                self.scheduler.shutdown(wait=False)
 
 
 cron_manager = CronManager()

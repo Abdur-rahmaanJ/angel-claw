@@ -4,16 +4,16 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>🪽 Angel Claw | Register</title>
-    <link rel="manifest" href="/static/manifest.json">
+    <link rel="manifest" href="/manifest.webmanifest">
     <meta name="theme-color" content="#09090b">
     <link rel="icon" type="image/png" href="/static/wing.png">
-    <link rel="apple-touch-icon" href="/static/wing.png">
+    <link rel="apple-touch-icon" href="/static/pwa/icon-192.png">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@1.0.0/css/bulma.min.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <script>
         if ('serviceWorker' in navigator) {
             window.addEventListener('load', () => {
-                navigator.serviceWorker.register('/static/sw.js')
+                navigator.serviceWorker.register('/sw.js')
                     .then(reg => console.log('Service Worker registered', reg))
                     .catch(err => console.error('Service Worker registration failed', err));
             });

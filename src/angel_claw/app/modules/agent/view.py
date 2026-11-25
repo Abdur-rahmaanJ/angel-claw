@@ -5,6 +5,8 @@ from flask import request
 from flask import jsonify
 from flask import Response
 from flask import stream_with_context
+from flask import send_from_directory
+from flask import current_app
 from flask_login import login_required
 from flask_login import current_user
 from init import csrf
@@ -36,6 +38,28 @@ def _build_context(session_id=None):
         channel_type="web",
         channel_identifier=session_id,
     )
+
+
+@blueprint.route("/sw.js")
+def service_worker():
+    """Serve the service worker from the site root.
+
+    A worker registered at /static/sw.js can only control /static/*, so it
+    has to live at the root to make the dashboard installable/offline.
+    """
+    response = send_from_directory(current_app.static_folder, "sw.js")
+    response.headers["Content-Type"] = "application/javascript; charset=utf-8"
+    response.headers["Service-Worker-Allowed"] = "/"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
+
+
+@blueprint.route("/manifest.webmanifest")
+def pwa_manifest():
+    response = send_from_directory(current_app.static_folder, "manifest.json")
+    response.headers["Content-Type"] = "application/manifest+json"
+    response.headers["Cache-Control"] = "no-cache"
+    return response
 
 
 @blueprint.route("/")

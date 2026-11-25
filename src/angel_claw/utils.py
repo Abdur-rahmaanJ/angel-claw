@@ -17,6 +17,10 @@ def safe_filename_part(value: str, fallback: str = "default") -> str:
 def get_user_root(user_id: str) -> Path:
     """Get the root directory for a specific user's data."""
     root = Path(settings.user_data_root).expanduser()
-    user_dir = root / "users" / user_id
-    user_dir.mkdir(parents=True, exist_ok=True)
+    user_dir = root / "users" / str(user_id)
+    user_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    try:
+        user_dir.chmod(0o700)
+    except OSError:
+        pass
     return user_dir

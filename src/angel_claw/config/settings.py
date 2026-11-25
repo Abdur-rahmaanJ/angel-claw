@@ -32,7 +32,12 @@ class Settings(BaseSettings):
     @property
     def data_dir(self) -> Path:
         p = Path(self.user_data_root).expanduser()
-        p.mkdir(parents=True, exist_ok=True)
+        p.mkdir(parents=True, exist_ok=True, mode=0o700)
+        # Holds API keys, chat history and secrets: owner-only.
+        try:
+            p.chmod(0o700)
+        except OSError:
+            pass
         return p
 
     @property

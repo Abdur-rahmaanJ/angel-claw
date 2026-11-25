@@ -60,7 +60,7 @@ class PersistentHistory:
                 )
                 conn.commit()
         else:
-            self.root.mkdir(parents=True, exist_ok=True)
+            self.root.mkdir(parents=True, exist_ok=True, mode=0o700)
             with sqlite3.connect(self.db_path) as conn:
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS messages (
@@ -77,6 +77,10 @@ class PersistentHistory:
                 conn.execute(
                     "CREATE INDEX IF NOT EXISTS idx_session ON messages(session_id)"
                 )
+            try:
+                os.chmod(self.db_path, 0o600)
+            except OSError:
+                pass
 
     def add_message(self, session_id: str, message: Message):
         if self._is_shared:

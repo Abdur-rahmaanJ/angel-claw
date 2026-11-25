@@ -104,6 +104,10 @@ class CronManager:
         # half-written file.
         with open(tmp_path, "w") as f:
             f.write(job.model_dump_json(indent=2))
+        try:
+            os.chmod(tmp_path, 0o600)
+        except OSError:
+            pass
         os.replace(tmp_path, path)
         try:
             self._job_mtimes[job.name] = os.path.getmtime(path)

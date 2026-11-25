@@ -104,6 +104,8 @@ def _upsert_env_file(updates: dict):
     try:
         with os.fdopen(fd, "w") as f:
             f.writelines(new_lines)
+        # The file holds every secret in the app: owner-only.
+        os.chmod(tmp_path, 0o600)
         os.replace(tmp_path, path)
     except BaseException:
         try:

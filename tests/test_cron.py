@@ -268,6 +268,50 @@ async def test_reload_drops_job_deleted_by_another_process(test_cron_dir):
     assert "gone_job" not in worker.jobs
 
 
+@pytest.mark.asyncio
+async def test_stale_one_shot_reports_missed_task(test_cron_dir, monkeypatch):
+    past = (datetime.now() - timedelta(days=3)).replace(microsecond=0)
+    with open(os.path.join(test_cron_dir, "stale.json"), "w") as f:
+        json.dump(
+            {
+                "name": "stale",
+                "schedule": {"kind": "at", "value": past.isoformat()},
+                "payload": {"kind": "message", "content": "old reminder"},
+                "session_id": "s",
+                "user_id": "u",
+                "last_run": None,
+                "next_run": None,
+                "enabled": True,
+            },
+            f,
+        )
+
+    manager = CronManager(persist_dir=test_cron_dir)
+    assert manager.jobs["stale"].enabled is False
+    assert [j.name for j in manager.missed_jobs] == ["stale"]
+
+    messages = []
+
+    async def mock_send(message, user_id, session_id="default"):
+        messages.append(message)
+
+    monkeypatch.setattr(manager, "_send_proactive_message", mock_send)
+
+    task = asyncio.create_task(manager.run())
+    try:
+        deadline = asyncio.get_event_loop().time() + 5
+        while not messages and asyncio.get_event_loop().time() < deadline:
+            await asyncio.sleep(0.05)
+    finally:
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    assert messages and "old reminder" in messages[0]
+
+
 def test_only_one_worker_holds_the_execution_lease(test_cron_dir):
     """Two cron owners on one directory must not both execute jobs."""
     first = CronManager(persist_dir=test_cron_dir)

@@ -70,6 +70,8 @@ class CronManager:
         # Scheduling engine: APScheduler replaces the hand-rolled poll loop.
         # Created here, started later inside run() (needs a running loop).
         self.scheduler = AsyncIOScheduler()
+        # One-shot jobs dropped as stale while loading; reported by run().
+        self.missed_jobs: List[Job] = []
         self.load_jobs()
         self.proactive_handlers: List[Callable] = []
 
@@ -239,6 +241,49 @@ class CronManager:
         except OSError:
             pass
 
+    async def _notify_missed_jobs(self):
+        """Tell the user about one-shot jobs skipped as too old."""
+        missed = list(self.missed_jobs)
+        self.missed_jobs.clear()
+        for job in missed:
+            content = job.payload.content or job.payload.skill_name or job.name
+            message = f"⚠️ Missed task: {content} (was due {job.schedule.value})"
+            if job.name.startswith("reminder_"):
+                try:
+                    from angel_claw.engine.app_context import (
+                        create_app_context_manager,
+                    )
+                    from angel_claw.config import settings
+
+                    ctx_manager = create_app_context_manager(settings)
+                    with ctx_manager._app_context() as app:
+                        if app is not None:
+                            from modules.agent.models import InternalMessage
+                            from shopyo_auth.models import User
+                            from init import db
+
+                            user_key = (
+                                int(job.user_id)
+                                if str(job.user_id).isdigit()
+                                else job.user_id
+                            )
+                            user = db.session.get(User, user_key)
+                            if user:
+                                db.session.add(
+                                    InternalMessage(
+                                        sender_id="system",
+                                        recipient_id=str(user.id),
+                                        recipient_email=user.email,
+                                        content=message,
+                                    )
+                                )
+                                db.session.commit()
+                except Exception as e:
+                    logger.error(f"Error storing missed-task notice: {e}")
+            await self._send_proactive_message(
+                message, job.user_id, job.session_id
+            )
+
     async def _reload_loop(self):
         while True:
             await asyncio.sleep(JOB_RELOAD_INTERVAL_SECONDS)
@@ -302,6 +347,7 @@ class CronManager:
                     else:
                         job.next_run = None
                         job.enabled = False
+                        self.missed_jobs.append(job)
                         logger.warning(
                             f"Disabling stale one-shot job {job.name} scheduled for {dt}"
                         )
@@ -542,6 +588,8 @@ class CronManager:
             # Jobs loaded from disk were never added to the scheduler; without
             # this they would sit enabled in the JSON files and never fire.
             self._schedule_all_jobs()
+            if self.missed_jobs:
+                await self._notify_missed_jobs()
             # Keep watching the shared directory for jobs another process adds.
             reload_task = asyncio.create_task(self._reload_loop())
             await asyncio.Event().wait()

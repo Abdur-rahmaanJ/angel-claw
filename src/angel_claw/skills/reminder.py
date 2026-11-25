@@ -59,11 +59,13 @@ def add_reminder(message: str, time_str: str, session_id: str = "web-default", u
         with ctx_manager._app_context():
             from modules.agent.models import Reminder
             # Check if a similar reminder exists in the next 60 seconds
+            # Same message within a minute of this time is the same
+            # reminder; check both sides of the target time.
             existing = Reminder.query.filter(
                 Reminder.user_id == user_id,
                 Reminder.message == message,
                 Reminder.is_sent == False,
-                Reminder.remind_at >= remind_at,
+                Reminder.remind_at >= remind_at - timedelta(seconds=60),
                 Reminder.remind_at < remind_at + timedelta(seconds=60)
             ).first()
             if existing:

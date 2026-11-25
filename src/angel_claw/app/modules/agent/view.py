@@ -615,7 +615,7 @@ def get_reminders():
 @blueprint.route("/reminders/delete/<int:reminder_id>", methods=["POST"])
 @login_required
 def delete_reminder(reminder_id):
-    from modules.agent.models import Reminder
+    from modules.agent.models import Reminder, InternalMessage
     from init import db
     from angel_claw.cron import cron_manager
 
@@ -623,6 +623,12 @@ def delete_reminder(reminder_id):
     if reminder:
         if reminder.job_name:
             cron_manager.delete_job(reminder.job_name)
+        # Deleting the reminder should also clear the message it delivered,
+        # otherwise the bell keeps an orphaned "REMINDER" entry forever.
+        InternalMessage.query.filter_by(
+            recipient_id=str(current_user.id),
+            content=f"🔔 REMINDER: {reminder.message}",
+        ).delete()
         db.session.delete(reminder)
         db.session.commit()
         return jsonify({"result": "success"})

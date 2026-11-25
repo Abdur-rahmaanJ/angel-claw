@@ -10,7 +10,7 @@ dependencies = [
     "pydantic",
     "pydantic-settings",
     "python-dotenv",
-    "angel-recall>=0.5.0",
+    "angel-recall>=0.5.1",
     "litellm",
     "apscheduler>=3.11,<4",
     "httpx",

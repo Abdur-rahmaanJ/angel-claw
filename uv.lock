@@ -197,7 +197,7 @@ wheels = [
 
 [[package]]
 name = "angel-claw"
-version = "0.16.0"
+version = "0.16.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -289,7 +289,7 @@ provides-extras = ["test", "file-handler", "google-calendar"]
 
 [[package]]
 name = "angel-recall"
-version = "0.5.0"
+version = "0.5.1"
 source = { editable = "../angel-recall" }
 dependencies = [
     { name = "agentor" },

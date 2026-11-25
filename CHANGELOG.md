@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.1] - 2026-11-26
+
+### Fixed
+
+- Chat memory is retrieved with the user's message instead of returning the newest cubes from a fixed namespace list; an empty query now injects no memory rather than unrelated facts.
+- Memory skills use the authenticated account email, so `store_memory`/`search_memory` and the engine share one memory owner.
+- Semantic relevance order is preserved and results are expanded one hop through related memories; archived memories and memories the user cannot read are excluded.
+- New memories are linked to semantically related memories, and graph edges are persisted so relationships survive a restart.
+- Embedding-less retrieval no longer falls back to substring or word matching: angel-recall asks the LLM to select relevant memories and returns nothing when no model is available.
+
+### Changed
+
+- Bumped `angel-recall` to 0.5.1.
+
 ## [0.16.0] - 2026-11-26
 
 ### Added

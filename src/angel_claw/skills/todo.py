@@ -83,6 +83,19 @@ def complete_todo(todo_id: int, session_id: str = "cli-default", user_id: Option
     return f"Error: Todo {todo_id} not found."
 
 @skill
+def clear_completed_todos(session_id: str = "cli-default", user_id: Optional[str] = None) -> str:
+    todos = _load_todos(session_id, user_id)
+    remaining = [t for t in todos if not t.get("completed")]
+    cleared = len(todos) - len(remaining)
+    if not cleared:
+        return "No completed todos to clear."
+    for i, todo in enumerate(remaining, 1):
+        todo["id"] = i
+    _save_todos(session_id, remaining, user_id)
+    return f"🗑️ Cleared {cleared} completed todo(s)."
+
+
+@skill
 def delete_todo(todo_id: int, session_id: str = "cli-default", user_id: Optional[str] = None) -> str:
     todos = _load_todos(session_id, user_id)
     original_count = len(todos)

@@ -121,33 +121,22 @@ class MemoryRetriever:
 
     MAX_RESULTS = 5
 
-    def retrieve(self, memos, context, session_id: str, use_global: bool):
-        """Retrieve memory cubes."""
-        if use_global:
-            return memos.operator.hybrid_retrieve(
-                query="",  # Will be replaced by caller
-                user=context.email,
-                namespace=None,
-                n_results=self.MAX_RESULTS,
-            )
+    def retrieve(self, memos, context, query: str, use_global: bool = False):
+        """Retrieve memories by meaning, then expand one hop through the graph.
 
-        user_namespace = f"user_{context.email}"
-        ns_to_check = [
-            session_id,
-            f"{session_id}_logs",
-            user_namespace,
-            f"{user_namespace}_logs",
-            "default",
-        ]
+        The vault is already scoped to the user's own directory, so a semantic
+        query is preferred over paging through every namespace and returning the
+        newest cubes regardless of relevance.
+        """
+        if not query:
+            return []
 
-        all_collected_ids = set()
-        for ns in ns_to_check:
-            all_collected_ids.update(memos.vault.namespaces.get(ns, set()))
-
-        retrieved_cubes = [memos.vault.get(cid) for cid in all_collected_ids]
-        retrieved_cubes = [c for c in retrieved_cubes if c and c.owner == context.email]
-        retrieved_cubes.sort(key=lambda c: c.timestamp, reverse=True)
-        return retrieved_cubes[: self.MAX_RESULTS]
+        return memos.operator.hybrid_retrieve(
+            query=query,
+            user=context.email,
+            namespace=None,
+            n_results=self.MAX_RESULTS,
+        )
 
     def format_memory_context(self, retrieved_cubes, memos) -> str:
         """Format retrieved cubes into memory context string."""
@@ -158,7 +147,7 @@ class MemoryRetriever:
             f"• [{c.timestamp.strftime('%Y-%m-%d %H:%M')}] [{c.semantic_type.value.upper()}] {memos.api._format_payload(c.payload, 150)}"
             for c in retrieved_cubes
         ]
-        return "Memory Context (Prioritized & Newest First):\n" + "\n".join(snippets)
+        return "Relevant Memory Context:\n" + "\n".join(snippets)
 
     def sanitize_memory(self, raw_memory: str) -> str:
         """Sanitize memory to prevent injection attacks."""

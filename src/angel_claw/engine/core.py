@@ -119,7 +119,7 @@ class AngelClawEngine:
         recent_history = history[-5:] if len(history) > 5 else history
 
         retrieved_cubes = self._memory_retriever.retrieve(
-            memos, context, session_id, use_global
+            memos, context, message, use_global
         )
         raw_memory = self._memory_retriever.format_memory_context(
             retrieved_cubes, memos
@@ -244,7 +244,7 @@ class AngelClawEngine:
         recent_history = history[-5:] if len(history) > 5 else history
 
         retrieved_cubes = self._memory_retriever.retrieve(
-            memos, context, session_id, use_global
+            memos, context, message, use_global
         )
         raw_memory = self._memory_retriever.format_memory_context(
             retrieved_cubes, memos

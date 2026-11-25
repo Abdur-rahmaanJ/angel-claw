@@ -71,12 +71,14 @@ class PairingService:
             from modules.agent.models import PairingToken
             from init import db
 
-            token = "".join([str(secrets.randbelow(10)) for _ in range(8)])
+            # 12 digits (10^12 space) keeps online guessing infeasible even
+            # without the per-IP throttle on /api/mobile/pair.
+            token = "".join([str(secrets.randbelow(10)) for _ in range(12)])
 
             pairing_token = PairingToken(
                 token=token,
                 user_id=context.user_id,
-                expires_at=datetime.now() + timedelta(minutes=10),
+                expires_at=datetime.now() + timedelta(minutes=5),
             )
             db.session.add(pairing_token)
             db.session.commit()

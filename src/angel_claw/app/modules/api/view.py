@@ -85,24 +85,28 @@ def token_auth_required(f):
 SSO_SALT = "ask-moris-sso"
 SSO_MAX_AGE = 60 * 60 * 24 * 30  # signed tokens live 30 days
 
-_sso_failures = {}  # remote_ip -> [window_start, failed_attempts]
+_auth_failures = {}  # (bucket, remote_ip) -> [window_start, failed_attempts]
 
 
-def _sso_throttled(ip):
-    """Cheap per-IP brake: >=10 failed attempts within 60s blocks new tries."""
+def _throttled(ip, bucket="sso", limit=10):
+    """Cheap per-IP brake: N failed attempts within 60s blocks new tries."""
     now = time.monotonic()
-    window, count = _sso_failures.get(ip, (now, 0))
+    window, count = _auth_failures.get((bucket, ip), (now, 0))
     if now - window > 60:
         return False
-    return count >= 10
+    return count >= limit
 
 
-def _sso_note_failure(ip):
+def _note_failure(ip, bucket="sso"):
     now = time.monotonic()
-    window, count = _sso_failures.get(ip, (now, 0))
+    window, count = _auth_failures.get((bucket, ip), (now, 0))
     if now - window > 60:
         window, count = now, 0
-    _sso_failures[ip] = [window, count + 1]
+    _auth_failures[(bucket, ip)] = [window, count + 1]
+
+
+def _clear_failures(ip, bucket="sso"):
+    _auth_failures.pop((bucket, ip), None)
 
 
 def _sso_serializer():
@@ -127,7 +131,7 @@ def sso_token():
     AngelClaw account without handling passwords themselves.
     """
     ip = request.remote_addr or "?"
-    if _sso_throttled(ip):
+    if _throttled(ip, "sso"):
         return jsonify({"status": "error", "message": "Too many attempts, try again later"}), 429
 
     data = request.get_json(silent=True) or {}
@@ -140,10 +144,10 @@ def sso_token():
 
     user = User.get_by_email(email)
     if user is None or not user.check_password(password):
-        _sso_note_failure(ip)
+        _note_failure(ip, "sso")
         return jsonify({"status": "error", "message": "Invalid email or password"}), 401
 
-    _sso_failures.pop(ip, None)
+    _clear_failures(ip, "sso")
     token = _sso_serializer().dumps({"uid": str(user.id), "email": user.email})
     return jsonify({
         "status": "success",
@@ -751,6 +755,10 @@ def mobile_add_command():
 @csrf.exempt
 def mobile_pair():
     """Exchange a pairing token for a permanent API key."""
+    ip = request.remote_addr or "?"
+    if _throttled(ip, "pair"):
+        return jsonify({"status": "error", "message": "Too many attempts, try again later"}), 429
+
     data = request.get_json()
     token = data.get("token")
     device_name = data.get("device_name", "Android Device")
@@ -766,7 +774,9 @@ def mobile_pair():
 
     user_id = engine.validate_pair_token(token)
     if not user_id:
+        _note_failure(ip, "pair")
         return jsonify({"status": "error", "message": "Invalid or expired token"}), 401
+    _clear_failures(ip, "pair")
 
     from shopyo_auth.models import User
     from init import db
@@ -794,6 +804,10 @@ def mobile_pair():
 @csrf.exempt
 def mobile_login():
     """Authenticate with email/password and return a permanent API key."""
+    ip = request.remote_addr or "?"
+    if _throttled(ip, "mobile-login"):
+        return jsonify({"status": "error", "message": "Too many attempts, try again later"}), 429
+
     data = request.get_json()
     email = data.get("email")
     password = data.get("pass")
@@ -806,7 +820,9 @@ def mobile_login():
 
     user = User.get_by_email(email)
     if user is None or not user.check_password(password):
+        _note_failure(ip, "mobile-login")
         return jsonify({"status": "error", "message": "Invalid credentials"}), 401
+    _clear_failures(ip, "mobile-login")
 
     context = UserContext(
         user_id=str(user.id),

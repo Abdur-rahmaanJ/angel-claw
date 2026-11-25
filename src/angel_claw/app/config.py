@@ -103,6 +103,10 @@ class ProductionConfig(BaseConfig):
     ENV = "production"
     SECRET_KEY = _secret_key()
 
+    # Throttle login/register/password endpoints provided by shopyo-auth.
+    SHOPYO_AUTH_RATE_LIMIT_ENABLED = True
+    SHOPYO_AUTH_RATE_LIMIT = "10 per minute"
+
     # control email confirmation for user registration
     EMAIL_CONFIRMATION_DISABLED = True
 

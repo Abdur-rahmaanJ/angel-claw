@@ -115,7 +115,8 @@ def test_pair_token_endpoint(client, auth_user, app):
     assert response.status_code == 200
     data = response.get_json()
     assert "token" in data
-    assert len(data["token"]) == 8
+    assert len(data["token"]) == 12
+    assert data["token"].isdigit()
 
 def test_api_key_endpoint(client, auth_user, app):
     # Login

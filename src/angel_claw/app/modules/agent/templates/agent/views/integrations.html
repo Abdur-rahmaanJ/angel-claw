@@ -42,6 +42,7 @@
                         <button @click="$store.viewManager.openPairingModal('telegram')" class="btn btn-primary text-sm">Connect</button>
                     </template>
                     <span x-show="integrations.telegram?.connected" class="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-400">Connected</span>
+                    <span x-show="integrations.telegram?.connected && !bridgeOnline" class="text-xs px-3 py-1 rounded-full bg-amber-500/20 text-amber-500" title="Messages will not be delivered until the bridge is running">Bridge offline</span>
                 </div>
             </div>
         </div>

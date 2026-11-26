@@ -113,6 +113,28 @@ A bare `angel-claw` no longer starts the gateway implicitly; use `serve` for the
 
 ---
 
+## 🗓️ Tasks API
+
+Schedule a prompt to run once at a chosen time and poll its status. Tasks are user-scoped and authenticate with the same `Authorization: Bearer ac_v1_...` API key as `/api/mobile/*`.
+
+```bash
+# Schedule (run_at is ISO-8601; omit it to run in ~2 seconds)
+curl -X POST http://127.0.0.1:5000/api/tasks \
+  -H "Authorization: Bearer $ANGEL_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Check availability","prompt":"Search and report availability for the requested date.","run_at":"2027-01-06T18:00:00+01:00"}'
+
+# List / filter
+curl "http://127.0.0.1:5000/api/tasks?status=scheduled" -H "Authorization: Bearer $ANGEL_KEY"
+
+# Inspect, cancel, or run now
+curl http://127.0.0.1:5000/api/tasks/1 -H "Authorization: Bearer $ANGEL_KEY"
+curl -X POST http://127.0.0.1:5000/api/tasks/1/cancel -H "Authorization: Bearer $ANGEL_KEY"
+curl -X POST http://127.0.0.1:5000/api/tasks/1/run -H "Authorization: Bearer $ANGEL_KEY"
+```
+
+Statuses: `scheduled`, `running`, `succeeded`, `failed`, `cancelled`. The result is stored on the task record (not in the Messages inbox), so a mobile client can poll `GET /api/tasks/<id>` or `GET /api/tasks?status=succeeded`.
+
 # 💬 Internal Messaging
 
 Angel Claw supports secure, internal communication between users. The agent handles delivery and notification across all active bridges.

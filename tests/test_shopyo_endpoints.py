@@ -179,6 +179,124 @@ def test_login_template(client, app):
     assert "Login" in html
 
 
+def test_tasks_api_create_list_and_cancel(client, auth_user, app, tmp_path):
+    from datetime import datetime, timedelta
+
+    from angel_claw.cron import cron_manager
+
+    login = client.post(
+        "/auth/login",
+        data={"email": "test@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    assert login.status_code == 200
+    key = client.post(
+        "/api-key", json={"name": "Tasks API"}
+    ).get_json()["key"]
+    headers = {"Authorization": f"Bearer {key}"}
+
+    old_dir, old_jobs = cron_manager.persist_dir, cron_manager.jobs
+    cron_manager.persist_dir = str(tmp_path)
+    cron_manager.jobs = {}
+    try:
+        run_at = (datetime.now() + timedelta(hours=1)).isoformat()
+        created = client.post(
+            "/api/tasks",
+            headers=headers,
+            json={"title": "Check prices", "prompt": "Check prices and report.", "run_at": run_at},
+        )
+        assert created.status_code == 201
+        task = created.get_json()["task"]
+        assert task["status"] == "scheduled"
+        assert task["prompt"] == "Check prices and report."
+        task_id = task["id"]
+
+        listed = client.get("/api/tasks?status=scheduled", headers=headers)
+        assert listed.status_code == 200
+        assert [t["id"] for t in listed.get_json()["tasks"]] == [task_id]
+
+        detail = client.get(f"/api/tasks/{task_id}", headers=headers)
+        assert detail.status_code == 200
+        assert detail.get_json()["task"]["title"] == "Check prices"
+
+        cancelled = client.post(f"/api/tasks/{task_id}/cancel", headers=headers)
+        assert cancelled.status_code == 200
+        assert cancelled.get_json()["task"]["status"] == "cancelled"
+        assert client.get("/api/tasks", headers=headers).get_json()["total"] == 1
+
+        missing = client.post("/api/tasks/999999/cancel", headers=headers)
+        assert missing.status_code == 404
+        empty = client.post("/api/tasks", headers=headers, json={"prompt": ""})
+        assert empty.status_code == 400
+        unauth = client.get("/api/tasks")
+        assert unauth.status_code == 401
+    finally:
+        cron_manager.persist_dir = old_dir
+        cron_manager.jobs = old_jobs
+        cron_manager.scheduler.remove_all_jobs()
+
+
+def test_task_execution_updates_status_without_inbox_duplicate(
+    client, auth_user, app, monkeypatch, tmp_path
+):
+    from datetime import datetime, timedelta
+    from unittest.mock import AsyncMock
+
+    from angel_claw.cron import cron_manager
+    from angel_claw.models import EngineResponse
+    from init import db
+    from modules.agent.models import InternalMessage
+    from modules.api.models import ScheduledTask
+
+    class FakeEngine:
+        async def execute(self, context, message):
+            return EngineResponse(content="Result for the scheduled task")
+
+    monkeypatch.setattr("angel_claw.engine.AngelClawEngine", FakeEngine)
+    monkeypatch.setattr(cron_manager, "_send_proactive_message", AsyncMock())
+
+    client.post(
+        "/auth/login",
+        data={"email": "test@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    key = client.post("/api-key", json={"name": "Task run"}).get_json()["key"]
+    headers = {"Authorization": f"Bearer {key}"}
+
+    old_dir, old_jobs = cron_manager.persist_dir, cron_manager.jobs
+    cron_manager.persist_dir = str(tmp_path)
+    cron_manager.jobs = {}
+    try:
+        created = client.post(
+            "/api/tasks",
+            headers=headers,
+            json={
+                "prompt": "Do the scheduled thing",
+                "run_at": (datetime.now() + timedelta(hours=1)).isoformat(),
+            },
+        ).get_json()["task"]
+
+        with app.app_context():
+            job = cron_manager.jobs[f"task_{created['id']}"]
+            asyncio.run(cron_manager._execute_job(job))
+            task = db.session.get(ScheduledTask, created["id"])
+            assert task.status == "succeeded"
+            assert task.result == "Result for the scheduled task"
+            assert task.finished_at is not None
+            assert task.attempts == 1
+            assert InternalMessage.query.filter_by(
+                recipient_id=str(auth_user["id"])
+            ).count() == 0
+
+        detail = client.get(f"/api/tasks/{created['id']}", headers=headers)
+        assert detail.get_json()["task"]["status"] == "succeeded"
+        assert detail.get_json()["task"]["result"] == "Result for the scheduled task"
+    finally:
+        cron_manager.persist_dir = old_dir
+        cron_manager.jobs = old_jobs
+        cron_manager.scheduler.remove_all_jobs()
+
+
 def test_scheduled_prompt_lands_in_tasks_and_messages(
     client, auth_user, app, monkeypatch, tmp_path
 ):

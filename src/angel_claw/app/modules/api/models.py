@@ -4,6 +4,32 @@ from shopyo.api.models import PkModel
 from init import db
 
 
+class ScheduledTask(PkModel):
+    """A user-facing task that runs an agent prompt at a chosen time."""
+
+    __tablename__ = "scheduled_tasks"
+    __table_args__ = {"extend_existing": True}
+
+    user_id = db.Column(db.String(100), nullable=False, index=True)
+    title = db.Column(db.String(200), nullable=False, default="")
+    prompt = db.Column(db.Text, nullable=False)
+    session_id = db.Column(db.String(100), nullable=False, default="task")
+    run_at = db.Column(db.DateTime, nullable=True)
+    status = db.Column(
+        db.String(20), nullable=False, default="scheduled", index=True
+    )
+    job_name = db.Column(db.String(120), nullable=True, unique=True)
+    result = db.Column(db.Text, nullable=True)
+    error = db.Column(db.Text, nullable=True)
+    attempts = db.Column(db.Integer, nullable=False, default=0)
+    created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+    updated_at = db.Column(
+        db.DateTime, nullable=False, default=datetime.now, onupdate=datetime.now
+    )
+    started_at = db.Column(db.DateTime, nullable=True)
+    finished_at = db.Column(db.DateTime, nullable=True)
+
+
 class UsageEvent(PkModel):
     """A usage event reported by an integrated app (e.g. ask-moris searches)."""
 

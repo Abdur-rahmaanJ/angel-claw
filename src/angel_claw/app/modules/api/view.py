@@ -1,5 +1,6 @@
 import logging
 import time
+from datetime import datetime, timedelta
 from functools import wraps
 from dataclasses import replace
 from uuid import uuid4
@@ -32,6 +33,240 @@ blueprint = mhelp.blueprint
 engine = AngelClawEngine()
 
 
+def token_auth_required(f):
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        auth_header = request.headers.get("Authorization")
+        if not auth_header or not auth_header.startswith("Bearer "):
+            return jsonify({"status": "error", "message": "Missing or invalid token"}), 401
+
+        token = auth_header.split(" ")[1]
+        context = engine.validate_api_key(token)
+        if not context:
+            return jsonify({"status": "error", "message": "Invalid token"}), 401
+
+        # Attach context to request for use in route
+        request.user_context = context
+        return f(*args, **kwargs)
+
+    return decorated
+
+
+# --- Scheduled task API -------------------------------------------------
+
+TASK_STATUSES = ("scheduled", "running", "succeeded", "failed", "cancelled")
+TASK_TERMINAL = ("succeeded", "failed", "cancelled")
+
+
+def _parse_run_at(value):
+    """ISO-8601 (with or without offset), epoch seconds, or now+2s if omitted."""
+    if value in (None, ""):
+        return datetime.now() + timedelta(seconds=2)
+    if isinstance(value, (int, float)):
+        run_at = datetime.fromtimestamp(value)
+    else:
+        run_at = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    if run_at.tzinfo is not None:
+        # Jobs and the rest of angel-claw store naive local time.
+        run_at = run_at.astimezone().replace(tzinfo=None)
+    if run_at < datetime.now() - timedelta(minutes=1):
+        raise ValueError("run_at must be in the future")
+    if run_at < datetime.now():
+        run_at = datetime.now() + timedelta(seconds=2)
+    return run_at
+
+
+def _iso(value):
+    return value.astimezone().isoformat() if value else None
+
+
+def _task_json(task):
+    return {
+        "id": task.id,
+        "title": task.title,
+        "prompt": task.prompt,
+        "status": task.status,
+        "run_at": _iso(task.run_at),
+        "result": task.result,
+        "error": task.error,
+        "attempts": task.attempts,
+        "session_id": task.session_id,
+        "created_at": _iso(task.created_at),
+        "updated_at": _iso(task.updated_at),
+        "started_at": _iso(task.started_at),
+        "finished_at": _iso(task.finished_at),
+    }
+
+
+def _task_for_user(task_id):
+    from modules.api.models import ScheduledTask
+
+    return ScheduledTask.query.filter_by(
+        id=task_id, user_id=request.user_context.user_id
+    ).first()
+
+
+def _task_job(task, run_at):
+    from angel_claw.cron import Job, JobPayload, JobSchedule
+
+    return Job(
+        name=task.job_name,
+        schedule=JobSchedule(kind="at", value=run_at.isoformat()),
+        payload=JobPayload(kind="prompt", content=task.prompt),
+        session_id=task.session_id,
+        user_id=task.user_id,
+    )
+
+
+@blueprint.route("/tasks", methods=["POST"])
+@csrf.exempt
+@token_auth_required
+def create_task():
+    """Schedule a prompt to run once at run_at and record its result."""
+    from angel_claw.cron import cron_manager
+    from modules.api.models import ScheduledTask
+
+    data = request.get_json(silent=True) or {}
+    prompt = (data.get("prompt") or "").strip()
+    if not prompt:
+        return jsonify({"status": "error", "message": "prompt is required"}), 400
+
+    try:
+        run_at = _parse_run_at(data.get("run_at"))
+    except (TypeError, ValueError) as e:
+        return jsonify({"status": "error", "message": str(e)}), 400
+
+    title = (data.get("title") or prompt[:60]).strip()[:200]
+    session_id = str(data.get("session_id") or f"task-{uuid4().hex[:10]}")
+    task = ScheduledTask(
+        user_id=request.user_context.user_id,
+        title=title,
+        prompt=prompt,
+        session_id=session_id,
+        run_at=run_at,
+        status="scheduled",
+    )
+    db.session.add(task)
+    db.session.flush()
+    task.job_name = f"task_{task.id}"
+    db.session.commit()
+
+    try:
+        cron_manager.save_job(_task_job(task, run_at))
+    except Exception as e:
+        task.status = "failed"
+        task.error = f"Could not schedule task: {e}"
+        task.finished_at = datetime.now()
+        db.session.commit()
+        return jsonify({"status": "error", "message": task.error}), 500
+
+    return jsonify({"status": "success", "task": _task_json(task)}), 201
+
+
+@blueprint.route("/tasks", methods=["GET"])
+@csrf.exempt
+@token_auth_required
+def list_tasks():
+    """List the caller's tasks, newest first, optionally by status."""
+    from modules.api.models import ScheduledTask
+
+    status_filter = request.args.get("status")
+    if status_filter and status_filter not in TASK_STATUSES:
+        return jsonify({"status": "error", "message": "invalid status"}), 400
+    try:
+        limit = min(max(int(request.args.get("limit", 50)), 1), 100)
+        offset = max(int(request.args.get("offset", 0)), 0)
+    except ValueError:
+        return jsonify({"status": "error", "message": "invalid pagination"}), 400
+
+    query = ScheduledTask.query.filter_by(user_id=request.user_context.user_id)
+    if status_filter:
+        query = query.filter_by(status=status_filter)
+    total = query.count()
+    tasks = (
+        query.order_by(ScheduledTask.created_at.desc())
+        .limit(limit)
+        .offset(offset)
+        .all()
+    )
+    return jsonify(
+        {
+            "status": "success",
+            "total": total,
+            "tasks": [_task_json(t) for t in tasks],
+        }
+    )
+
+
+@blueprint.route("/tasks/<int:task_id>", methods=["GET"])
+@csrf.exempt
+@token_auth_required
+def get_task(task_id):
+    task = _task_for_user(task_id)
+    if task is None:
+        return jsonify({"status": "error", "message": "task not found"}), 404
+    return jsonify({"status": "success", "task": _task_json(task)})
+
+
+@blueprint.route("/tasks/<int:task_id>/cancel", methods=["POST"])
+@csrf.exempt
+@token_auth_required
+def cancel_task(task_id):
+    from angel_claw.cron import cron_manager
+
+    task = _task_for_user(task_id)
+    if task is None:
+        return jsonify({"status": "error", "message": "task not found"}), 404
+    if task.status in TASK_TERMINAL:
+        return jsonify({"status": "error", "message": "task is already finished"}), 409
+
+    if task.job_name:
+        try:
+            cron_manager.delete_job(task.job_name)
+        except Exception as e:
+            logger.warning(f"Could not delete task job {task.job_name}: {e}")
+    task.status = "cancelled"
+    task.finished_at = datetime.now()
+    db.session.commit()
+    return jsonify({"status": "success", "task": _task_json(task)})
+
+
+@blueprint.route("/tasks/<int:task_id>/run", methods=["POST"])
+@csrf.exempt
+@token_auth_required
+def run_task_now(task_id):
+    """Run a task immediately (or re-run one that already finished)."""
+    from angel_claw.cron import cron_manager
+
+    task = _task_for_user(task_id)
+    if task is None:
+        return jsonify({"status": "error", "message": "task not found"}), 404
+    if task.status == "running":
+        return jsonify({"status": "error", "message": "task is already running"}), 409
+    if not task.job_name:
+        task.job_name = f"task_{task.id}"
+
+    run_at = datetime.now() + timedelta(seconds=2)
+    task.run_at = run_at
+    task.status = "scheduled"
+    task.error = None
+    task.result = None
+    task.started_at = None
+    task.finished_at = None
+    db.session.commit()
+
+    try:
+        cron_manager.save_job(_task_job(task, run_at))
+    except Exception as e:
+        task.status = "failed"
+        task.error = f"Could not schedule task: {e}"
+        task.finished_at = datetime.now()
+        db.session.commit()
+        return jsonify({"status": "error", "message": task.error}), 500
+
+    return jsonify({"status": "success", "task": _task_json(task)}), 202
+
+
 @blueprint.route("/version", methods=["GET"])
 def api_version():
     """Public build/version probe so clients can verify what's deployed."""
@@ -46,23 +281,6 @@ def api_version():
         "version": ver,
     })
 
-
-def token_auth_required(f):
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        auth_header = request.headers.get("Authorization")
-        if not auth_header or not auth_header.startswith("Bearer "):
-            return jsonify({"status": "error", "message": "Missing or invalid token"}), 401
-        
-        token = auth_header.split(" ")[1]
-        context = engine.validate_api_key(token)
-        if not context:
-            return jsonify({"status": "error", "message": "Invalid token"}), 401
-            
-        # Attach context to request for use in route
-        request.user_context = context
-        return f(*args, **kwargs)
-    return decorated
 
 # --- SSO (AngelClaw as identity provider for integrated apps) ---
 

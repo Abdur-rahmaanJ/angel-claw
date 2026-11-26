@@ -4,11 +4,13 @@
  * Served from the site root (/sw.js) so its scope covers the whole app.
  *
  * Strategy:
- *  - Navigations: network first, cached copy as offline fallback.
+ *  - Navigations: network only, offline page as fallback. Authenticated HTML is
+ *    never written to the cache, so a shared browser cannot replay it later.
  *  - Static assets (own /static + CDN libs): stale-while-revalidate.
  *  - Everything else (chat streams, API calls, non-GET): not intercepted.
  */
-const CACHE_NAME = 'angel-claw-v4';
+const CACHE_NAME = 'angel-claw-v5';
+const CDN_HOSTS = new Set(['cdnjs.cloudflare.com', 'cdn.jsdelivr.net']);
 
 const SHELL_ASSETS = [
   '/static/wing.png',
@@ -50,7 +52,7 @@ self.addEventListener('message', (event) => {
 function isStaticRequest(request, url) {
   return url.origin === self.location.origin
     ? url.pathname.startsWith('/static/')
-    : true; // cross-origin: CDN libraries only
+    : CDN_HOSTS.has(url.hostname); // cross-origin: CDN libraries only
 }
 
 self.addEventListener('fetch', (event) => {
@@ -64,15 +66,7 @@ self.addEventListener('fetch', (event) => {
 
   if (request.mode === 'navigate') {
     event.respondWith(
-      fetch(request)
-        .then((response) => {
-          const copy = response.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(request, copy));
-          return response;
-        })
-        .catch(() =>
-          caches.match(request).then((cached) => cached || caches.match('/static/pwa/offline.html'))
-        )
+      fetch(request).catch(() => caches.match('/static/pwa/offline.html'))
     );
     return;
   }

@@ -605,15 +605,28 @@ def delete_cron_job(name):
 @login_required
 def get_calendar():
     user_context = _build_context()
-    from angel_claw.skills.calendar import list_calendar_events
-
-    result = list_calendar_events(
-        session_id=user_context.channel_identifier, user_id=user_context.user_id
+    from angel_claw.skills.calendar import (
+        _get_calendar_dir,
+        list_calendar_events,
     )
+
+    # Calendar events live per chat session, but the calendar tab and dashboard
+    # show the user's whole calendar, so merge every session file.
+    events = []
+    calendar_dir = _get_calendar_dir(user_context.user_id)
+    for filename in sorted(os.listdir(calendar_dir)):
+        if not filename.endswith(".json"):
+            continue
+        session_id = filename[: -len(".json")]
+        for event in list_calendar_events(
+            session_id=session_id, user_id=user_context.user_id
+        ):
+            events.append({**event, "session": session_id})
+    events.sort(key=lambda event: event.get("start", ""))
+
     if request.args.get("format") == "html":
-        return render_template("agent/partials/_calendar_list.html", events=result)
-    # Return JSON for dashboard; the skill returns a list of event dicts.
-    return jsonify({"upcoming": len(result), "events": result})
+        return render_template("agent/partials/_calendar_list.html", events=events)
+    return jsonify({"upcoming": len(events), "events": events})
 
 
 @blueprint.route("/reminders")

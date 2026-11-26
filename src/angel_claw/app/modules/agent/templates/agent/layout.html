@@ -526,7 +526,6 @@
                 init() {
                     document.documentElement.className = this.theme;
                     this.applyAccent(this.accent);
-                    this.generatePairingToken();
 
                     // Load view from URL hash (default: chat)
                     const validViews = ['dashboard','chat','tasks','calendar','messages','reminders','soul','memory','skills','api','usage','integrations','settings'];
@@ -593,7 +592,11 @@
                 },
 
                 openPairingModal() {
-                    this.generatePairingToken();
+                    // Tokens expire after five minutes, so only mint one when the
+                    // user actually opens the pairing dialog.
+                    this.pairingToken = '---';
+                    this.activeModal = 'pairing';
+                    return this.generatePairingToken();
                 },
 
                 async createNewThread() {

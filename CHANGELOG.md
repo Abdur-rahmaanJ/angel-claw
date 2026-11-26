@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.0] - 2026-11-26
+
+### Added
+
+- Generic Tasks API for mobile/backend clients: create a scheduled prompt, list and filter tasks, fetch one task, cancel it, or run it now. Endpoints live under `/api/tasks` and use the existing API-key bearer auth.
+- `scheduled_tasks` table and migration storing title, prompt, run time, status, attempts, result, error and timestamps.
+- Cron jobs linked to a task now update its status through `running` to `succeeded`/`failed` and store the agent's result on the task.
+
+### Changed
+
+- Task results are returned through `/api/tasks` and are not duplicated into the Messages inbox.
+
 ## [0.17.1] - 2026-11-26
 
 ### Changed

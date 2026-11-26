@@ -65,3 +65,19 @@ def tool_enabled(config: dict, module: str, tool: str) -> bool:
     if isinstance(entry, dict) and entry.get("disabled"):
         return False
     return module_enabled(config, module)
+
+
+def clear_legacy_tool_disables(config: dict, tools) -> None:
+    """Drop old per-tool disables when their module is enabled.
+
+    Older builds exposed both module and individual tool switches. The current
+    Settings page only has module switches, so leaving a hidden tool disable in
+    place makes the enabled module look broken. Field values are untouched.
+    """
+    for tool in tools:
+        entry = config.get(tool)
+        if not isinstance(entry, dict):
+            continue
+        entry.pop("disabled", None)
+        if not entry:
+            config.pop(tool, None)

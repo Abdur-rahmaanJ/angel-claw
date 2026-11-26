@@ -822,6 +822,8 @@ def toggle_skill():
     enabled = data.get("enabled", True)
 
     from angel_claw.utils import get_user_root
+    from angel_claw.skills.defaults import clear_legacy_tool_disables
+    from angel_claw.runtime.registry import TieredSkillRegistry
     import json
 
     user_context = _build_context()
@@ -835,6 +837,12 @@ def toggle_skill():
     if skill_name not in skill_config:
         skill_config[skill_name] = {}
     skill_config[skill_name]["disabled"] = not enabled
+    if enabled:
+        # Older builds also had per-tool switches. The page only shows module
+        # switches now, so clear stale tool disables for this module.
+        registry = TieredSkillRegistry(user_context)
+        tools = registry.manager.get_modules().get(skill_name, {}).get("functions", [])
+        clear_legacy_tool_disables(skill_config, tools)
 
     json.dump(skill_config, open(skill_config_file, "w"))
     return jsonify({"result": "success"})

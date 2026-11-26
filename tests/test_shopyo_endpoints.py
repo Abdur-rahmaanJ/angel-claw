@@ -277,7 +277,9 @@ def test_task_execution_updates_status_without_inbox_duplicate(
         ).get_json()["task"]
 
         with app.app_context():
-            job = cron_manager.jobs[f"task_{created['id']}"]
+            job = next(
+                j for j in cron_manager.jobs.values() if j.task_id == created["id"]
+            )
             asyncio.run(cron_manager._execute_job(job))
             task = db.session.get(ScheduledTask, created["id"])
             assert task.status == "succeeded"
@@ -291,6 +293,170 @@ def test_task_execution_updates_status_without_inbox_duplicate(
         detail = client.get(f"/api/tasks/{created['id']}", headers=headers)
         assert detail.get_json()["task"]["status"] == "succeeded"
         assert detail.get_json()["task"]["result"] == "Result for the scheduled task"
+    finally:
+        cron_manager.persist_dir = old_dir
+        cron_manager.jobs = old_jobs
+        cron_manager.scheduler.remove_all_jobs()
+
+
+def test_enabling_module_clears_legacy_tool_disable(
+    client, auth_user, app, tmp_path, monkeypatch
+):
+    import angel_claw.utils as utils
+
+    monkeypatch.setattr(utils, "get_user_root", lambda user_id: tmp_path)
+    config_file = tmp_path / "skill_config.json"
+    config_file.write_text(
+        json.dumps(
+            {
+                "web": {"disabled": True},
+                "web_read": {"disabled": True, "fields": {"KEEP": "yes"}},
+            }
+        )
+    )
+
+    client.post(
+        "/auth/login",
+        data={"email": "test@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    response = client.post("/skills/toggle", json={"skill": "web", "enabled": True})
+    assert response.status_code == 200
+
+    config = json.loads(config_file.read_text())
+    assert config["web"]["disabled"] is False
+    assert "disabled" not in config["web_read"]
+    assert config["web_read"]["fields"] == {"KEEP": "yes"}
+
+
+def test_superseded_task_attempt_cannot_run_or_overwrite(
+    client, auth_user, app, monkeypatch, tmp_path
+):
+    """An old cached job must not execute after /run creates a new attempt."""
+    from datetime import datetime, timedelta
+    from unittest.mock import AsyncMock
+
+    from angel_claw.cron import cron_manager
+    from angel_claw.models import EngineResponse
+    from init import db
+    from modules.api.models import ScheduledTask
+
+    calls = []
+
+    class FakeEngine:
+        async def execute(self, context, message):
+            calls.append(message)
+            return EngineResponse(content="fresh result")
+
+    monkeypatch.setattr("angel_claw.engine.AngelClawEngine", FakeEngine)
+    monkeypatch.setattr(cron_manager, "_send_proactive_message", AsyncMock())
+
+    client.post(
+        "/auth/login",
+        data={"email": "test@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    key = client.post("/api-key", json={"name": "Stale task"}).get_json()["key"]
+    headers = {"Authorization": f"Bearer {key}"}
+
+    old_dir, old_jobs = cron_manager.persist_dir, cron_manager.jobs
+    cron_manager.persist_dir = str(tmp_path)
+    cron_manager.jobs = {}
+    try:
+        created = client.post(
+            "/api/tasks",
+            headers=headers,
+            json={
+                "prompt": "Run once",
+                "run_at": (datetime.now() + timedelta(hours=1)).isoformat(),
+            },
+        ).get_json()["task"]
+
+        with app.app_context():
+            old_job = next(
+                j for j in cron_manager.jobs.values() if j.task_id == created["id"]
+            )
+
+        rerun = client.post(f"/api/tasks/{created['id']}/run", headers=headers)
+        assert rerun.status_code == 202
+
+        with app.app_context():
+            asyncio.run(cron_manager._execute_job(old_job))
+            task = db.session.get(ScheduledTask, created["id"])
+            assert calls == []
+            assert task.status == "scheduled"
+            assert task.result is None
+
+            current_job = next(
+                j for j in cron_manager.jobs.values() if j.task_id == created["id"]
+            )
+            asyncio.run(cron_manager._execute_job(current_job))
+            db.session.refresh(task)
+            assert calls == ["Run once"]
+            assert task.status == "succeeded"
+            assert task.result == "fresh result"
+    finally:
+        cron_manager.persist_dir = old_dir
+        cron_manager.jobs = old_jobs
+        cron_manager.scheduler.remove_all_jobs()
+
+
+def test_cancelled_task_does_not_execute_cached_job(
+    client, auth_user, app, monkeypatch, tmp_path
+):
+    from datetime import datetime, timedelta
+    from unittest.mock import AsyncMock
+
+    from angel_claw.cron import cron_manager
+    from angel_claw.models import EngineResponse
+    from init import db
+    from modules.api.models import ScheduledTask
+
+    calls = []
+
+    class FakeEngine:
+        async def execute(self, context, message):
+            calls.append(message)
+            return EngineResponse(content="should not run")
+
+    monkeypatch.setattr("angel_claw.engine.AngelClawEngine", FakeEngine)
+    monkeypatch.setattr(cron_manager, "_send_proactive_message", AsyncMock())
+
+    client.post(
+        "/auth/login",
+        data={"email": "test@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    key = client.post("/api-key", json={"name": "Cancelled task"}).get_json()["key"]
+    headers = {"Authorization": f"Bearer {key}"}
+
+    old_dir, old_jobs = cron_manager.persist_dir, cron_manager.jobs
+    cron_manager.persist_dir = str(tmp_path)
+    cron_manager.jobs = {}
+    try:
+        created = client.post(
+            "/api/tasks",
+            headers=headers,
+            json={
+                "prompt": "Do not run",
+                "run_at": (datetime.now() + timedelta(hours=1)).isoformat(),
+            },
+        ).get_json()["task"]
+
+        with app.app_context():
+            cached_job = next(
+                j for j in cron_manager.jobs.values() if j.task_id == created["id"]
+            )
+
+        cancelled = client.post(f"/api/tasks/{created['id']}/cancel", headers=headers)
+        assert cancelled.status_code == 200
+
+        with app.app_context():
+            asyncio.run(cron_manager._execute_job(cached_job))
+            task = db.session.get(ScheduledTask, created["id"])
+            assert calls == []
+            assert task.status == "cancelled"
+            assert task.result is None
     finally:
         cron_manager.persist_dir = old_dir
         cron_manager.jobs = old_jobs

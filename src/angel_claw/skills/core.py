@@ -248,12 +248,13 @@ def schedule_task(
     then with its normal tools, so no site-specific integration is needed.
     """
     try:
-        # Reminder jobs are recognised by this prefix, so a task using it would
-        # be hidden from the Tasks tab and cannot be paused or deleted there.
-        if name.startswith("reminder_"):
+        # Reminder jobs and API tasks are recognised by these prefixes. A
+        # user-chosen name from either namespace could replace another user's
+        # job (jobs are stored by name) or be hidden from the Tasks tab.
+        if name.startswith(("reminder_", "task_")):
             return (
-                "Error: task names starting with 'reminder_' are reserved for "
-                "reminders; choose another name."
+                "Error: task names starting with 'reminder_' or 'task_' are "
+                "reserved; choose another name."
             )
         job = Job(
             name=name,

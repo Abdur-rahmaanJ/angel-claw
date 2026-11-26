@@ -50,6 +50,8 @@ class Job(BaseModel):
     payload: JobPayload
     session_id: str = "default"
     user_id: str = "cli"
+    # API tasks carry their row id so a superseded attempt can be recognised.
+    task_id: Optional[int] = None
     last_run: Optional[datetime] = None
     next_run: Optional[datetime] = None
     enabled: bool = True
@@ -416,10 +418,14 @@ class CronManager:
             return
         await self._execute_job(job)
 
-    def _mark_scheduled_task(self, job_name, status, result=None, error=None):
-        """Reflect a task job's lifecycle in its API record."""
-        if not job_name.startswith("task_"):
-            return
+    def _task_is_current(self, job: Job) -> bool:
+        """True when this job is still the task's active attempt.
+
+        A re-run gives the task a new job name. The old job can still be cached
+        in another worker, so every write and the payload itself check this.
+        """
+        if job.task_id is None:
+            return True
         try:
             from angel_claw.engine.app_context import create_app_context_manager
             from angel_claw.config import settings
@@ -427,13 +433,46 @@ class CronManager:
             ctx_manager = create_app_context_manager(settings)
             with ctx_manager._app_context() as app:
                 if app is None:
-                    return
+                    return False
                 from modules.api.models import ScheduledTask
                 from init import db
 
-                task = ScheduledTask.query.filter_by(job_name=job_name).first()
-                if task is None or task.status == "cancelled":
-                    return
+                task = db.session.get(ScheduledTask, job.task_id)
+                return bool(
+                    task
+                    and task.job_name == job.name
+                    and task.status not in ("cancelled", "succeeded", "failed")
+                )
+        except Exception as e:
+            logger.error(f"Error checking scheduled task for {job.name}: {e}")
+            return False
+
+    def _mark_scheduled_task(self, job: Job, status, result=None, error=None) -> bool:
+        """Reflect a task job's lifecycle in its API record.
+
+        Returns False when this job no longer owns the task, so the caller can
+        stop before executing or overwriting a newer attempt.
+        """
+        if job.task_id is None:
+            return True
+        try:
+            from angel_claw.engine.app_context import create_app_context_manager
+            from angel_claw.config import settings
+
+            ctx_manager = create_app_context_manager(settings)
+            with ctx_manager._app_context() as app:
+                if app is None:
+                    return False
+                from modules.api.models import ScheduledTask
+                from init import db
+
+                task = db.session.get(ScheduledTask, job.task_id)
+                if (
+                    task is None
+                    or task.job_name != job.name
+                    or task.status == "cancelled"
+                ):
+                    return False
                 now = datetime.now()
                 if status == "running":
                     task.status = "running"
@@ -448,13 +487,22 @@ class CronManager:
                     task.error = error
                     task.finished_at = now
                 db.session.commit()
+                return True
         except Exception as e:
-            logger.error(f"Error updating scheduled task {job_name}: {e}")
+            logger.error(f"Error updating scheduled task {job.name}: {e}")
+            return False
 
     async def _execute_job(self, job: Job):
         logger.info(f"Executing job: {job.name}")
+        if not self._task_is_current(job):
+            logger.info(f"Skipping stale or cancelled task job {job.name}")
+            await self.delete_job_async(job.name)
+            return
         job.last_run = datetime.now()
-        self._mark_scheduled_task(job.name, "running")
+        if not self._mark_scheduled_task(job, "running"):
+            logger.info(f"Task job {job.name} was cancelled before it started")
+            await self.delete_job_async(job.name)
+            return
 
         # Handle Reminders persistence
         if job.name.startswith("reminder_"):
@@ -487,7 +535,7 @@ class CronManager:
                 )
                 await self._store_web_message(job, job.payload.content)
                 self._mark_scheduled_task(
-                    job.name, "succeeded", result=job.payload.content
+                    job, "succeeded", result=job.payload.content
                 )
             elif job.payload.kind == "prompt":
                 from .engine import AngelClawEngine
@@ -501,13 +549,23 @@ class CronManager:
                     channel_type="cron",
                     channel_identifier=job.session_id,
                 )
+                # Cancellation or a re-run can land while the agent is
+                # working. Re-check immediately before spending the turn.
+                if not self._task_is_current(job):
+                    logger.info(f"Task job {job.name} was superseded before execution")
+                    await self.delete_job_async(job.name)
+                    return
                 response = await engine.execute(context, job.payload.content)
+                if not self._task_is_current(job):
+                    logger.info(f"Discarding superseded result for {job.name}")
+                    await self.delete_job_async(job.name)
+                    return
                 await self._send_proactive_message(
                     response.content, job.user_id, job.session_id
                 )
                 await self._store_web_message(job, response.content)
                 self._mark_scheduled_task(
-                    job.name, "succeeded", result=response.content
+                    job, "succeeded", result=response.content
                 )
             elif job.payload.kind == "skill":
                 from .engine import AngelClawEngine
@@ -539,7 +597,7 @@ class CronManager:
                     )
         except Exception as e:
             logger.error(f"Error executing job {job.name}: {e}")
-            self._mark_scheduled_task(job.name, "failed", error=str(e))
+            self._mark_scheduled_task(job, "failed", error=str(e))
 
         # Recalculate next run or disable if one-shot
         if job.schedule.kind in ["at", "in"]:
@@ -551,15 +609,16 @@ class CronManager:
         await self.save_job_async(job)
 
     async def _store_web_message(self, job: Job, message: str):
-        """Keep a scheduled task's result in the web inbox.
+        """Keep non-task scheduled results in the web inbox.
 
         Bridge sessions are delivered by their own proactive handler; web
-        sessions have none, so without this a prompt scheduled for next month
-        would run and the result would disappear. Reminders are skipped on
-        purpose: the dashboard announces those and the Messages tab must not
-        show them a second time.
+        sessions have none, so a scheduled prompt's result would otherwise
+        disappear. Reminders are announced by the dashboard, and API tasks
+        return their result through /api/tasks, so both are skipped.
         """
         if not message or job.name.startswith("reminder_"):
+            return
+        if job.name.startswith("task_"):
             return
         if "@" in (job.session_id or ""):
             return
@@ -572,14 +631,8 @@ class CronManager:
                 if app is None:
                     return
                 from modules.agent.models import InternalMessage
-                from modules.api.models import ScheduledTask
                 from shopyo_auth.models import User
                 from init import db
-
-                # API tasks expose their result through /api/tasks; adding an
-                # inbox message too would duplicate it.
-                if ScheduledTask.query.filter_by(job_name=job.name).first():
-                    return
 
                 user_key = (
                     int(job.user_id) if str(job.user_id).isdigit() else job.user_id

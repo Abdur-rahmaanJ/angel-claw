@@ -115,6 +115,7 @@ def _task_job(task, run_at):
         payload=JobPayload(kind="prompt", content=task.prompt),
         session_id=task.session_id,
         user_id=task.user_id,
+        task_id=task.id,
     )
 
 
@@ -148,7 +149,9 @@ def create_task():
     )
     db.session.add(task)
     db.session.flush()
-    task.job_name = f"task_{task.id}"
+    # A fresh name per attempt: an older job that is still cached in another
+    # worker must not be able to write into this task's current record.
+    task.job_name = f"task_{task.id}_{uuid4().hex[:8]}"
     db.session.commit()
 
     try:
@@ -243,9 +246,9 @@ def run_task_now(task_id):
         return jsonify({"status": "error", "message": "task not found"}), 404
     if task.status == "running":
         return jsonify({"status": "error", "message": "task is already running"}), 409
-    if not task.job_name:
-        task.job_name = f"task_{task.id}"
 
+    old_job_name = task.job_name
+    task.job_name = f"task_{task.id}_{uuid4().hex[:8]}"
     run_at = datetime.now() + timedelta(seconds=2)
     task.run_at = run_at
     task.status = "scheduled"
@@ -254,6 +257,11 @@ def run_task_now(task_id):
     task.started_at = None
     task.finished_at = None
     db.session.commit()
+    if old_job_name:
+        try:
+            cron_manager.delete_job(old_job_name)
+        except Exception as e:
+            logger.warning(f"Could not remove old task job {old_job_name}: {e}")
 
     try:
         cron_manager.save_job(_task_job(task, run_at))
@@ -935,6 +943,13 @@ def api_toggle_skill():
         skill_config[skill_name] = {}
 
     skill_config[skill_name]["disabled"] = not enabled
+    if enabled:
+        # Legacy per-tool switches are no longer shown in Settings; clear them
+        # so enabling the module actually restores all of its tools.
+        from angel_claw.skills.defaults import clear_legacy_tool_disables
+
+        tools = registry.manager.get_modules().get(skill_name, {}).get("functions", [])
+        clear_legacy_tool_disables(skill_config, tools)
 
     with open(skill_config_file, "w") as f:
         json.dump(skill_config, f)

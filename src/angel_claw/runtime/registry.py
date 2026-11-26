@@ -20,6 +20,11 @@ from ..config import settings
 
 logger = logging.getLogger("angel-claw-registry")
 
+# These tools mutate this process's runtime (or describe it) and need the host's
+# live registry; a Docker child has neither the user's runtime nor its loaded
+# module set.
+HOST_SIDE_TOOLS = frozenset({"list_skill_modules", "load_skill_tools"})
+
 
 class TieredSkillRegistry:
     """Manages global and user-specific skills with execution sandboxing (Threads or Docker)."""
@@ -166,7 +171,7 @@ class TieredSkillRegistry:
                 if "is_admin" not in arguments:
                     arguments["is_admin"] = self.context.is_admin
 
-            if settings.docker_sandboxing_enabled:
+            if settings.docker_sandboxing_enabled and name not in HOST_SIDE_TOOLS:
                 result = await self._call_in_docker(name, arguments)
             else:
                 sandboxed_func = self._make_sandboxed(func)

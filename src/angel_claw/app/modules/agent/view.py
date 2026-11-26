@@ -206,7 +206,16 @@ def chat():
         def generate():
             yield from run_async_streaming(user_context, message, use_global=use_global)
 
-        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={
+                # Proxies must not buffer the stream or tokens arrive in bursts;
+                # the browser must not cache or reuse the event stream.
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     response = async_to_sync(engine.execute)(
         user_context, message, use_global=use_global

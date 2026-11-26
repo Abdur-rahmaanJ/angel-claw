@@ -789,10 +789,14 @@ def get_skill_config(skill_name):
     fields = {}
     if skill_config_file.exists():
         try:
-            config = json.load(open(skill_config_file))
-            fields = (config.get(skill_name) or {}).get("fields") or {}
-        except Exception:
-            fields = {}
+            with open(skill_config_file) as f:
+                config = json.load(f)
+        except Exception as e:
+            # Returning empty fields would open a blank (editable) form, and
+            # saving it would overwrite credentials we merely failed to read.
+            logger.error(f"Error reading skill config: {e}")
+            return jsonify({"error": "Could not read saved settings"}), 500
+        fields = (config.get(skill_name) or {}).get("fields") or {}
     return jsonify({"fields": fields})
 
 

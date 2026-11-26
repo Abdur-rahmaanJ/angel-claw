@@ -286,15 +286,28 @@
                     }
                 },
                 async openConfig(skill) {
+                    const name = skill.name;
                     this.configSkill = skill;
-                    const defs = this.skillFieldDefs[skill.name] || [];
+                    const defs = this.skillFieldDefs[name] || [];
                     // Saved values (possibly credentials) are fetched on demand
                     // instead of being embedded in the dashboard HTML.
                     let saved = {};
                     try {
-                        const r = await fetch(`/skills/config/${encodeURIComponent(skill.name)}`);
-                        if (r.ok) saved = (await r.json()).fields || {};
-                    } catch(e) { /* fall back to empty fields */ }
+                        const r = await fetch(`/skills/config/${encodeURIComponent(name)}`);
+                        // A blank form would let Save overwrite settings that
+                        // exist but could not be read, so refuse to open.
+                        if (!r.ok) throw new Error();
+                        saved = (await r.json()).fields || {};
+                    } catch(e) {
+                        if (this.configSkill?.name === name) {
+                            this.configSkill = null;
+                            Alpine.store('ui').toast('Could not load saved skill settings', 'error');
+                        }
+                        return;
+                    }
+                    // A later click may have opened another skill while this
+                    // request was in flight; its fields must not be replaced.
+                    if (this.configSkill?.name !== name) return;
                     this.configFields = defs.map(f => ({
                         name: f.name,
                         type: f.type || 'text',

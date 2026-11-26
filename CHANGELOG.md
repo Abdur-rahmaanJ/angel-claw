@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.1] - 2026-11-26
+
+### Changed
+
+- Running `angel-claw` with no arguments (or `python -m angel_claw`) now prints version, data directory, database/model status and the next commands, instead of silently starting the FastAPI gateway. Use `angel-claw gateway` for the API and `angel-claw serve` for the dashboard.
+- `angel-claw --help` lists each command with a description; an unknown command shows the same status panel and exits non-zero.
+- `angel-claw serve` no longer blocks on the setup wizard when it has no TTY (systemd/Docker); it prints the missing `MODEL_KEY` instruction and continues.
+- `python -m angel_claw.main` and the repository `main.py` now delegate to the CLI.
+
 ## [0.17.0] - 2026-11-26
 
 ### Added

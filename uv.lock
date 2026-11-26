@@ -197,7 +197,7 @@ wheels = [
 
 [[package]]
 name = "angel-claw"
-version = "0.17.0"
+version = "0.17.1"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },

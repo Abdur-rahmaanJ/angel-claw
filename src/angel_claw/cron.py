@@ -449,6 +449,7 @@ class CronManager:
                 await self._send_proactive_message(
                     job.payload.content, job.user_id, job.session_id
                 )
+                await self._store_web_message(job, job.payload.content)
             elif job.payload.kind == "prompt":
                 from .engine import AngelClawEngine
                 from .models import UserContext
@@ -465,6 +466,7 @@ class CronManager:
                 await self._send_proactive_message(
                     response.content, job.user_id, job.session_id
                 )
+                await self._store_web_message(job, response.content)
             elif job.payload.kind == "skill":
                 from .engine import AngelClawEngine
                 from .models import UserContext
@@ -504,6 +506,49 @@ class CronManager:
             self._calculate_next_run(job)
 
         await self.save_job_async(job)
+
+    async def _store_web_message(self, job: Job, message: str):
+        """Keep a scheduled task's result in the web inbox.
+
+        Bridge sessions are delivered by their own proactive handler; web
+        sessions have none, so without this a prompt scheduled for next month
+        would run and the result would disappear. Reminders are skipped on
+        purpose: the dashboard announces those and the Messages tab must not
+        show them a second time.
+        """
+        if not message or job.name.startswith("reminder_"):
+            return
+        if "@" in (job.session_id or ""):
+            return
+        try:
+            from angel_claw.engine.app_context import create_app_context_manager
+            from angel_claw.config import settings
+
+            ctx_manager = create_app_context_manager(settings)
+            with ctx_manager._app_context() as app:
+                if app is None:
+                    return
+                from modules.agent.models import InternalMessage
+                from shopyo_auth.models import User
+                from init import db
+
+                user_key = (
+                    int(job.user_id) if str(job.user_id).isdigit() else job.user_id
+                )
+                user = db.session.get(User, user_key)
+                if not user:
+                    return
+                db.session.add(
+                    InternalMessage(
+                        sender_id="system",
+                        recipient_id=str(user.id),
+                        recipient_email=user.email,
+                        content=f"⏰ {message}",
+                    )
+                )
+                db.session.commit()
+        except Exception as e:
+            logger.error(f"Error storing scheduled task result: {e}", exc_info=True)
 
     async def _send_proactive_message(
         self, message: str, user_id: str, session_id: str = "default"

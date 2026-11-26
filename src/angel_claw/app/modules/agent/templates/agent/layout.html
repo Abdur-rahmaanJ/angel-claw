@@ -83,7 +83,11 @@
                 setTimeout(() => {
                     icon.className = oldClass;
                 }, 2000);
-            }).catch(() => {});
+            }).catch(() => {
+                // Clipboard access is blocked on insecure origins and by some
+                // browser settings; tell the user instead of failing silently.
+                Alpine.store('ui')?.toast('Could not copy to clipboard', 'error');
+            });
         };
 
         // Simple view loader using fetch
@@ -96,6 +100,15 @@
                 const res = await fetch(`/view/${viewName}`, {
                     headers: { 'X-CSRFToken': token || '' }
                 });
+                if (res.redirected || res.status === 401) {
+                    // Session expired: reload so the server can show the login page.
+                    location.reload();
+                    return;
+                }
+                if (!res.ok) {
+                    Alpine.store('ui')?.toast('Could not load view', 'error');
+                    return;
+                }
                 if (res.ok) {
                     const html = await res.text();
                     container.innerHTML = html;
@@ -154,7 +167,7 @@
                     this.canInstall = false;
                 }
             }));
-            Alpine.data('dashboardData', () => ({                todosCount: '--', todosTotal: 0, eventsCount: '--', eventsDays: 7,
+            Alpine.data('dashboardData', () => ({                todosCount: '--', todosTotal: 0, eventsCount: '--', eventsDays: 365,
                 credits: { balance: 0, limit: 1000, lifetime_spent: 0 },
                 creditsError: false, todosError: false, eventsError: false,
                 async init() { await Promise.all([this.loadCredits(), this.loadTodos(), this.loadEvents()]); },
@@ -168,10 +181,10 @@
                 async init() { await Promise.all([this.loadTodos(), this.loadJobs()]); },
                 async loadTodos() { this.error = false; try { const r = await fetch('/todos?format=json'); if (!r.ok) throw new Error(); const d = await r.json(); this.todos = d.todos || []; } catch(e) { this.error = true; } finally { this.loading = false; } },
                 async loadJobs() { try { const r = await fetch('/cron/jobs'); if (!r.ok) throw new Error(); const d = await r.json(); this.jobs = d.jobs || []; } catch(e) { this.jobs = []; } },
-                async toggleTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/toggle`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not update task', 'error'); } },
-                async deleteTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
+                async toggleTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { const r = await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/toggle`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not update task', 'error'); } },
+                async deleteTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { const r = await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
                 async toggleJob(job) { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/cron/jobs/${encodeURIComponent(job.name)}/toggle`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); const d = await r.json().catch(() => ({})); if (!r.ok) { Alpine.store('ui').toast(d.error || 'Could not update task', 'error'); return; } await this.loadJobs(); },
-                async deleteJob(job) { const token = document.getElementById('csrf_token')?.value; try { await fetch(`/cron/jobs/${encodeURIComponent(job.name)}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); await this.loadJobs(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
+                async deleteJob(job) { const token = document.getElementById('csrf_token')?.value; try { const r = await fetch(`/cron/jobs/${encodeURIComponent(job.name)}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); await this.loadJobs(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
                 formatDate(ts) { if (!ts) return '—'; try { return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) { return ts; } }
             }));
 
@@ -185,8 +198,8 @@
                 async init() { try { const r = await fetch('/messages?format=json'); if (!r.ok) throw new Error(); const d = await r.json(); this.messages = d.messages || []; } catch(e) { this.error = true; } finally { this.loading = false; } },
                 formatDate(ts) { if (!ts) return ''; try { return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) { return ts; } },
                 openMessage(msg) { this.selectedMessage = msg; this.modalOpen = true; },
-                async markAsRead(id) { if (!id) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/messages/mark-read/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); const msg = this.messages.find(m => m.id === id); if (msg) msg.is_read = true; } catch(e) { console.error(e); } },
-                async deleteMsg(id) { if (!id) return; if (!await Alpine.store('ui').confirm({ title: 'Delete message?', danger: true, confirmText: 'Delete' })) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/messages/delete/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.messages = this.messages.filter(m => m.id !== id); this.modalOpen = false; Alpine.store('ui').toast('Message deleted'); } catch(e) { console.error(e); Alpine.store('ui').toast('Failed to delete message', 'error'); } }
+                async markAsRead(id) { if (!id) return; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/messages/mark-read/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); const msg = this.messages.find(m => m.id === id); if (msg) msg.is_read = true; } catch(e) { Alpine.store('ui').toast('Could not mark message as read', 'error'); } },
+                async deleteMsg(id) { if (!id) return; if (!await Alpine.store('ui').confirm({ title: 'Delete message?', danger: true, confirmText: 'Delete' })) return; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/messages/delete/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); this.messages = this.messages.filter(m => m.id !== id); this.modalOpen = false; Alpine.store('ui').toast('Message deleted'); } catch(e) { Alpine.store('ui').toast('Failed to delete message', 'error'); } }
             }));
 
             Alpine.data('apiData', () => ({
@@ -211,7 +224,7 @@
                     } catch(e) { Alpine.store('ui').toast(e.message || 'Failed to create key', 'error'); }
                     finally { this.creating = false; }
                 },
-                async revokeKey(id) { if (!id) return; if (!await Alpine.store('ui').confirm({ title: 'Revoke API key?', message: 'Apps using this key will lose access immediately.', danger: true, confirmText: 'Revoke' })) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/api-key/revoke/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.apiKeys = this.apiKeys.filter(k => k.id !== id); Alpine.store('ui').toast('API key revoked'); } catch(e) { console.error(e); Alpine.store('ui').toast('Failed to revoke key', 'error'); } }
+                async revokeKey(id) { if (!id) return; if (!await Alpine.store('ui').confirm({ title: 'Revoke API key?', message: 'Apps using this key will lose access immediately.', danger: true, confirmText: 'Revoke' })) return; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/api-key/revoke/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); this.apiKeys = this.apiKeys.filter(k => k.id !== id); Alpine.store('ui').toast('API key revoked'); } catch(e) { Alpine.store('ui').toast('Failed to revoke key', 'error'); } }
             }));
 
             Alpine.data('soulData', () => ({
@@ -272,10 +285,16 @@
                         });
                     }
                 },
-                openConfig(skill) {
+                async openConfig(skill) {
                     this.configSkill = skill;
                     const defs = this.skillFieldDefs[skill.name] || [];
-                    const saved = this.config[skill.name]?.fields || {};
+                    // Saved values (possibly credentials) are fetched on demand
+                    // instead of being embedded in the dashboard HTML.
+                    let saved = {};
+                    try {
+                        const r = await fetch(`/skills/config/${encodeURIComponent(skill.name)}`);
+                        if (r.ok) saved = (await r.json()).fields || {};
+                    } catch(e) { /* fall back to empty fields */ }
                     this.configFields = defs.map(f => ({
                         name: f.name,
                         type: f.type || 'text',
@@ -288,11 +307,17 @@
                     if (!this.configSkill) return;
                     const fields = this.configFields.reduce((acc, f) => { acc[f.name] = f.value; return acc; }, {});
                     const token = document.getElementById('csrf_token')?.value;
-                    await fetch('/skills/config', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' },
-                        body: JSON.stringify({ skill: this.configSkill.name, fields })
-                    });
+                    try {
+                        const r = await fetch('/skills/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' },
+                            body: JSON.stringify({ skill: this.configSkill.name, fields })
+                        });
+                        if (!r.ok) throw new Error();
+                    } catch(e) {
+                        Alpine.store('ui').toast('Could not save skill settings', 'error');
+                        return;
+                    }
                     this.configModal = false;
                 },
                 async uploadSkill(event) {
@@ -323,7 +348,7 @@
                 async init() { await this.loadMemories(); },
                 async loadMemories() { this.error = false; try { const sid = Alpine.store('viewManager')?.currentSessionId || 'Thread 1'; const r = await fetch(`/chat/memories?session_id=${encodeURIComponent(sid)}`); if (!r.ok) throw new Error(); const d = await r.json(); this.memories = d.memories || []; } catch(e) { this.error = true; } finally { this.loading = false; } },
                 confirmDelete(mem) { this.deleteTarget = mem; this.deleteModal = true; },
-                async executeDelete() { if (!this.deleteTarget) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/chat/memories/delete/${this.deleteTarget.id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.memories = this.memories.filter(m => m.id !== this.deleteTarget.id); } catch(e) { console.error(e); } finally { this.deleteModal = false; this.deleteTarget = null; } }
+                async executeDelete() { if (!this.deleteTarget) return; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/chat/memories/delete/${this.deleteTarget.id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); this.memories = this.memories.filter(m => m.id !== this.deleteTarget.id); } catch(e) { Alpine.store('ui').toast('Could not delete memory', 'error'); } finally { this.deleteModal = false; this.deleteTarget = null; } }
             }));
 
             Alpine.data('threadsData', () => ({
@@ -351,6 +376,14 @@
                 streamingContent: '',
                 devLogOpen: false,
                 logs: [],
+                streamAbort: null,
+
+                cancelStream() {
+                    if (!this.streamAbort) return;
+                    this.streamAbort.abort();
+                    this.streamAbort = null;
+                    this.streamingContent = '';
+                },
 
                 async loadHistory() {
                     const sid = Alpine.store('viewManager')?.currentSessionId || "Thread 1";
@@ -376,6 +409,7 @@
                     this.userInput = '';
                     if (viewStore) viewStore.isStreaming = true;
                     this.streamingContent = '';
+                    this.streamAbort = new AbortController();
                     this.$nextTick(() => this.scrollToBottom(true));
 
                     try {
@@ -384,6 +418,7 @@
                         const res = await fetch('/chat', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream', 'X-CSRFToken': token },
+                            signal: this.streamAbort.signal,
                             body: JSON.stringify({ 
                                 message: msg, 
                                 session_id: sid,
@@ -391,10 +426,34 @@
                             })
                         });
 
+                        if (res.redirected || res.status === 401) {
+                            throw new Error('Your session expired. Reload the page to sign in again.');
+                        }
                         if (!res.ok) throw new Error('Failed to send message');
+                        if (!(res.headers.get('content-type') || '').includes('text/event-stream')) {
+                            throw new Error('Your session expired. Reload the page to sign in again.');
+                        }
 
                         const reader = res.body.getReader();
                         const decoder = new TextDecoder();
+                        let buffer = '';
+
+                        // A data line can be split across network reads, so only
+                        // consume complete lines and keep the remainder buffered.
+                        const handleLine = (line) => {
+                            const trimmed = line.trim();
+                            if (!trimmed.startsWith('data:')) return;
+                            const payload = trimmed.slice(5).trim();
+                            if (!payload || payload === '[DONE]') return;
+                            let data;
+                            try { data = JSON.parse(payload); } catch (e) { return; }
+                            if (!data.chunk) return;
+                            if (data.chunk.startsWith('[TOOL_CALL:')) {
+                                this.logs.push(`<span class="text-accent">Executing:</span> ${window.escapeHtml(data.chunk.replace('[TOOL_CALL:', '').replace(']', ''))}`);
+                            } else {
+                                this.streamingContent += data.chunk;
+                            }
+                        };
 
                         while (true) {
                             const { value, done } = await reader.read();
@@ -403,35 +462,38 @@
                             const container = this.$refs.messageContainer;
                             const wasAtBottom = container ? (container.scrollHeight - container.scrollTop - container.clientHeight < 20) : false;
 
-                            const chunk = decoder.decode(value);
-                            const lines = chunk.split('\n');
-                            for (const line of lines) {
-                                const trimmed = line.trim();
-                                if (trimmed.startsWith('data: ')) {
-                                    try {
-                                        const data = JSON.parse(trimmed.slice(6));
-                                        if (data.chunk) {
-                                            if (data.chunk.startsWith('[TOOL_CALL:')) {
-                                                this.logs.push(`<span class="text-accent">Executing:</span> ${window.escapeHtml(data.chunk.replace('[TOOL_CALL:', '').replace(']', ''))}`);
-                                            } else {
-                                                this.streamingContent += data.chunk;
-                                            }
-                                        }
-                                    } catch (e) {}
-                                }
-                            }
-                            
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop();
+                            lines.forEach(handleLine);
+
                             if (wasAtBottom && container) {
                                 container.scrollTop = container.scrollHeight;
                             }
                         }
-                        
-                        this.messages.push({ role: 'assistant', content: this.streamingContent });
+                        buffer += decoder.decode();
+                        if (buffer.trim()) handleLine(buffer);
+
+                        if (this.streamingContent.trim()) {
+                            this.messages.push({ role: 'assistant', content: this.streamingContent });
+                        }
                         this.streamingContent = '';
                         document.body.dispatchEvent(new CustomEvent('refresh-threads'));
                     } catch (err) {
-                        this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
+                        if (err.name === 'AbortError') {
+                            // The user left this thread; drop the partial reply
+                            // instead of appending it to another conversation.
+                            this.streamingContent = '';
+                        } else {
+                            if (this.streamingContent.trim()) {
+                                this.messages.push({ role: 'assistant', content: this.streamingContent });
+                                this.streamingContent = '';
+                            }
+                            this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
+                            Alpine.store('ui').toast(err.message, 'error');
+                        }
                     } finally {
+                        this.streamAbort = null;
                         if (viewStore) viewStore.isStreaming = false;
                         this.$nextTick(() => {
                             const container = this.$refs.messageContainer;
@@ -496,18 +558,26 @@
                 pairingToken: '---',
                 notificationTimer: null,
                 unreadMessages: 0,
+                notifiedMessageIds: new Set(),
+                notifiedReminderIds: new Set(),
 
                 init() {
                     document.documentElement.className = this.theme;
                     this.applyAccent(this.accent);
-                    this.generatePairingToken();
 
                     // Load view from URL hash (default: chat)
                     const validViews = ['dashboard','chat','tasks','calendar','messages','reminders','soul','memory','skills','api','usage','integrations','settings'];
                     const hashView = (location.hash || '').replace(/^#\/?/, '').split('/')[0];
                     this.activeView = validViews.includes(hashView) ? hashView : 'chat';
                     loadView(this.activeView).then(() => {
-                        this.createNewThread();
+                        // Keep the conversation the user was in before a reload
+                        // instead of silently starting a brand new thread.
+                        const storedThread = localStorage.getItem('current-session-id');
+                        if (storedThread) {
+                            this.switchToThread(storedThread);
+                        } else {
+                            this.createNewThread();
+                        }
                     });
                     window.addEventListener('hashchange', () => {
                         const v = (location.hash || '').replace(/^#\/?/, '').split('/')[0];
@@ -520,14 +590,45 @@
 
                 startNotificationPoller() {
                     if (this.notificationTimer) clearInterval(this.notificationTimer);
-                    this.notificationTimer = setInterval(() => this.checkNotifications(), 30000);
+                    this.notificationTimer = setInterval(() => {
+                        this.checkNotifications();
+                        this.checkReminderNotifications();
+                    }, 30000);
                     // Also check immediately
                     this.checkNotifications();
+                    this.checkReminderNotifications();
+                },
+
+                async checkReminderNotifications() {
+                    try {
+                        const r = await fetch('/reminders?format=json');
+                        if (!r.ok) return;
+                        const d = await r.json();
+                        const now = Date.now();
+                        for (const reminder of d.reminders || []) {
+                            if (!reminder.is_sent) continue;
+                            const due = Date.parse(reminder.remind_at);
+                            // Only announce reminders that just fired; older ones
+                            // were already seen before this page was opened.
+                            if (Number.isNaN(due) || now - due > 5 * 60 * 1000) continue;
+                            if (this.notifiedReminderIds.has(reminder.id)) continue;
+                            this.notifiedReminderIds.add(reminder.id);
+                            Alpine.store('ui').toast('🔔 ' + reminder.message);
+                            if (Notification.permission === 'granted') {
+                                new Notification('Angel Claw Reminder', {
+                                    body: reminder.message,
+                                    icon: '/static/wing.png',
+                                    tag: 'angelclaw-reminder-' + reminder.id
+                                });
+                            }
+                        }
+                    } catch(e) { console.error('Reminder notification check error', e); }
                 },
 
                 async checkNotifications() {
                     try {
                         const r = await fetch('/messages?format=json');
+                        if (!r.ok) return;
                         const d = await r.json();
                         const unread = (d.messages || []).filter(m => !m.is_read);
                         this.unreadMessages = unread.length;
@@ -535,7 +636,10 @@
                         if (Notification.permission !== "granted") return;
 
                         for (const msg of unread) {
-                            // Show notification (keep unread so badge stays visible in UI)
+                            // Notify once per message per page load; the poll runs
+                            // every 30s and unread items stay unread on purpose.
+                            if (this.notifiedMessageIds.has(msg.id)) continue;
+                            this.notifiedMessageIds.add(msg.id);
                             new Notification("Angel Claw Reminder", {
                                 body: msg.content.replace('🔔 REMINDER: ', ''),
                                 icon: "/static/wing.png",
@@ -560,7 +664,11 @@
                 },
 
                 openPairingModal() {
-                    this.generatePairingToken();
+                    // Tokens expire after five minutes, so only mint one when the
+                    // user actually opens the pairing dialog.
+                    this.pairingToken = '---';
+                    this.activeModal = 'pairing';
+                    return this.generatePairingToken();
                 },
 
                 async createNewThread() {

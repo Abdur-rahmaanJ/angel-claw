@@ -63,6 +63,16 @@
           {% endif %}
         {% endwith %}
 
+        {% if form.errors %}
+            {% for field, errors in form.errors.items() %}
+                {% for error in errors %}
+                    <div class="notification is-danger is-light py-2 px-4 mb-4" style="font-size: 0.85rem;">
+                        {{ error }}
+                    </div>
+                {% endfor %}
+            {% endfor %}
+        {% endif %}
+
         <form method="POST" action="{{ url_for('shopyo_auth.login') }}">
             {{ form.hidden_tag() }}
             

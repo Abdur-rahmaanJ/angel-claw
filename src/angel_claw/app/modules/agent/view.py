@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime
 
+from flask import abort
 from flask import render_template
 from flask import request
 from flask import jsonify
@@ -106,12 +107,20 @@ def index():
     if not isinstance(skill_config, dict):
         skill_config = {}
 
+    # Only expose enable/disable flags: the file also holds skill credentials
+    # and this dict is serialized into the dashboard HTML.
+    skill_status = {
+        name: {"disabled": bool(cfg.get("disabled"))}
+        for name, cfg in skill_config.items()
+        if isinstance(cfg, dict)
+    }
+
     context.update(
         {
             "history": history,
             "channels": channel_types,
             "credit_info": credit_info,
-            "skill_config": skill_config,
+            "skill_config": skill_status,
         }
     )
     return render_template("{}/index.html".format(mhelp.info["module_name"]), **context)
@@ -197,7 +206,16 @@ def chat():
         def generate():
             yield from run_async_streaming(user_context, message, use_global=use_global)
 
-        return Response(stream_with_context(generate()), mimetype="text/event-stream")
+        return Response(
+            stream_with_context(generate()),
+            mimetype="text/event-stream",
+            headers={
+                # Proxies must not buffer the stream or tokens arrive in bursts;
+                # the browser must not cache or reuse the event stream.
+                "Cache-Control": "no-cache",
+                "X-Accel-Buffering": "no",
+            },
+        )
 
     response = async_to_sync(engine.execute)(
         user_context, message, use_global=use_global
@@ -211,9 +229,28 @@ def chat():
     )
 
 
+VIEW_NAMES = {
+    "dashboard",
+    "chat",
+    "tasks",
+    "calendar",
+    "messages",
+    "reminders",
+    "soul",
+    "memory",
+    "skills",
+    "api",
+    "usage",
+    "integrations",
+    "settings",
+}
+
+
 @blueprint.route("/view/<view_name>")
 @login_required
 def get_view(view_name):
+    if view_name not in VIEW_NAMES:
+        abort(404)
     context = mhelp.context()
     template = f"agent/views/{view_name}.html"
     return render_template(template, **context)
@@ -455,12 +492,12 @@ def get_todos():
         session_id = filename[: -len(".json")]
         for todo in _load_todos(session_id, user_id=user_context.user_id):
             todos.append({**todo, "session": session_id})
-    pending = result.count("⬜")
-    total = result.count("⬜") + result.count("✅")
+    # Count every session, matching the merged list the tasks tab renders.
+    pending = len([t for t in todos if not t.get("completed")])
     return jsonify(
         {
             "pending": pending,
-            "total": max(total, 1),
+            "total": len(todos),
             "todos": todos,
         }
     )
@@ -508,9 +545,24 @@ def get_cron_jobs():
     from angel_claw.cron import cron_manager
 
     user_id = str(current_user.id)
+
+    # Reminders are backed by one-shot jobs but belong to the Reminders tab;
+    # showing them here too would duplicate every reminder.
+    from init import db
+    from modules.agent.models import Reminder
+
+    reminder_jobs = {
+        name
+        for (name,) in db.session.query(Reminder.job_name)
+        .filter(Reminder.user_id == user_id, Reminder.job_name.isnot(None))
+        .all()
+    }
+
     jobs = []
     for job in cron_manager.jobs.values():
         if job.user_id != user_id:
+            continue
+        if job.name.startswith("reminder_") or job.name in reminder_jobs:
             continue
         jobs.append(
             {
@@ -577,17 +629,28 @@ def delete_cron_job(name):
 @login_required
 def get_calendar():
     user_context = _build_context()
-    from angel_claw.skills.calendar import list_calendar_events
-
-    result = list_calendar_events(
-        session_id=user_context.channel_identifier, user_id=user_context.user_id
+    from angel_claw.skills.calendar import (
+        _get_calendar_dir,
+        list_calendar_events,
     )
+
+    # Calendar events live per chat session, but the calendar tab and dashboard
+    # show the user's whole calendar, so merge every session file.
+    events = []
+    calendar_dir = _get_calendar_dir(user_context.user_id)
+    for filename in sorted(os.listdir(calendar_dir)):
+        if not filename.endswith(".json"):
+            continue
+        session_id = filename[: -len(".json")]
+        for event in list_calendar_events(
+            session_id=session_id, user_id=user_context.user_id
+        ):
+            events.append({**event, "session": session_id})
+    events.sort(key=lambda event: event.get("start", ""))
+
     if request.args.get("format") == "html":
-        return render_template("agent/partials/_calendar_list.html", events=result)
-    # Return JSON for dashboard
-    lines = result.split("\n") if isinstance(result, str) else result
-    upcoming = len([l for l in lines if l.strip() and not l.startswith("##")])
-    return jsonify({"upcoming": upcoming, "events": result})
+        return render_template("agent/partials/_calendar_list.html", events=events)
+    return jsonify({"upcoming": len(events), "events": events})
 
 
 @blueprint.route("/reminders")
@@ -686,19 +749,6 @@ def get_skills():
     registry = TieredSkillRegistry(user_context)
     skills = registry.manager.get_skill_details()
 
-    # Get user skill config from file
-    from angel_claw.utils import get_user_root
-    import json
-
-    user_root = get_user_root(user_context.user_id)
-    skill_config_file = user_root / "skill_config.json"
-    skill_config = {}
-    if skill_config_file.exists():
-        try:
-            skill_config = json.load(open(skill_config_file))
-        except Exception:
-            pass
-
     # Get skill field definitions from skill modules
     skill_field_defs = {}
     for skill_name in skills.keys():
@@ -719,10 +769,28 @@ def get_skills():
     return jsonify(
         {
             "skills": skills_list,
-            "skill_config": skill_config,
             "skill_field_defs": skill_field_defs,
         }
     )
+
+
+@blueprint.route("/skills/config/<skill_name>")
+@login_required
+def get_skill_config(skill_name):
+    """Return the saved fields for one skill to the authenticated owner."""
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_context = _build_context()
+    skill_config_file = get_user_root(user_context.user_id) / "skill_config.json"
+    fields = {}
+    if skill_config_file.exists():
+        try:
+            config = json.load(open(skill_config_file))
+            fields = (config.get(skill_name) or {}).get("fields") or {}
+        except Exception:
+            fields = {}
+    return jsonify({"fields": fields})
 
 
 @blueprint.route("/skills/toggle", methods=["POST"])

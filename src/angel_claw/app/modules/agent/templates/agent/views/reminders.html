@@ -103,11 +103,10 @@ function remindersData() {
                     method: 'POST',
                     headers: { 'X-CSRFToken': token || '' }
                 });
-                if (res.ok) {
-                    this.reminders = this.reminders.filter(r => r.id !== id);
-                }
+                if (!res.ok) throw new Error();
+                this.reminders = this.reminders.filter(r => r.id !== id);
             } catch(e) {
-                console.error(e);
+                Alpine.store('ui').toast('Could not delete reminder', 'error');
             }
         }
     }

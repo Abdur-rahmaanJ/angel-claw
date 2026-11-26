@@ -39,63 +39,13 @@
                 </div>
                 <div class="flex items-center gap-3">
                     <template x-if="!integrations.telegram?.connected">
-                        <button @click="$store.viewManager.activeModal = 'telegram-pairing'" class="btn btn-primary text-sm">Connect</button>
+                        <button @click="$store.viewManager.openPairingModal('telegram')" class="btn btn-primary text-sm">Connect</button>
                     </template>
                     <span x-show="integrations.telegram?.connected" class="text-xs px-3 py-1 rounded-full bg-blue-500/20 text-blue-400">Connected</span>
+                    <span x-show="integrations.telegram?.connected && !bridgeOnline" class="text-xs px-3 py-1 rounded-full bg-amber-500/20 text-amber-500" title="Messages will not be delivered until the bridge is running">Bridge offline</span>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Telegram Pairing Modal -->
-<div x-show="$store.viewManager.activeModal === 'telegram-pairing'" x-cloak class="fixed inset-0 bg-black/80 z-[1000] flex items-center justify-center p-4 backdrop-blur-md">
-    <div class="bg-[var(--card-bg)] border border-[var(--border-color)] rounded-3xl w-full max-w-[500px] p-8">
-        <div class="flex justify-between items-center mb-6">
-            <h3 class="text-2xl font-bold">Connect Telegram</h3>
-            <button @click="$store.viewManager.activeModal = null" class="text-zinc-500 hover:text-white"><i class="fas fa-times text-xl"></i></button>
-        </div>
-        
-        <div class="text-center">
-            <div class="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600 mb-2">Your Pairing Token</div>
-            <div class="relative">
-                <div x-text="$store.viewManager.pairingToken" class="w-full bg-black/40 border border-accent/20 text-accent py-5 rounded-2xl font-mono text-center text-3xl tracking-[0.5em] outline-none my-4">---</div>
-                <button @click="navigator.clipboard.writeText($store.viewManager.pairingToken); Alpine.store('ui').toast('Copied to clipboard')" class="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-400 hover:text-white" title="Copy">
-                    <i class="fas fa-copy"></i>
-                </button>
-            </div>
-        </div>
-
-        <div class="bg-zinc-800/30 p-5 rounded-2xl text-[13px] border border-zinc-700/50 mt-6">
-            <p class="mb-3 opacity-80">Send this command to <a href="https://t.me/abdur_angelclaw_bot" target="_blank" class="text-blue-400 font-bold hover:underline">@abdur_angelclaw_bot</a> on Telegram:</p>
-            <code class="text-white font-mono break-all text-sm bg-black/40 p-3 rounded-lg block">/pair <span x-text="$store.viewManager.pairingToken" class="font-bold text-accent"></span></code>
-        </div>
-        
-        <div class="mt-6 text-sm text-zinc-500 text-center">
-            <p>After sending, wait a few seconds and refresh this page.</p>
-        </div>
-        
-        <div class="mt-6 flex gap-4">
-            <button class="btn btn-secondary flex-grow" @click="$store.viewManager.activeModal = null">Close</button>
-            <button class="btn btn-primary flex-grow" @click="$store.viewManager.openPairingModal()">New Token</button>
-        </div>
-    </div>
-</div>
-
-<script>
-function integrationsData() {
-    return {
-        integrations: {},
-        loading: true,
-        
-        async init() {
-            try {
-                const res = await fetch('/me');
-                const data = await res.json();
-                this.integrations = data.integrations || {};
-            } catch(e) { console.error(e); }
-            finally { this.loading = false; }
-        }
-    };
-}
-</script>

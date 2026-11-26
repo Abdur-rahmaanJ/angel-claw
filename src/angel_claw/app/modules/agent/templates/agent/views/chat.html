@@ -1,6 +1,6 @@
 <div class="flex flex-col h-full overflow-hidden" 
      x-data="window.chatInterface()" 
-     @refresh-chat.window="loadHistory(); Alpine.store('viewManager').isStreaming = false"
+     @refresh-chat.window="cancelStream(); loadHistory(); Alpine.store('viewManager').isStreaming = false"
      x-init="loadHistory()">
     
     <header class="view-header shrink-0">
@@ -15,12 +15,14 @@
                         Alpine.store('ui').confirm({ title: 'Delete thread?', message: $store.viewManager.currentSessionId, danger: true, confirmText: 'Delete' })
                         .then(ok => {
                             if (!ok) return;
-                            fetch('/chat/delete/' + $store.viewManager.currentSessionId, { method: 'POST', headers: { 'X-CSRFToken': document.getElementById('csrf_token')?.value } })
-                            .then(() => {
+                            fetch('/chat/delete/' + encodeURIComponent($store.viewManager.currentSessionId), { method: 'POST', headers: { 'X-CSRFToken': document.getElementById('csrf_token')?.value } })
+                            .then(r => {
+                                if (!r.ok) throw new Error();
                                 $store.viewManager.createNewThread();
                                 document.body.dispatchEvent(new CustomEvent('refresh-threads'));
                                 Alpine.store('ui').toast('Thread deleted');
-                            });
+                            })
+                            .catch(() => Alpine.store('ui').toast('Could not delete thread', 'error'));
                         })
                     "
                     class="p-2 text-red-500/50 hover:text-red-500 transition-all ml-2"
@@ -119,7 +121,7 @@
                     x-model="userInput"
                     @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
                     @input="$el.style.height = 'auto'; $el.style.height = Math.max($el.scrollHeight, 60) + 'px'"
-                    class="flex-grow bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 py-3.5 text-[14px] md:text-[15px] focus:border-accent outline-none resize-none h-[50px] md:h-[60px] max-h-[150px] md:max-h-[200px] transition-all text-white leading-relaxed" 
+                    class="flex-grow bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 py-3.5 text-[14px] md:text-[15px] focus:border-accent outline-none resize-none h-[50px] md:h-[60px] max-h-[150px] md:max-h-[200px] transition-all text-[var(--text-primary)] leading-relaxed" 
                     placeholder="Ask your agent anything..." 
                     rows="1"
                     :disabled="$store.viewManager.isStreaming"></textarea>

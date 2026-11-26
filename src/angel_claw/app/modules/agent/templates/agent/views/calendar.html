@@ -19,7 +19,7 @@
                 Couldn't load events. <button class="text-accent underline" @click="init()">Retry</button>
             </div>
             <div x-show="!loading && !error" class="space-y-3">
-                <template x-for="event in events" :key="event.id">
+                <template x-for="event in events" :key="(event.session || '') + ':' + event.id">
                     <div class="p-4 bg-white/5 border border-white/5 rounded-xl">
                         <div class="flex justify-between items-start">
                             <div>

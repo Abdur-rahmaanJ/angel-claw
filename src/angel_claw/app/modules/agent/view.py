@@ -2,6 +2,7 @@ import logging
 import os
 from datetime import datetime
 
+from flask import abort
 from flask import render_template
 from flask import request
 from flask import jsonify
@@ -211,9 +212,28 @@ def chat():
     )
 
 
+VIEW_NAMES = {
+    "dashboard",
+    "chat",
+    "tasks",
+    "calendar",
+    "messages",
+    "reminders",
+    "soul",
+    "memory",
+    "skills",
+    "api",
+    "usage",
+    "integrations",
+    "settings",
+}
+
+
 @blueprint.route("/view/<view_name>")
 @login_required
 def get_view(view_name):
+    if view_name not in VIEW_NAMES:
+        abort(404)
     context = mhelp.context()
     template = f"agent/views/{view_name}.html"
     return render_template(template, **context)

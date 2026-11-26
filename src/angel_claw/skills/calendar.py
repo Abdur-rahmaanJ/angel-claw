@@ -10,11 +10,11 @@ from angel_claw.utils import get_user_root, safe_filename_part
 
 def _get_calendar_dir(user_id: Optional[str] = None) -> str:
     """Get the directory for storing calendar events."""
-    if user_id: return str(get_user_root(user_id) / "calendar")
-    base_dir = os.path.join(os.getcwd(), ".angelclaw")
-    cal_dir = os.path.join(base_dir, "calendar")
-    if not os.path.exists(cal_dir):
-        os.makedirs(cal_dir)
+    if user_id:
+        cal_dir = str(get_user_root(user_id) / "calendar")
+    else:
+        cal_dir = os.path.join(os.getcwd(), ".angelclaw", "calendar")
+    os.makedirs(cal_dir, exist_ok=True)
     return cal_dir
 
 

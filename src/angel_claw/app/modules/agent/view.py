@@ -584,10 +584,8 @@ def get_calendar():
     )
     if request.args.get("format") == "html":
         return render_template("agent/partials/_calendar_list.html", events=result)
-    # Return JSON for dashboard
-    lines = result.split("\n") if isinstance(result, str) else result
-    upcoming = len([l for l in lines if l.strip() and not l.startswith("##")])
-    return jsonify({"upcoming": upcoming, "events": result})
+    # Return JSON for dashboard; the skill returns a list of event dicts.
+    return jsonify({"upcoming": len(result), "events": result})
 
 
 @blueprint.route("/reminders")

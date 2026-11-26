@@ -90,6 +90,13 @@ def ensure_env():
 
     if not os.path.exists(".env") or not is_config_complete():
         print("Angel Claw is not configured yet.")
+        if not sys.stdin.isatty():
+            # Service managers have no TTY; never block a deploy on a prompt.
+            print(
+                "No interactive terminal detected. Set MODEL_KEY in .env (or run "
+                "`angel-claw setup`), then start the service again."
+            )
+            return
         if questionary.confirm("Do you want to run the setup wizard?").ask():
             from .config.wizard import run_wizard
 
@@ -407,10 +414,107 @@ def start_web_server(port=5000, debug=False, migrate=False):
     app.run(host="0.0.0.0", port=port, debug=debug, use_reloader=False)
 
 
+def _version() -> str:
+    try:
+        from importlib.metadata import version
+
+        return version("angel-claw")
+    except Exception:
+        return "dev"
+
+
+def _model_ready() -> bool:
+    key = (settings.api_key or "").strip()
+    return bool(key) and key not in (
+        "your_api_key_here",
+        "your_api_key",
+        "YOUR_API_KEY",
+    )
+
+
+def print_home(problem: str | None = None):
+    """Bare `angel-claw`: show status and the next useful command."""
+    db_path = os.path.abspath(os.path.expanduser(settings.db_path))
+    db_ready = os.path.exists(db_path)
+    model_ready = _model_ready()
+
+    if problem:
+        console.print(f"[bold red]{problem}[/bold red]")
+
+    table = Table.grid(padding=(0, 2))
+    table.add_column(style="cyan", no_wrap=True)
+    table.add_column(style="white")
+    table.add_row("Version", _version())
+    table.add_row("Data", str(settings.data_dir))
+    table.add_row(
+        "Database",
+        f"[green]ready[/green] ({db_path})"
+        if db_ready
+        else "[yellow]not initialized[/yellow] - run [bold]angel-claw setup[/bold]",
+    )
+    table.add_row(
+        "Model",
+        f"[green]{settings.model} configured[/green]"
+        if model_ready
+        else f"[yellow]{settings.model} - no MODEL_KEY[/yellow] (add it in Settings or .env)",
+    )
+
+    next_steps = Table.grid(padding=(0, 2))
+    next_steps.add_column(style="bold cyan", no_wrap=True)
+    next_steps.add_column(style="white")
+    if not db_ready:
+        next_steps.add_row("angel-claw setup", "Create the database and admin account")
+    next_steps.add_row("angel-claw serve", "Web dashboard + background bridges")
+    next_steps.add_row("angel-claw chat", "Chat in the terminal")
+    next_steps.add_row("angel-claw --help", "All commands")
+
+    console.print(
+        Panel(
+            table,
+            title=f"[bold green]🪽 Angel Claw {_version()}[/bold green]",
+            subtitle="[dim]Run a command below to get started[/dim]",
+            border_style="bright_blue",
+            expand=False,
+            padding=(1, 3),
+        )
+    )
+    console.print("[bold]Next[/bold]")
+    console.print(next_steps)
+    if db_ready and model_ready:
+        console.print(
+            "\n[dim]Dashboard: http://127.0.0.1:5000 after `angel-claw serve`[/dim]"
+        )
+
+
 def print_usage():
-    print("🪽 Angel Claw CLI")
-    print(
-        "Usage: angel-claw [chat|serve|tutorial|login-whatsapp|confirm-user|promote-user|create-admin|update-password|setup|list-users|bridges|locate-static|mcp]"
+    table = Table(title="🪽 Angel Claw CLI", title_style="bold green", show_lines=False)
+    table.add_column("Command", style="bold cyan", no_wrap=True)
+    table.add_column("What it does", style="white")
+
+    rows = [
+        ("setup", "Create the database and the first admin account"),
+        ("serve", "Start the web dashboard and background bridges"),
+        ("chat", "Start an interactive terminal chat"),
+        ("bridges", "Run only Telegram, WhatsApp and the cron worker"),
+        ("gateway", "Run the FastAPI gateway for API clients"),
+        ("status", "Show configuration and database status"),
+        ("tutorial", "Guided tour of the main features"),
+        ("list-users", "List accounts and their admin/confirmation state"),
+        ("create-admin <email> <password>", "Create an administrator"),
+        ("update-password <email> <password>", "Change an account password"),
+        ("promote-user <email>", "Grant administrator access"),
+        ("confirm-user <email>", "Mark an email as confirmed"),
+        ("login-whatsapp", "Link WhatsApp with a QR code"),
+        ("locate-static", "Print the web static directory (for Nginx)"),
+        (r"mcp \[list|test]", "Inspect MCP tools or run diagnostics"),
+    ]
+    for command, description in rows:
+        table.add_row(command, description)
+
+    console.print(table)
+    console.print(
+        "\n[dim]Run [bold]angel-claw[/bold] for status and next steps. "
+        "Run [bold]angel-claw serve[/bold] to open the dashboard.[/dim]"
     )
 
 
@@ -652,12 +756,17 @@ def main():
         else:
             print("Usage: angel-claw mcp [list|test]")
     elif len(sys.argv) == 1:
-        # Default to starting the gateway if no subcommand
+        print_home()
+    elif sys.argv[1] == "status":
+        print_home()
+    elif sys.argv[1] == "gateway":
+        ensure_env()
         from .gateway import start as start_gateway
 
         start_gateway()
     else:
-        print_usage()
+        print_home(f"Unknown command: {sys.argv[1]}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

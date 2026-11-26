@@ -36,6 +36,7 @@
 
 ```bash
 $ pip install angel-claw
+$ angel-claw           # Status and the next command to run
 $ angel-claw setup     # Initialize database and create admin account
 $ angel-claw serve     # Starts the Agent OS Gateway + Web Dashboard
 $ angel-claw chat      # Authenticated CLI mode
@@ -69,11 +70,16 @@ To get started with a fresh installation:
 Angel Claw provides a powerful command-line interface for managing the OS, users, and bridges.
 
 ### Core Commands
+*   `angel-claw`: Prints configuration/database status with the next command to run. Running `python -m angel_claw` does the same.
 *   `angel-claw setup`: Interactive wizard to initialize the database and create the primary admin account.
 *   `angel-claw serve`: Starts the Flask Web Gateway and the background Bridge Worker in a single process.
 *   `angel-claw chat`: Launches an authenticated interactive chat session in your terminal.
 *   `angel-claw bridges`: Starts only the background bridge workers (Telegram, WhatsApp, Cron). Recommended for production.
+*   `angel-claw gateway`: Starts only the FastAPI gateway for API clients.
+*   `angel-claw status`: Shows the same status panel as the bare command.
 *   `angel-claw tutorial`: Runs the interactive "Guided Tour" of Angel Claw's features.
+
+A bare `angel-claw` no longer starts the gateway implicitly; use `serve` for the dashboard or `gateway` for the API.
 
 ### User Management
 *   `angel-claw list-users`: Displays all registered users, their confirmation status, and admin privileges.

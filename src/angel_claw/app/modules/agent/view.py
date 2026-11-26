@@ -475,12 +475,12 @@ def get_todos():
         session_id = filename[: -len(".json")]
         for todo in _load_todos(session_id, user_id=user_context.user_id):
             todos.append({**todo, "session": session_id})
-    pending = result.count("⬜")
-    total = result.count("⬜") + result.count("✅")
+    # Count every session, matching the merged list the tasks tab renders.
+    pending = len([t for t in todos if not t.get("completed")])
     return jsonify(
         {
             "pending": pending,
-            "total": max(total, 1),
+            "total": len(todos),
             "todos": todos,
         }
     )

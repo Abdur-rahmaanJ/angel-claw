@@ -54,7 +54,7 @@ async def browser_navigate(url: str) -> str:
     try:
         validate_public_url(url)
         page = await _get_page()
-        await page.goto(url=url, timeout=20000)
+        await page.goto(url=url, timeout=15000)
         text = await page.markdown(max_bytes=6000, strip={"clutter": True})
         text = str(text or "").strip()
         return f"Navigated to {url}. Content:\n\n{text[:4000]}"

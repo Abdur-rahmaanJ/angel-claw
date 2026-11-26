@@ -68,7 +68,7 @@ async def _exa_search(query: str, count: int, api_key: str) -> str:
             "highlights": {"numSentences": 2, "highlightsPerUrl": 1},
         },
     }
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.post(
             "https://api.exa.ai/search",
             json=payload,
@@ -92,7 +92,7 @@ async def _exa_search(query: str, count: int, api_key: str) -> str:
 
 
 async def _brave_search(query: str, count: int, api_key: str) -> str:
-    async with httpx.AsyncClient(timeout=30) as client:
+    async with httpx.AsyncClient(timeout=15) as client:
         resp = await client.get(
             "https://api.search.brave.com/res/v1/web/search",
             headers={
@@ -128,7 +128,7 @@ async def _lightpanda_search(query: str) -> str | None:
     try:
         async with AsyncBrowser() as browser:
             async with browser.session() as page:
-                text = await page.search(query=query, timeout=20000)
+                text = await page.search(query=query, timeout=15000)
         text = str(text or "").strip()
         return text or None
     except Exception:
@@ -223,7 +223,7 @@ async def _lightpanda_read(url: str) -> str | None:
         async with AsyncBrowser() as browser:
             async with browser.session() as page:
                 text = await page.markdown(
-                    url=url, max_bytes=200_000, strip={"clutter": True}, timeout=20000
+                    url=url, max_bytes=200_000, strip={"clutter": True}, timeout=15000
                 )
         text = str(text or "").strip()
         return text or None
@@ -234,7 +234,7 @@ async def _lightpanda_read(url: str) -> str | None:
 
 async def _http_read(url: str) -> str:
     headers = {"User-Agent": _USER_AGENT, "Accept": "text/html,application/json,text/plain"}
-    async with httpx.AsyncClient(timeout=20, follow_redirects=False) as client:
+    async with httpx.AsyncClient(timeout=10, follow_redirects=False) as client:
         current = url
         for _ in range(4):
             validate_public_url(current)

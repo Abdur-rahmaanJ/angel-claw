@@ -665,7 +665,10 @@ def get_reminders():
             "reminders": [{
                 "id": r.id,
                 "message": r.message,
-                "remind_at": r.remind_at.isoformat(),
+                # Attach the server's UTC offset: a naive timestamp is parsed
+                # as browser-local time, which shifts the reminder by the
+                # timezone difference and hides its notification.
+                "remind_at": r.remind_at.astimezone().isoformat(),
                 "channel": r.channel_type,
                 "is_sent": r.is_sent
             } for r in reminders]

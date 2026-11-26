@@ -177,3 +177,104 @@ def test_login_template(client, app):
     html = response.get_data(as_text=True)
     assert "Angel Claw" in html
     assert "Login" in html
+
+
+def test_scheduled_prompt_lands_in_tasks_and_messages(
+    client, auth_user, app, monkeypatch, tmp_path
+):
+    """A future prompt is a Tasks row; its result is one Messages entry.
+
+    Reminders are the exception: they stay in the Reminders tab and must not
+    create an inbox message when they fire.
+    """
+    from datetime import datetime, timedelta
+    from unittest.mock import AsyncMock
+
+    from angel_claw.cron import Job, JobPayload, JobSchedule, cron_manager
+    from angel_claw.models import EngineResponse
+    from init import db
+    from modules.agent.models import InternalMessage, Reminder
+
+    class FakeEngine:
+        async def execute(self, context, message):
+            assert "table" in message.lower()
+            return EngineResponse(
+                content="Found a table for six at Test Bistro: https://example.com/book"
+            )
+
+    monkeypatch.setattr("angel_claw.engine.AngelClawEngine", FakeEngine)
+    monkeypatch.setattr(cron_manager, "_send_proactive_message", AsyncMock())
+
+    old_dir, old_jobs = cron_manager.persist_dir, cron_manager.jobs
+    cron_manager.persist_dir = str(tmp_path)
+    cron_manager.jobs = {}
+    try:
+        login = client.post(
+            "/auth/login",
+            data={"email": "test@example.com", "password": "password"},
+            follow_redirects=True,
+        )
+        assert login.status_code == 200
+
+        with app.app_context():
+            user_id = str(auth_user["id"])
+            when = (datetime.now() + timedelta(minutes=5)).isoformat()
+            job = Job(
+                name="restaurant_table_check",
+                schedule=JobSchedule(kind="at", value=when),
+                payload=JobPayload(
+                    kind="prompt",
+                    content="Find a table for six at a restaurant tomorrow and report it.",
+                ),
+                session_id="Thread 1",
+                user_id=user_id,
+            )
+            cron_manager.save_job(job)
+
+            tasks = client.get("/cron/jobs").get_json()["jobs"]
+            assert "restaurant_table_check" in {t["name"] for t in tasks}
+
+            asyncio.run(
+                cron_manager._execute_job(cron_manager.jobs["restaurant_table_check"])
+            )
+            messages = InternalMessage.query.filter_by(recipient_id=user_id).all()
+            assert any("Test Bistro" in m.content for m in messages)
+            assert any(m.content.startswith("⏰") for m in messages)
+
+            # A reminder must stay out of Tasks and out of the inbox.
+            reminder_name = f"reminder_{user_id}_{int(datetime.now().timestamp())}"
+            reminder_job = Job(
+                name=reminder_name,
+                schedule=JobSchedule(kind="at", value=when),
+                payload=JobPayload(
+                    kind="message", content="🔔 REMINDER: table for six"
+                ),
+                session_id="Thread 1",
+                user_id=user_id,
+            )
+            cron_manager.save_job(reminder_job)
+            reminder = Reminder(
+                user_id=user_id,
+                message="table for six",
+                remind_at=datetime.now() + timedelta(minutes=5),
+                channel_type="web",
+                channel_identifier="Thread 1",
+                job_name=reminder_name,
+            )
+            db.session.add(reminder)
+            db.session.commit()
+
+            tasks = client.get("/cron/jobs").get_json()["jobs"]
+            assert reminder_name not in {t["name"] for t in tasks}
+
+            before = InternalMessage.query.filter_by(recipient_id=user_id).count()
+            asyncio.run(
+                cron_manager._execute_job(cron_manager.jobs[reminder_name])
+            )
+            db.session.refresh(reminder)
+            assert reminder.is_sent is True
+            assert InternalMessage.query.filter_by(recipient_id=user_id).count() == before
+    finally:
+        cron_manager.persist_dir = old_dir
+        cron_manager.jobs = old_jobs
+        cron_manager.scheduler.remove_all_jobs()

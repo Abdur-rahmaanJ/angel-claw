@@ -93,8 +93,9 @@ def ensure_env():
         if not sys.stdin.isatty():
             # Service managers have no TTY; never block a deploy on a prompt.
             print(
-                "No interactive terminal detected. Set MODEL_KEY in .env (or run "
-                "`angel-claw setup`), then start the service again."
+                "No interactive terminal detected. Set MODEL_KEY in .env, or "
+                "run `angel-claw chat` in an interactive terminal and accept "
+                "the setup wizard, then start the service again."
             )
             return
         if questionary.confirm("Do you want to run the setup wizard?").ask():

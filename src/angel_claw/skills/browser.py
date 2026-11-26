@@ -4,7 +4,10 @@ import asyncio
 import os
 
 from angel_claw.skills.manager import skill
-from angel_claw.utils import validate_public_url
+from angel_claw.utils import validate_public_url_resolved
+
+# Enforced after DNS resolution, including redirects followed by the browser.
+_LIGHTPANDA_ARGS = ("--block-private-networks",)
 
 _browser = None
 _page = None
@@ -29,7 +32,7 @@ async def _get_page():
     if _page is None or _loop is not loop:
         from lightpanda import AsyncBrowser
 
-        _browser = AsyncBrowser()
+        _browser = AsyncBrowser(args=_LIGHTPANDA_ARGS)
         await _browser.start()
         _page = await _browser.new_session()
         _loop = loop
@@ -52,7 +55,7 @@ async def _reset():
 async def browser_navigate(url: str) -> str:
     """Open a URL in Lightpanda and return the page as readable markdown."""
     try:
-        validate_public_url(url)
+        await validate_public_url_resolved(url)
         page = await _get_page()
         await page.goto(url=url, timeout=15000)
         text = await page.markdown(max_bytes=6000, strip={"clutter": True})
@@ -90,7 +93,11 @@ async def browser_screenshot(path: str = "screenshot.png") -> str:
     try:
         page = await _get_page()
         target = _screenshot_path(path)
-        await page.screenshot(path=target)
+        image = await page.screenshot()
+        if not isinstance(image, (bytes, bytearray)):
+            return f"Error taking screenshot: unexpected image type {type(image).__name__}."
+        with open(target, "wb") as f:
+            f.write(image)
         return f"Screenshot saved to {target}."
     except Exception as e:
         return f"Error taking screenshot: {e}"

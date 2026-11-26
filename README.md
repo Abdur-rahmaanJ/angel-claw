@@ -194,11 +194,14 @@ Control your AI from anywhere with secure pairing.
 Generate an API key in the Dashboard and use it to build your own integrations:
 
 ```bash
-curl -X POST http://localhost:5000/chat \
+curl -X POST http://localhost:5000/api/mobile/chat \
      -H "Authorization: Bearer ac_v1_..." \
      -H "Content-Type: application/json" \
      -d '{"message": "Remind me to call John tomorrow"}'
 ```
+
+See the [Developer API Reference](docs/api.md) for chat, session, mobile, skills, task
+and gateway endpoints.
 
 ---
 

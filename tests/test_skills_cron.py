@@ -36,3 +36,16 @@ def test_schedule_task_skill():
     del_res = delete_task("test_skill_job")
     assert "deleted" in del_res
     assert "test_skill_job" not in cron_manager.jobs
+
+
+def test_schedule_task_rejects_reserved_prefixes():
+    for name in ("reminder_user_1", "task_1_deadbeef"):
+        res = schedule_task(
+            name=name,
+            schedule_kind="at",
+            schedule_value="2030-01-01 12:00:00",
+            payload_kind="message",
+            content="should not exist",
+        )
+        assert "reserved" in res
+        assert name not in cron_manager.jobs

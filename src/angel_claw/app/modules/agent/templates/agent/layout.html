@@ -259,6 +259,7 @@
 
             Alpine.data('skillsData', () => ({
                 skills: [], loading: true, configModal: false, configSkill: null, configFields: [],
+                configRequest: 0,
                 skillFieldDefs: {},
                 config: {{ skill_config | tojson }},
                 async init() { await this.loadSkills(); },
@@ -287,6 +288,9 @@
                 },
                 async openConfig(skill) {
                     const name = skill.name;
+                    // Double clicks (or a slow request followed by another one)
+                    // must not let an obsolete response clear a newer dialog.
+                    const requestId = ++this.configRequest;
                     this.configSkill = skill;
                     const defs = this.skillFieldDefs[name] || [];
                     // Saved values (possibly credentials) are fetched on demand
@@ -299,15 +303,15 @@
                         if (!r.ok) throw new Error();
                         saved = (await r.json()).fields || {};
                     } catch(e) {
-                        if (this.configSkill?.name === name) {
+                        if (this.configRequest === requestId) {
                             this.configSkill = null;
                             Alpine.store('ui').toast('Could not load saved skill settings', 'error');
                         }
                         return;
                     }
-                    // A later click may have opened another skill while this
-                    // request was in flight; its fields must not be replaced.
-                    if (this.configSkill?.name !== name) return;
+                    // A later click may have opened another skill (or the same
+                    // one) while this request was in flight; ignore this reply.
+                    if (this.configRequest !== requestId || this.configSkill?.name !== name) return;
                     this.configFields = defs.map(f => ({
                         name: f.name,
                         type: f.type || 'text',

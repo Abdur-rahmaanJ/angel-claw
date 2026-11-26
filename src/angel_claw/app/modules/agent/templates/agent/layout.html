@@ -267,7 +267,7 @@
                         this.skillFieldDefs = d.skill_field_defs || {};
                         this.skills = (d.skills || []).map(s => ({
                             ...s, 
-                            enabled: !this.config[s.name]?.disabled,
+                            enabled: s.enabled !== undefined ? s.enabled : !this.config[s.name]?.disabled,
                             has_config: !!this.skillFieldDefs[s.name]
                         })); 
                     } catch(e) { console.error(e); } 

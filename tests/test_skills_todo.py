@@ -3,7 +3,11 @@ import os
 import shutil
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.join(os.path.dirname(__file__), "..", "src")
+if _SRC not in sys.path:
+    # Append, never prepend: conftest keeps the Shopyo app dir first so
+    # `from app import create_app` does not resolve to the package instead.
+    sys.path.append(_SRC)
 from angel_claw.skills.todo import (
     add_todo,
     list_todos,

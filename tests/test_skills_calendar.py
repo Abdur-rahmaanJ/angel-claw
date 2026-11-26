@@ -4,7 +4,11 @@ import shutil
 import sys
 from datetime import datetime, timedelta
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
+_SRC = os.path.join(os.path.dirname(__file__), "..", "src")
+if _SRC not in sys.path:
+    # Append, never prepend: conftest keeps the Shopyo app dir first so
+    # `from app import create_app` does not resolve to the package instead.
+    sys.path.append(_SRC)
 from angel_claw.skills.calendar import (
     create_calendar_event,
     list_calendar_events,

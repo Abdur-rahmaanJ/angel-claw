@@ -666,28 +666,22 @@ def api_get_chat_history(session_id):
 def api_get_skills():
     """List available skills and their current config."""
     from angel_claw.runtime.registry import TieredSkillRegistry
-    from angel_claw.utils import get_user_root
-    import json
 
     user_context = request.user_context
     registry = TieredSkillRegistry(user_context)
-    skills = registry.manager.get_skill_details()
+    modules = registry.manager.get_modules()
 
-    user_root = get_user_root(user_context.user_id)
-    skill_config_file = user_root / "skill_config.json"
-    skill_config = {}
-    if skill_config_file.exists():
-        try:
-            skill_config = json.load(open(skill_config_file))
-        except Exception:
-            pass
+    from angel_claw.skills.defaults import MODULE_DESCRIPTIONS
 
     skills_list = []
-    for name, desc in skills.items():
+    for name, info in sorted(modules.items()):
         skills_list.append({
             "name": name,
-            "description": desc,
-            "enabled": not skill_config.get(name, {}).get("disabled", False)
+            "description": MODULE_DESCRIPTIONS.get(name)
+            or info.get("description")
+            or f"Tools for {name}",
+            "enabled": registry.is_module_enabled(name),
+            "tools": len(info["functions"]),
         })
 
     return jsonify({"status": "success", "skills": skills_list})

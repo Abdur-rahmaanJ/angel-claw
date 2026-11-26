@@ -16,6 +16,10 @@ class SkillManager:
             self.skills_dirs = skills_dirs
 
         self.skills: Dict[str, Callable] = {}
+        # Tool function -> skill module (file), so the UI and registry can work
+        # with modules while skills remain individual callables.
+        self.skill_modules: Dict[str, str] = {}
+        self.module_docs: Dict[str, str] = {}
         self._tool_defs_cache: List[Dict[str, Any]] = []
         self._file_checksum: str = ""
         for d in self.skills_dirs:
@@ -47,6 +51,8 @@ class SkillManager:
     def load_skills(self):
         """Load skills from all skill directories."""
         self.skills = {}
+        self.skill_modules = {}
+        self.module_docs = {}
         for d in self.skills_dirs:
             if not os.path.exists(d):
                 continue
@@ -80,16 +86,33 @@ class SkillManager:
             details[name] = doc
         return details
 
+    def get_modules(self) -> Dict[str, Dict[str, Any]]:
+        """Group loaded tools by skill module (one file each)."""
+        self.reload_if_needed()
+        modules: Dict[str, Dict[str, Any]] = {}
+        for tool, module in self.skill_modules.items():
+            entry = modules.setdefault(
+                module,
+                {
+                    "description": self.module_docs.get(module, ""),
+                    "functions": [],
+                },
+            )
+            entry["functions"].append(tool)
+        return modules
+
     def _load_skill_from_path(self, skill_name: str, skill_path: str):
         try:
             spec = importlib.util.spec_from_file_location(skill_name, skill_path)
             module = importlib.util.module_from_spec(spec)
             module.skill = skill
             spec.loader.exec_module(module)
+            self.module_docs[skill_name] = inspect.getdoc(module) or ""
 
             for name, obj in inspect.getmembers(module):
                 if inspect.isfunction(obj) and getattr(obj, "_is_skill", False):
                     self.skills[name] = obj
+                    self.skill_modules[name] = skill_name
         except Exception as e:
             logger.debug(f"Error loading skill {skill_name}: {e}")
 

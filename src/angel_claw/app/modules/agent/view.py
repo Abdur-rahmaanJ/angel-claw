@@ -108,11 +108,14 @@ def index():
         skill_config = {}
 
     # Only expose enable/disable flags: the file also holds skill credentials
-    # and this dict is serialized into the dashboard HTML.
+    # and this dict is serialized into the dashboard HTML. Default-off modules
+    # are included so they show as disabled before the user ever toggles them.
+    from angel_claw.skills.defaults import DEFAULT_DISABLED_MODULES, module_enabled
+
     skill_status = {
-        name: {"disabled": bool(cfg.get("disabled"))}
-        for name, cfg in skill_config.items()
-        if isinstance(cfg, dict)
+        name: {"disabled": not module_enabled(skill_config, name)}
+        for name in set(skill_config) | set(DEFAULT_DISABLED_MODULES)
+        if isinstance(skill_config.get(name, {}), dict)
     }
 
     context.update(
@@ -750,11 +753,14 @@ def get_skills():
 
     user_context = _build_context()
     registry = TieredSkillRegistry(user_context)
-    skills = registry.manager.get_skill_details()
+    modules = registry.manager.get_modules()
+
+    from angel_claw.skills.defaults import MODULE_DESCRIPTIONS
 
     # Get skill field definitions from skill modules
     skill_field_defs = {}
-    for skill_name in skills.keys():
+    skills_list = []
+    for skill_name, info in sorted(modules.items()):
         try:
             # Try to import the skill module and get SKILL_CONFIG
             mod = importlib.import_module(f"angel_claw.skills.{skill_name}")
@@ -763,12 +769,20 @@ def get_skills():
                 skill_field_defs[skill_name] = mod.SKILL_CONFIG.get("fields", [])
         except Exception:
             pass
+        skills_list.append(
+            {
+                "name": skill_name,
+                "description": MODULE_DESCRIPTIONS.get(skill_name)
+                or info.get("description")
+                or f"Tools for {skill_name}",
+                "enabled": registry.is_module_enabled(skill_name),
+                "tools": len(info["functions"]),
+            }
+        )
 
     if request.args.get("format") == "html":
-        return render_template("agent/partials/_skills_list.html", skills=skills)
+        return render_template("agent/partials/_skills_list.html", skills=modules)
 
-    # Convert dict to array
-    skills_list = [{"name": k, "description": v} for k, v in skills.items()]
     return jsonify(
         {
             "skills": skills_list,

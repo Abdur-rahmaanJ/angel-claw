@@ -8,6 +8,12 @@ import subprocess
 from datetime import datetime
 from typing import List, Dict, Any, Callable, Optional
 from ..skills.manager import SkillManager
+from ..skills.defaults import (
+    EAGER_MODULES,
+    MODULE_DESCRIPTIONS,
+    module_enabled,
+    tool_enabled,
+)
 from ..models import UserContext
 from ..mcp_manager import mcp_manager
 from ..config import settings
@@ -32,13 +38,89 @@ class TieredSkillRegistry:
         user_skills.mkdir(parents=True, exist_ok=True)
 
         self.manager = SkillManager([internal_skills, local_skills, str(user_skills)])
+        self._config_cache: tuple[float, dict] | None = None
+        # Modules whose tool schemas were requested with load_skill_tools.
+        self._loaded_modules: set[str] = set()
 
         self._executor = concurrent.futures.ThreadPoolExecutor(
             max_workers=5, thread_name_prefix=f"user_{context.user_id}_sandbox"
         )
 
+    def get_skill_config(self) -> dict:
+        """The user's skill config, cached until the file changes."""
+        path = self.user_root / "skill_config.json"
+        try:
+            mtime = path.stat().st_mtime
+        except OSError:
+            return {}
+        if self._config_cache and self._config_cache[0] == mtime:
+            return self._config_cache[1]
+        try:
+            with open(path) as f:
+                config = json.load(f)
+            config = config if isinstance(config, dict) else {}
+        except Exception as e:
+            logger.error(f"Error reading skill config: {e}")
+            config = {}
+        self._config_cache = (mtime, config)
+        return config
+
+    def _tool_enabled(self, name: str) -> bool:
+        module = self.manager.skill_modules.get(name, name)
+        if not tool_enabled(self.get_skill_config(), module, name):
+            return False
+        return module in EAGER_MODULES or module in self._loaded_modules
+
+    def is_module_enabled(self, module: str) -> bool:
+        return module_enabled(self.get_skill_config(), module)
+
+    def is_module_loaded(self, module: str) -> bool:
+        return module in EAGER_MODULES or module in self._loaded_modules
+
+    def load_module(self, module: str) -> str:
+        """Expose a lazily-loaded module's tools for later turns."""
+        module = (module or "").strip().lower()
+        modules = self.manager.get_modules()
+        if module not in modules:
+            known = ", ".join(sorted(modules))
+            return f"Error: unknown skill module '{module}'. Available: {known}."
+        if not self.is_module_enabled(module):
+            return (
+                f"Error: '{module}' is disabled in Settings -> Skills. "
+                "Enable it there first."
+            )
+        if self.is_module_loaded(module):
+            return f"'{module}' tools are already loaded."
+        self._loaded_modules.add(module)
+        tools = ", ".join(sorted(modules[module]["functions"]))
+        return (
+            f"Loaded '{module}'. New tools available now: {tools}. "
+            "Call them directly."
+        )
+
+    def describe_modules(self) -> str:
+        """Human/model readable inventory for list_skill_modules."""
+        modules = self.manager.get_modules()
+        lines = []
+        for module, info in sorted(modules.items()):
+            if not self.is_module_enabled(module):
+                status = "disabled in Settings"
+            elif self.is_module_loaded(module):
+                status = "loaded"
+            else:
+                status = "not loaded"
+            description = MODULE_DESCRIPTIONS.get(module) or info.get("description") or ""
+            lines.append(
+                f"- {module}: {status} ({len(info['functions'])} tools) - {description}"
+            )
+        return "Skill modules:\n" + "\n".join(lines)
+
     async def get_tool_definitions(self) -> List[Dict[str, Any]]:
-        local_tools = self.manager.get_tool_definitions()
+        local_tools = [
+            tool
+            for tool in self.manager.get_tool_definitions()
+            if self._tool_enabled(tool["function"]["name"])
+        ]
         mcp_tools = await mcp_manager.get_tool_definitions()
         return local_tools + mcp_tools
 
@@ -46,7 +128,8 @@ class TieredSkillRegistry:
     def skills(self) -> Dict[str, Callable]:
         sandboxed_skills = {}
         for name, func in self.manager.skills.items():
-            sandboxed_skills[name] = self._make_sandboxed(func)
+            if self._tool_enabled(name):
+                sandboxed_skills[name] = self._make_sandboxed(func)
         return sandboxed_skills
 
     async def call_tool(
@@ -57,6 +140,8 @@ class TieredSkillRegistry:
             arguments = {}
 
         if name in self.manager.skills:
+            if not self._tool_enabled(name):
+                return f"Error: Tool '{name}' is disabled in Skills settings."
             func = self.manager.skills[name]
 
             sig = inspect.signature(func)

@@ -193,6 +193,38 @@ def list_skills() -> str:
 
 
 @skill
+def list_skill_modules(user_id: str = None) -> str:
+    """List skill modules, whether their tools are loaded, and their status.
+
+    Use this before load_skill_tools when you are not sure which module has
+    the tools you need (for example browser or email).
+    """
+    from angel_claw.runtime.manager import runtime_manager
+
+    runtime = runtime_manager.get_existing(user_id) if user_id else None
+    if runtime is None:
+        return "Error: no active runtime for this user."
+    return runtime.skills.describe_modules()
+
+
+@skill
+def load_skill_tools(module: str, user_id: str = None) -> str:
+    """Load a skill module's tools into this conversation.
+
+    Tools for calendar, reminder, todo, memory, scheduling and web are
+    already loaded. Call this for modules listed as 'not loaded' by
+    list_skill_modules (browser, email, file_handler, ...) and then call the
+    returned tools normally.
+    """
+    from angel_claw.runtime.manager import runtime_manager
+
+    runtime = runtime_manager.get_existing(user_id) if user_id else None
+    if runtime is None:
+        return "Error: no active runtime for this user."
+    return runtime.skills.load_module(module)
+
+
+@skill
 def schedule_task(
     name: str,
     schedule_kind: str,
@@ -209,6 +241,11 @@ def schedule_task(
     - schedule_kind: 'at' (isoformat), 'in' (relative, e.g. '1m', '30s'), 'every' (recurring, e.g. '1h'), 'cron' (expression).
     - payload_kind: 'message' (send content to user), 'prompt' (ask agent content), 'skill' (run skill_name with args).
     - session_id: The session ID this task belongs to (defaults to cli-default).
+
+    For an action that must happen later (e.g. "check for a table for 6 on
+    2027-01-06"), schedule payload_kind='prompt' with content describing the
+    check and schedule_kind='at' with a local ISO date-time. The agent runs it
+    then with its normal tools, so no site-specific integration is needed.
     """
     try:
         # Reminder jobs are recognised by this prefix, so a task using it would

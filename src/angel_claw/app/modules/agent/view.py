@@ -545,9 +545,24 @@ def get_cron_jobs():
     from angel_claw.cron import cron_manager
 
     user_id = str(current_user.id)
+
+    # Reminders are backed by one-shot jobs but belong to the Reminders tab;
+    # showing them here too would duplicate every reminder.
+    from init import db
+    from modules.agent.models import Reminder
+
+    reminder_jobs = {
+        name
+        for (name,) in db.session.query(Reminder.job_name)
+        .filter(Reminder.user_id == user_id, Reminder.job_name.isnot(None))
+        .all()
+    }
+
     jobs = []
     for job in cron_manager.jobs.values():
         if job.user_id != user_id:
+            continue
+        if job.name.startswith("reminder_") or job.name in reminder_jobs:
             continue
         jobs.append(
             {

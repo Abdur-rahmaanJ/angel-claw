@@ -83,7 +83,11 @@
                 setTimeout(() => {
                     icon.className = oldClass;
                 }, 2000);
-            }).catch(() => {});
+            }).catch(() => {
+                // Clipboard access is blocked on insecure origins and by some
+                // browser settings; tell the user instead of failing silently.
+                Alpine.store('ui')?.toast('Could not copy to clipboard', 'error');
+            });
         };
 
         // Simple view loader using fetch

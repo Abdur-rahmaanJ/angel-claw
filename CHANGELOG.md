@@ -2,6 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.0] - 2026-11-26
+
+### Security
+
+- Web and browser tools now resolve hostnames before connecting and reject any target with a loopback, private, link-local or otherwise non-public address. Redirect targets are checked at every hop.
+- Lightpanda runs with `--block-private-networks`, so browser navigation and redirects cannot reach internal services.
+- `web_read`'s HTTP fallback streams the body and stops at two megabytes instead of buffering an arbitrarily large response.
+
+### Fixed
+
+- Task jobs use a unique name per attempt and carry their task id, so a cancelled or superseded attempt cannot run its prompt or overwrite a newer attempt's result.
+- The `task_` job prefix is reserved alongside `reminder_`, preventing a user-scheduled job from replacing another user's API task.
+- Enabling a skill module now clears legacy per-tool disable flags while preserving saved credentials and other fields.
+- `load_skill_tools` and `list_skill_modules` run in the host process under Docker sandboxing, so lazy modules can still be loaded.
+- `browser_screenshot` writes the returned image bytes to the screenshots directory instead of passing an absolute path to Lightpanda.
+
+### Documentation
+
+- Replaced the developer API reference with accurate coverage of the Tasks API, chat/session endpoints, mobile companion endpoints, skills endpoints and FastAPI gateway.
+- Corrected the README developer API example.
+
 ## [0.18.0] - 2026-11-26
 
 ### Added

@@ -285,10 +285,16 @@
                         });
                     }
                 },
-                openConfig(skill) {
+                async openConfig(skill) {
                     this.configSkill = skill;
                     const defs = this.skillFieldDefs[skill.name] || [];
-                    const saved = this.config[skill.name]?.fields || {};
+                    // Saved values (possibly credentials) are fetched on demand
+                    // instead of being embedded in the dashboard HTML.
+                    let saved = {};
+                    try {
+                        const r = await fetch(`/skills/config/${encodeURIComponent(skill.name)}`);
+                        if (r.ok) saved = (await r.json()).fields || {};
+                    } catch(e) { /* fall back to empty fields */ }
                     this.configFields = defs.map(f => ({
                         name: f.name,
                         type: f.type || 'text',

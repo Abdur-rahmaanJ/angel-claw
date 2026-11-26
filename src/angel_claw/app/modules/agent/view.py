@@ -107,12 +107,20 @@ def index():
     if not isinstance(skill_config, dict):
         skill_config = {}
 
+    # Only expose enable/disable flags: the file also holds skill credentials
+    # and this dict is serialized into the dashboard HTML.
+    skill_status = {
+        name: {"disabled": bool(cfg.get("disabled"))}
+        for name, cfg in skill_config.items()
+        if isinstance(cfg, dict)
+    }
+
     context.update(
         {
             "history": history,
             "channels": channel_types,
             "credit_info": credit_info,
-            "skill_config": skill_config,
+            "skill_config": skill_status,
         }
     )
     return render_template("{}/index.html".format(mhelp.info["module_name"]), **context)
@@ -704,19 +712,6 @@ def get_skills():
     registry = TieredSkillRegistry(user_context)
     skills = registry.manager.get_skill_details()
 
-    # Get user skill config from file
-    from angel_claw.utils import get_user_root
-    import json
-
-    user_root = get_user_root(user_context.user_id)
-    skill_config_file = user_root / "skill_config.json"
-    skill_config = {}
-    if skill_config_file.exists():
-        try:
-            skill_config = json.load(open(skill_config_file))
-        except Exception:
-            pass
-
     # Get skill field definitions from skill modules
     skill_field_defs = {}
     for skill_name in skills.keys():
@@ -737,10 +732,28 @@ def get_skills():
     return jsonify(
         {
             "skills": skills_list,
-            "skill_config": skill_config,
             "skill_field_defs": skill_field_defs,
         }
     )
+
+
+@blueprint.route("/skills/config/<skill_name>")
+@login_required
+def get_skill_config(skill_name):
+    """Return the saved fields for one skill to the authenticated owner."""
+    from angel_claw.utils import get_user_root
+    import json
+
+    user_context = _build_context()
+    skill_config_file = get_user_root(user_context.user_id) / "skill_config.json"
+    fields = {}
+    if skill_config_file.exists():
+        try:
+            config = json.load(open(skill_config_file))
+            fields = (config.get(skill_name) or {}).get("fields") or {}
+        except Exception:
+            fields = {}
+    return jsonify({"fields": fields})
 
 
 @blueprint.route("/skills/toggle", methods=["POST"])

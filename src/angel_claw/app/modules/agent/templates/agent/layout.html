@@ -168,10 +168,10 @@
                 async init() { await Promise.all([this.loadTodos(), this.loadJobs()]); },
                 async loadTodos() { this.error = false; try { const r = await fetch('/todos?format=json'); if (!r.ok) throw new Error(); const d = await r.json(); this.todos = d.todos || []; } catch(e) { this.error = true; } finally { this.loading = false; } },
                 async loadJobs() { try { const r = await fetch('/cron/jobs'); if (!r.ok) throw new Error(); const d = await r.json(); this.jobs = d.jobs || []; } catch(e) { this.jobs = []; } },
-                async toggleTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/toggle`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not update task', 'error'); } },
-                async deleteTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
+                async toggleTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { const r = await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/toggle`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not update task', 'error'); } },
+                async deleteTodo(todo) { const token = document.getElementById('csrf_token')?.value; try { const r = await fetch(`/todos/${encodeURIComponent(todo.session)}/${todo.id}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); await this.loadTodos(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
                 async toggleJob(job) { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/cron/jobs/${encodeURIComponent(job.name)}/toggle`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); const d = await r.json().catch(() => ({})); if (!r.ok) { Alpine.store('ui').toast(d.error || 'Could not update task', 'error'); return; } await this.loadJobs(); },
-                async deleteJob(job) { const token = document.getElementById('csrf_token')?.value; try { await fetch(`/cron/jobs/${encodeURIComponent(job.name)}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); await this.loadJobs(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
+                async deleteJob(job) { const token = document.getElementById('csrf_token')?.value; try { const r = await fetch(`/cron/jobs/${encodeURIComponent(job.name)}/delete`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); await this.loadJobs(); } catch(e) { Alpine.store('ui').toast('Could not delete task', 'error'); } },
                 formatDate(ts) { if (!ts) return '—'; try { return new Date(ts).toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) { return ts; } }
             }));
 
@@ -185,8 +185,8 @@
                 async init() { try { const r = await fetch('/messages?format=json'); if (!r.ok) throw new Error(); const d = await r.json(); this.messages = d.messages || []; } catch(e) { this.error = true; } finally { this.loading = false; } },
                 formatDate(ts) { if (!ts) return ''; try { return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: 'numeric', minute: '2-digit' }); } catch(e) { return ts; } },
                 openMessage(msg) { this.selectedMessage = msg; this.modalOpen = true; },
-                async markAsRead(id) { if (!id) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/messages/mark-read/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); const msg = this.messages.find(m => m.id === id); if (msg) msg.is_read = true; } catch(e) { console.error(e); } },
-                async deleteMsg(id) { if (!id) return; if (!await Alpine.store('ui').confirm({ title: 'Delete message?', danger: true, confirmText: 'Delete' })) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/messages/delete/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.messages = this.messages.filter(m => m.id !== id); this.modalOpen = false; Alpine.store('ui').toast('Message deleted'); } catch(e) { console.error(e); Alpine.store('ui').toast('Failed to delete message', 'error'); } }
+                async markAsRead(id) { if (!id) return; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/messages/mark-read/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); const msg = this.messages.find(m => m.id === id); if (msg) msg.is_read = true; } catch(e) { Alpine.store('ui').toast('Could not mark message as read', 'error'); } },
+                async deleteMsg(id) { if (!id) return; if (!await Alpine.store('ui').confirm({ title: 'Delete message?', danger: true, confirmText: 'Delete' })) return; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/messages/delete/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); this.messages = this.messages.filter(m => m.id !== id); this.modalOpen = false; Alpine.store('ui').toast('Message deleted'); } catch(e) { Alpine.store('ui').toast('Failed to delete message', 'error'); } }
             }));
 
             Alpine.data('apiData', () => ({
@@ -211,7 +211,7 @@
                     } catch(e) { Alpine.store('ui').toast(e.message || 'Failed to create key', 'error'); }
                     finally { this.creating = false; }
                 },
-                async revokeKey(id) { if (!id) return; if (!await Alpine.store('ui').confirm({ title: 'Revoke API key?', message: 'Apps using this key will lose access immediately.', danger: true, confirmText: 'Revoke' })) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/api-key/revoke/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.apiKeys = this.apiKeys.filter(k => k.id !== id); Alpine.store('ui').toast('API key revoked'); } catch(e) { console.error(e); Alpine.store('ui').toast('Failed to revoke key', 'error'); } }
+                async revokeKey(id) { if (!id) return; if (!await Alpine.store('ui').confirm({ title: 'Revoke API key?', message: 'Apps using this key will lose access immediately.', danger: true, confirmText: 'Revoke' })) return; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/api-key/revoke/${id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); this.apiKeys = this.apiKeys.filter(k => k.id !== id); Alpine.store('ui').toast('API key revoked'); } catch(e) { Alpine.store('ui').toast('Failed to revoke key', 'error'); } }
             }));
 
             Alpine.data('soulData', () => ({
@@ -288,11 +288,17 @@
                     if (!this.configSkill) return;
                     const fields = this.configFields.reduce((acc, f) => { acc[f.name] = f.value; return acc; }, {});
                     const token = document.getElementById('csrf_token')?.value;
-                    await fetch('/skills/config', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' },
-                        body: JSON.stringify({ skill: this.configSkill.name, fields })
-                    });
+                    try {
+                        const r = await fetch('/skills/config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': token || '' },
+                            body: JSON.stringify({ skill: this.configSkill.name, fields })
+                        });
+                        if (!r.ok) throw new Error();
+                    } catch(e) {
+                        Alpine.store('ui').toast('Could not save skill settings', 'error');
+                        return;
+                    }
                     this.configModal = false;
                 },
                 async uploadSkill(event) {
@@ -323,7 +329,7 @@
                 async init() { await this.loadMemories(); },
                 async loadMemories() { this.error = false; try { const sid = Alpine.store('viewManager')?.currentSessionId || 'Thread 1'; const r = await fetch(`/chat/memories?session_id=${encodeURIComponent(sid)}`); if (!r.ok) throw new Error(); const d = await r.json(); this.memories = d.memories || []; } catch(e) { this.error = true; } finally { this.loading = false; } },
                 confirmDelete(mem) { this.deleteTarget = mem; this.deleteModal = true; },
-                async executeDelete() { if (!this.deleteTarget) return; try { const token = document.getElementById('csrf_token')?.value; await fetch(`/chat/memories/delete/${this.deleteTarget.id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); this.memories = this.memories.filter(m => m.id !== this.deleteTarget.id); } catch(e) { console.error(e); } finally { this.deleteModal = false; this.deleteTarget = null; } }
+                async executeDelete() { if (!this.deleteTarget) return; try { const token = document.getElementById('csrf_token')?.value; const r = await fetch(`/chat/memories/delete/${this.deleteTarget.id}`, { method: 'POST', headers: { 'X-CSRFToken': token || '' } }); if (!r.ok) throw new Error(); this.memories = this.memories.filter(m => m.id !== this.deleteTarget.id); } catch(e) { Alpine.store('ui').toast('Could not delete memory', 'error'); } finally { this.deleteModal = false; this.deleteTarget = null; } }
             }));
 
             Alpine.data('threadsData', () => ({

@@ -522,6 +522,7 @@
                 pairingToken: '---',
                 notificationTimer: null,
                 unreadMessages: 0,
+                notifiedMessageIds: new Set(),
 
                 init() {
                     document.documentElement.className = this.theme;
@@ -560,6 +561,7 @@
                 async checkNotifications() {
                     try {
                         const r = await fetch('/messages?format=json');
+                        if (!r.ok) return;
                         const d = await r.json();
                         const unread = (d.messages || []).filter(m => !m.is_read);
                         this.unreadMessages = unread.length;
@@ -567,7 +569,10 @@
                         if (Notification.permission !== "granted") return;
 
                         for (const msg of unread) {
-                            // Show notification (keep unread so badge stays visible in UI)
+                            // Notify once per message per page load; the poll runs
+                            // every 30s and unread items stay unread on purpose.
+                            if (this.notifiedMessageIds.has(msg.id)) continue;
+                            this.notifiedMessageIds.add(msg.id);
                             new Notification("Angel Claw Reminder", {
                                 body: msg.content.replace('🔔 REMINDER: ', ''),
                                 icon: "/static/wing.png",

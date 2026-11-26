@@ -59,8 +59,11 @@ class AppContextManager:
 
                     app_dir = importlib.resources.files("angel_claw").joinpath("app")
                     app_path_str = str(app_dir)
-                    if app_path_str not in sys.path:
-                        sys.path.insert(0, app_path_str)
+                    # Always first: otherwise `app` can resolve to the package
+                    # directory and `from app import create_app` fails.
+                    if app_path_str in sys.path:
+                        sys.path.remove(app_path_str)
+                    sys.path.insert(0, app_path_str)
 
                     from app import create_app
 

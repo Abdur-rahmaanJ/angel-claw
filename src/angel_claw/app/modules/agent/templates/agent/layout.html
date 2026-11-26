@@ -527,7 +527,14 @@
                     const hashView = (location.hash || '').replace(/^#\/?/, '').split('/')[0];
                     this.activeView = validViews.includes(hashView) ? hashView : 'chat';
                     loadView(this.activeView).then(() => {
-                        this.createNewThread();
+                        // Keep the conversation the user was in before a reload
+                        // instead of silently starting a brand new thread.
+                        const storedThread = localStorage.getItem('current-session-id');
+                        if (storedThread) {
+                            this.switchToThread(storedThread);
+                        } else {
+                            this.createNewThread();
+                        }
                     });
                     window.addEventListener('hashchange', () => {
                         const v = (location.hash || '').replace(/^#\/?/, '').split('/')[0];

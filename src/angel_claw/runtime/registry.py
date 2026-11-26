@@ -66,7 +66,9 @@ class TieredSkillRegistry:
             config = config if isinstance(config, dict) else {}
         except Exception as e:
             logger.error(f"Error reading skill config: {e}")
-            config = {}
+            # Keep enforcing the last valid config while the file is broken.
+            # Do not cache the failure as an empty config.
+            return self._config_cache[1] if self._config_cache else {}
         self._config_cache = (mtime, config)
         return config
 
@@ -84,11 +86,17 @@ class TieredSkillRegistry:
 
     def load_module(self, module: str) -> str:
         """Expose a lazily-loaded module's tools for later turns."""
-        module = (module or "").strip().lower()
+        requested = (module or "").strip()
         modules = self.manager.get_modules()
-        if module not in modules:
+        # Module keys are file-name stems and keep their case (e.g. MySkill).
+        # Resolve the model's spelling back to the discovered key instead of
+        # lowercasing a name that will be compared with those keys.
+        module = next(
+            (m for m in modules if m.lower() == requested.lower()), None
+        )
+        if module is None:
             known = ", ".join(sorted(modules))
-            return f"Error: unknown skill module '{module}'. Available: {known}."
+            return f"Error: unknown skill module '{requested}'. Available: {known}."
         if not self.is_module_enabled(module):
             return (
                 f"Error: '{module}' is disabled in Settings -> Skills. "

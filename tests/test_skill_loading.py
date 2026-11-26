@@ -1,7 +1,9 @@
 import asyncio
 import json
+import os
 import shutil
 import socket
+import time
 from pathlib import Path
 
 import pytest
@@ -84,6 +86,36 @@ def test_web_tools_reject_internal_urls():
     with pytest.raises(ValueError):
         validate_public_url("http://localhost/x")
     assert validate_public_url("https://example.com/x") == "https://example.com/x"
+
+
+def test_invalid_config_keeps_last_valid_config(user_root):
+    config_file = user_root / "skill_config.json"
+    config_file.write_text(json.dumps({"web_read": {"disabled": True}}))
+    registry = _registry(user_root)
+    assert "web_read" not in _tools(registry)
+
+    config_file.write_text("{not valid json")
+    later = time.time() + 5
+    os.utime(config_file, (later, later))
+
+    assert registry.get_skill_config()["web_read"]["disabled"] is True
+    assert "web_read" not in _tools(registry)
+
+
+def test_load_module_preserves_discovered_case(user_root):
+    skills_dir = user_root / "skills"
+    skills_dir.mkdir(parents=True, exist_ok=True)
+    (skills_dir / "MySkill.py").write_text(
+        "from angel_claw.skills.manager import skill\n\n"
+        "@skill\n"
+        "def my_custom_tool():\n"
+        "    \"\"\"A custom tool.\"\"\"\n"
+        "    return 'ok'\n"
+    )
+    registry = _registry(user_root)
+
+    assert registry.load_module("MySkill").startswith("Loaded 'MySkill'")
+    assert "my_custom_tool" in _tools(registry)
 
 
 def test_resolved_url_rejects_private_dns(monkeypatch):

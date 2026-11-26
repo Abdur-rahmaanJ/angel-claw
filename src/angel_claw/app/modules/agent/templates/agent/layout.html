@@ -376,6 +376,14 @@
                 streamingContent: '',
                 devLogOpen: false,
                 logs: [],
+                streamAbort: null,
+
+                cancelStream() {
+                    if (!this.streamAbort) return;
+                    this.streamAbort.abort();
+                    this.streamAbort = null;
+                    this.streamingContent = '';
+                },
 
                 async loadHistory() {
                     const sid = Alpine.store('viewManager')?.currentSessionId || "Thread 1";
@@ -401,6 +409,7 @@
                     this.userInput = '';
                     if (viewStore) viewStore.isStreaming = true;
                     this.streamingContent = '';
+                    this.streamAbort = new AbortController();
                     this.$nextTick(() => this.scrollToBottom(true));
 
                     try {
@@ -409,6 +418,7 @@
                         const res = await fetch('/chat', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json', 'Accept': 'text/event-stream', 'X-CSRFToken': token },
+                            signal: this.streamAbort.signal,
                             body: JSON.stringify({ 
                                 message: msg, 
                                 session_id: sid,
@@ -470,13 +480,20 @@
                         this.streamingContent = '';
                         document.body.dispatchEvent(new CustomEvent('refresh-threads'));
                     } catch (err) {
-                        if (this.streamingContent.trim()) {
-                            this.messages.push({ role: 'assistant', content: this.streamingContent });
+                        if (err.name === 'AbortError') {
+                            // The user left this thread; drop the partial reply
+                            // instead of appending it to another conversation.
                             this.streamingContent = '';
+                        } else {
+                            if (this.streamingContent.trim()) {
+                                this.messages.push({ role: 'assistant', content: this.streamingContent });
+                                this.streamingContent = '';
+                            }
+                            this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
+                            Alpine.store('ui').toast(err.message, 'error');
                         }
-                        this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
-                        Alpine.store('ui').toast(err.message, 'error');
                     } finally {
+                        this.streamAbort = null;
                         if (viewStore) viewStore.isStreaming = false;
                         this.$nextTick(() => {
                             const container = this.$refs.messageContainer;

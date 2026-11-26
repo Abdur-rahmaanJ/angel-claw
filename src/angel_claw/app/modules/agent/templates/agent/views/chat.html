@@ -119,7 +119,7 @@
                     x-model="userInput"
                     @keydown.enter.prevent="if(!$event.shiftKey) sendMessage()"
                     @input="$el.style.height = 'auto'; $el.style.height = Math.max($el.scrollHeight, 60) + 'px'"
-                    class="flex-grow bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 py-3.5 text-[14px] md:text-[15px] focus:border-accent outline-none resize-none h-[50px] md:h-[60px] max-h-[150px] md:max-h-[200px] transition-all text-white leading-relaxed" 
+                    class="flex-grow bg-[var(--card-bg)] border border-[var(--border-color)] rounded-2xl px-4 py-3.5 text-[14px] md:text-[15px] focus:border-accent outline-none resize-none h-[50px] md:h-[60px] max-h-[150px] md:max-h-[200px] transition-all text-[var(--text-primary)] leading-relaxed" 
                     placeholder="Ask your agent anything..." 
                     rows="1"
                     :disabled="$store.viewManager.isStreaming"></textarea>

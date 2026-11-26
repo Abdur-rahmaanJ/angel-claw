@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.2] - 2026-11-26
+
+### Changed
+
+- A reminder now appears only in the Reminders tab: its backing cron job is hidden from Scheduled Tasks, and firing it no longer writes a `🔔 REMINDER:` item into Messages. The dashboard polls reminders and shows a toast/browser notification instead.
+
+### Fixed
+
+- Calendar returned 500 whenever events existed (and the calendar tab showed none); per-session events are merged for the calendar tab and dashboard, and first-event creation no longer fails on a missing directory.
+- Chat streaming dropped tokens that were split across network reads and ignored HTTP/session errors; partial replies are kept with the error, session expiry reloads to login, and leaving a thread cancels its stream.
+- Reloading the dashboard always started a new chat thread instead of restoring the active one.
+- Failed mutations for tasks, messages, reminders, API keys, memories, skill config and thread deletion were shown as successes.
+- Unknown `/view/<name>` returned 500 instead of 404, and expired sessions injected the login page into the dashboard.
+- To-do counts were padded to 1 when empty and only counted the current chat session; the dashboard counted events for the default session only and labelled a year of events as "7 days".
+- Dashboard load failures displayed zeros without a retry path.
+- Pairing tokens were minted on every dashboard load and usually expired before the dialog opened; the Telegram "Connect" button never opened the pairing dialog and integrations ignored bridge status.
+- Login validation errors were hidden, clipboard failures were silent, and the browser notification for an unread message repeated on every 30s poll.
+- Chat and password inputs were unreadable in light theme.
+
+### Security
+
+- Skill credentials are no longer serialized into the dashboard HTML; the config dialog fetches them on demand.
+- The service worker no longer caches authenticated dashboard pages or arbitrary cross-origin responses, and only known CDN hosts are cached.
+
 ## [0.16.1] - 2026-11-26
 
 ### Fixed

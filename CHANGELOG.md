@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.16.3] - 2026-11-26
+
+### Fixed
+
+- Skill settings no longer silently reset: if `skill_config.json` exists but cannot be read or parsed, the config endpoint returns an error and the dialog refuses to open instead of showing blank fields whose Save would wipe the stored credentials.
+- Opening another skill's settings while a request is still in flight no longer leaves the dialog showing the earlier skill's fields under the later skill's name.
+- `schedule_task` rejects names starting with `reminder_`, which were reserved for reminders and left the task hidden from both the Tasks and Reminders tabs.
+- Reminder timestamps are serialized with the server's UTC offset, so a browser in a different timezone no longer skips the notification or displays a shifted due time.
+
 ## [0.16.2] - 2026-11-26
 
 ### Changed

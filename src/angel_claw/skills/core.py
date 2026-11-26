@@ -211,6 +211,13 @@ def schedule_task(
     - session_id: The session ID this task belongs to (defaults to cli-default).
     """
     try:
+        # Reminder jobs are recognised by this prefix, so a task using it would
+        # be hidden from the Tasks tab and cannot be paused or deleted there.
+        if name.startswith("reminder_"):
+            return (
+                "Error: task names starting with 'reminder_' are reserved for "
+                "reminders; choose another name."
+            )
         job = Job(
             name=name,
             schedule=JobSchedule(kind=schedule_kind, value=schedule_value),

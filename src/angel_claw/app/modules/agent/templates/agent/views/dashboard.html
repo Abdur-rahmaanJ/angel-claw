@@ -31,14 +31,16 @@
 
         <div class="stat-card md:col-span-3">
             <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Pending Tasks</div>
-            <div class="text-3xl font-bold mb-2" x-text="todosCount">--</div>
-            <div class="text-xs text-zinc-500">From <span x-text="todosTotal">0</span> total</div>
+            <div class="text-3xl font-bold mb-2" x-text="todosError ? '—' : todosCount">--</div>
+            <div class="text-xs text-zinc-500" x-show="!todosError">From <span x-text="todosTotal">0</span> total</div>
+            <div class="text-xs text-red-400" x-show="todosError">Couldn't load tasks. <button class="underline" @click="loadTodos()">Retry</button></div>
         </div>
 
         <div class="stat-card md:col-span-3">
             <div class="text-xs font-semibold text-zinc-500 uppercase tracking-wider mb-2">Upcoming Events</div>
-            <div class="text-3xl font-bold mb-2" x-text="eventsCount">--</div>
-            <div class="text-xs text-zinc-500">Next <span x-text="eventsDays">7</span> days</div>
+            <div class="text-3xl font-bold mb-2" x-text="eventsError ? '—' : eventsCount">--</div>
+            <div class="text-xs text-zinc-500" x-show="!eventsError">Next <span x-text="eventsDays">365</span> days</div>
+            <div class="text-xs text-red-400" x-show="eventsError">Couldn't load events. <button class="underline" @click="loadEvents()">Retry</button></div>
         </div>
     </div>
 </div>

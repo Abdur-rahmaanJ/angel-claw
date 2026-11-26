@@ -167,7 +167,7 @@
                     this.canInstall = false;
                 }
             }));
-            Alpine.data('dashboardData', () => ({                todosCount: '--', todosTotal: 0, eventsCount: '--', eventsDays: 7,
+            Alpine.data('dashboardData', () => ({                todosCount: '--', todosTotal: 0, eventsCount: '--', eventsDays: 365,
                 credits: { balance: 0, limit: 1000, lifetime_spent: 0 },
                 creditsError: false, todosError: false, eventsError: false,
                 async init() { await Promise.all([this.loadCredits(), this.loadTodos(), this.loadEvents()]); },

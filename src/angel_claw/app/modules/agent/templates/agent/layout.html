@@ -391,10 +391,34 @@
                             })
                         });
 
+                        if (res.redirected || res.status === 401) {
+                            throw new Error('Your session expired. Reload the page to sign in again.');
+                        }
                         if (!res.ok) throw new Error('Failed to send message');
+                        if (!(res.headers.get('content-type') || '').includes('text/event-stream')) {
+                            throw new Error('Your session expired. Reload the page to sign in again.');
+                        }
 
                         const reader = res.body.getReader();
                         const decoder = new TextDecoder();
+                        let buffer = '';
+
+                        // A data line can be split across network reads, so only
+                        // consume complete lines and keep the remainder buffered.
+                        const handleLine = (line) => {
+                            const trimmed = line.trim();
+                            if (!trimmed.startsWith('data:')) return;
+                            const payload = trimmed.slice(5).trim();
+                            if (!payload || payload === '[DONE]') return;
+                            let data;
+                            try { data = JSON.parse(payload); } catch (e) { return; }
+                            if (!data.chunk) return;
+                            if (data.chunk.startsWith('[TOOL_CALL:')) {
+                                this.logs.push(`<span class="text-accent">Executing:</span> ${window.escapeHtml(data.chunk.replace('[TOOL_CALL:', '').replace(']', ''))}`);
+                            } else {
+                                this.streamingContent += data.chunk;
+                            }
+                        };
 
                         while (true) {
                             const { value, done } = await reader.read();
@@ -403,34 +427,30 @@
                             const container = this.$refs.messageContainer;
                             const wasAtBottom = container ? (container.scrollHeight - container.scrollTop - container.clientHeight < 20) : false;
 
-                            const chunk = decoder.decode(value);
-                            const lines = chunk.split('\n');
-                            for (const line of lines) {
-                                const trimmed = line.trim();
-                                if (trimmed.startsWith('data: ')) {
-                                    try {
-                                        const data = JSON.parse(trimmed.slice(6));
-                                        if (data.chunk) {
-                                            if (data.chunk.startsWith('[TOOL_CALL:')) {
-                                                this.logs.push(`<span class="text-accent">Executing:</span> ${window.escapeHtml(data.chunk.replace('[TOOL_CALL:', '').replace(']', ''))}`);
-                                            } else {
-                                                this.streamingContent += data.chunk;
-                                            }
-                                        }
-                                    } catch (e) {}
-                                }
-                            }
-                            
+                            buffer += decoder.decode(value, { stream: true });
+                            const lines = buffer.split('\n');
+                            buffer = lines.pop();
+                            lines.forEach(handleLine);
+
                             if (wasAtBottom && container) {
                                 container.scrollTop = container.scrollHeight;
                             }
                         }
-                        
-                        this.messages.push({ role: 'assistant', content: this.streamingContent });
+                        buffer += decoder.decode();
+                        if (buffer.trim()) handleLine(buffer);
+
+                        if (this.streamingContent.trim()) {
+                            this.messages.push({ role: 'assistant', content: this.streamingContent });
+                        }
                         this.streamingContent = '';
                         document.body.dispatchEvent(new CustomEvent('refresh-threads'));
                     } catch (err) {
+                        if (this.streamingContent.trim()) {
+                            this.messages.push({ role: 'assistant', content: this.streamingContent });
+                            this.streamingContent = '';
+                        }
                         this.messages.push({ role: 'assistant', content: 'Error: ' + err.message });
+                        Alpine.store('ui').toast(err.message, 'error');
                     } finally {
                         if (viewStore) viewStore.isStreaming = false;
                         this.$nextTick(() => {

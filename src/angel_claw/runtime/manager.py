@@ -31,6 +31,10 @@ class RuntimeManager:
             runtime.mark_active()
             return runtime
 
+    def get_existing(self, user_id) -> Optional[UserRuntime]:
+        """The cached runtime for a user, without creating one."""
+        return self._runtimes.get(str(user_id))
+
     async def start_cleanup_task(self):
         """Start the background task for cleaning up idle runtimes."""
         if self._cleanup_task:

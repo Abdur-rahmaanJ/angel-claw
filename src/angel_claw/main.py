@@ -1,7 +1,6 @@
-from .gateway import start
+"""Compatibility entry point: `python -m angel_claw.main` behaves like the CLI."""
 
-def main():
-    start()
+from .cli import main
 
 if __name__ == "__main__":
     main()

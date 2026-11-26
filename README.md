@@ -36,6 +36,7 @@
 
 ```bash
 $ pip install angel-claw
+$ angel-claw           # Status and the next command to run
 $ angel-claw setup     # Initialize database and create admin account
 $ angel-claw serve     # Starts the Agent OS Gateway + Web Dashboard
 $ angel-claw chat      # Authenticated CLI mode
@@ -69,11 +70,16 @@ To get started with a fresh installation:
 Angel Claw provides a powerful command-line interface for managing the OS, users, and bridges.
 
 ### Core Commands
+*   `angel-claw`: Prints configuration/database status with the next command to run. Running `python -m angel_claw` does the same.
 *   `angel-claw setup`: Interactive wizard to initialize the database and create the primary admin account.
 *   `angel-claw serve`: Starts the Flask Web Gateway and the background Bridge Worker in a single process.
 *   `angel-claw chat`: Launches an authenticated interactive chat session in your terminal.
 *   `angel-claw bridges`: Starts only the background bridge workers (Telegram, WhatsApp, Cron). Recommended for production.
+*   `angel-claw gateway`: Starts only the FastAPI gateway for API clients.
+*   `angel-claw status`: Shows the same status panel as the bare command.
 *   `angel-claw tutorial`: Runs the interactive "Guided Tour" of Angel Claw's features.
+
+A bare `angel-claw` no longer starts the gateway implicitly; use `serve` for the dashboard or `gateway` for the API.
 
 ### User Management
 *   `angel-claw list-users`: Displays all registered users, their confirmation status, and admin privileges.
@@ -106,6 +112,28 @@ Angel Claw provides a powerful command-line interface for managing the OS, users
 | 🔑 **Developer APIs**          | Create and manage scoped API keys for external integration. |
 
 ---
+
+## 🗓️ Tasks API
+
+Schedule a prompt to run once at a chosen time and poll its status. Tasks are user-scoped and authenticate with the same `Authorization: Bearer ac_v1_...` API key as `/api/mobile/*`.
+
+```bash
+# Schedule (run_at is ISO-8601; omit it to run in ~2 seconds)
+curl -X POST http://127.0.0.1:5000/api/tasks \
+  -H "Authorization: Bearer $ANGEL_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"title":"Check availability","prompt":"Search and report availability for the requested date.","run_at":"2027-01-06T18:00:00+01:00"}'
+
+# List / filter
+curl "http://127.0.0.1:5000/api/tasks?status=scheduled" -H "Authorization: Bearer $ANGEL_KEY"
+
+# Inspect, cancel, or run now
+curl http://127.0.0.1:5000/api/tasks/1 -H "Authorization: Bearer $ANGEL_KEY"
+curl -X POST http://127.0.0.1:5000/api/tasks/1/cancel -H "Authorization: Bearer $ANGEL_KEY"
+curl -X POST http://127.0.0.1:5000/api/tasks/1/run -H "Authorization: Bearer $ANGEL_KEY"
+```
+
+Statuses: `scheduled`, `running`, `succeeded`, `failed`, `cancelled`. The result is stored on the task record (not in the Messages inbox), so a mobile client can poll `GET /api/tasks/<id>` or `GET /api/tasks?status=succeeded`.
 
 # 💬 Internal Messaging
 

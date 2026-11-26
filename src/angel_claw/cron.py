@@ -416,9 +416,45 @@ class CronManager:
             return
         await self._execute_job(job)
 
+    def _mark_scheduled_task(self, job_name, status, result=None, error=None):
+        """Reflect a task job's lifecycle in its API record."""
+        if not job_name.startswith("task_"):
+            return
+        try:
+            from angel_claw.engine.app_context import create_app_context_manager
+            from angel_claw.config import settings
+
+            ctx_manager = create_app_context_manager(settings)
+            with ctx_manager._app_context() as app:
+                if app is None:
+                    return
+                from modules.api.models import ScheduledTask
+                from init import db
+
+                task = ScheduledTask.query.filter_by(job_name=job_name).first()
+                if task is None or task.status == "cancelled":
+                    return
+                now = datetime.now()
+                if status == "running":
+                    task.status = "running"
+                    task.started_at = now
+                    task.attempts = (task.attempts or 0) + 1
+                elif status == "succeeded":
+                    task.status = "succeeded"
+                    task.result = result
+                    task.finished_at = now
+                elif status == "failed":
+                    task.status = "failed"
+                    task.error = error
+                    task.finished_at = now
+                db.session.commit()
+        except Exception as e:
+            logger.error(f"Error updating scheduled task {job_name}: {e}")
+
     async def _execute_job(self, job: Job):
         logger.info(f"Executing job: {job.name}")
         job.last_run = datetime.now()
+        self._mark_scheduled_task(job.name, "running")
 
         # Handle Reminders persistence
         if job.name.startswith("reminder_"):
@@ -449,6 +485,10 @@ class CronManager:
                 await self._send_proactive_message(
                     job.payload.content, job.user_id, job.session_id
                 )
+                await self._store_web_message(job, job.payload.content)
+                self._mark_scheduled_task(
+                    job.name, "succeeded", result=job.payload.content
+                )
             elif job.payload.kind == "prompt":
                 from .engine import AngelClawEngine
                 from .models import UserContext
@@ -464,6 +504,10 @@ class CronManager:
                 response = await engine.execute(context, job.payload.content)
                 await self._send_proactive_message(
                     response.content, job.user_id, job.session_id
+                )
+                await self._store_web_message(job, response.content)
+                self._mark_scheduled_task(
+                    job.name, "succeeded", result=response.content
                 )
             elif job.payload.kind == "skill":
                 from .engine import AngelClawEngine
@@ -495,6 +539,7 @@ class CronManager:
                     )
         except Exception as e:
             logger.error(f"Error executing job {job.name}: {e}")
+            self._mark_scheduled_task(job.name, "failed", error=str(e))
 
         # Recalculate next run or disable if one-shot
         if job.schedule.kind in ["at", "in"]:
@@ -504,6 +549,55 @@ class CronManager:
             self._calculate_next_run(job)
 
         await self.save_job_async(job)
+
+    async def _store_web_message(self, job: Job, message: str):
+        """Keep a scheduled task's result in the web inbox.
+
+        Bridge sessions are delivered by their own proactive handler; web
+        sessions have none, so without this a prompt scheduled for next month
+        would run and the result would disappear. Reminders are skipped on
+        purpose: the dashboard announces those and the Messages tab must not
+        show them a second time.
+        """
+        if not message or job.name.startswith("reminder_"):
+            return
+        if "@" in (job.session_id or ""):
+            return
+        try:
+            from angel_claw.engine.app_context import create_app_context_manager
+            from angel_claw.config import settings
+
+            ctx_manager = create_app_context_manager(settings)
+            with ctx_manager._app_context() as app:
+                if app is None:
+                    return
+                from modules.agent.models import InternalMessage
+                from modules.api.models import ScheduledTask
+                from shopyo_auth.models import User
+                from init import db
+
+                # API tasks expose their result through /api/tasks; adding an
+                # inbox message too would duplicate it.
+                if ScheduledTask.query.filter_by(job_name=job.name).first():
+                    return
+
+                user_key = (
+                    int(job.user_id) if str(job.user_id).isdigit() else job.user_id
+                )
+                user = db.session.get(User, user_key)
+                if not user:
+                    return
+                db.session.add(
+                    InternalMessage(
+                        sender_id="system",
+                        recipient_id=str(user.id),
+                        recipient_email=user.email,
+                        content=f"⏰ {message}",
+                    )
+                )
+                db.session.commit()
+        except Exception as e:
+            logger.error(f"Error storing scheduled task result: {e}", exc_info=True)
 
     async def _send_proactive_message(
         self, message: str, user_id: str, session_id: str = "default"

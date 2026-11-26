@@ -43,6 +43,12 @@ class LlmExecutor:
 
         while turns < MAX_TURNS:
             turns += 1
+            # load_skill_tools can add tools between turns of the same request.
+            if runtime is not None:
+                try:
+                    all_tools = await runtime.get_tool_definitions()
+                except Exception as e:
+                    logger.warning(f"Could not refresh tools: {e}")
 
             cache_key = None
             response = None
@@ -188,6 +194,12 @@ class LlmExecutor:
 
         while turns < MAX_TURNS:
             turns += 1
+            # load_skill_tools can add tools between turns of the same request.
+            if runtime is not None:
+                try:
+                    all_tools = await runtime.get_tool_definitions()
+                except Exception as e:
+                    logger.warning(f"Could not refresh tools: {e}")
 
             try:
                 response = await litellm.acompletion(

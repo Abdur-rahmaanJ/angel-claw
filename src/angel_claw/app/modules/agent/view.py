@@ -108,11 +108,14 @@ def index():
         skill_config = {}
 
     # Only expose enable/disable flags: the file also holds skill credentials
-    # and this dict is serialized into the dashboard HTML.
+    # and this dict is serialized into the dashboard HTML. Default-off modules
+    # are included so they show as disabled before the user ever toggles them.
+    from angel_claw.skills.defaults import DEFAULT_DISABLED_MODULES, module_enabled
+
     skill_status = {
-        name: {"disabled": bool(cfg.get("disabled"))}
-        for name, cfg in skill_config.items()
-        if isinstance(cfg, dict)
+        name: {"disabled": not module_enabled(skill_config, name)}
+        for name in set(skill_config) | set(DEFAULT_DISABLED_MODULES)
+        if isinstance(skill_config.get(name, {}), dict)
     }
 
     context.update(
@@ -665,7 +668,10 @@ def get_reminders():
             "reminders": [{
                 "id": r.id,
                 "message": r.message,
-                "remind_at": r.remind_at.isoformat(),
+                # Attach the server's UTC offset: a naive timestamp is parsed
+                # as browser-local time, which shifts the reminder by the
+                # timezone difference and hides its notification.
+                "remind_at": r.remind_at.astimezone().isoformat(),
                 "channel": r.channel_type,
                 "is_sent": r.is_sent
             } for r in reminders]
@@ -747,11 +753,14 @@ def get_skills():
 
     user_context = _build_context()
     registry = TieredSkillRegistry(user_context)
-    skills = registry.manager.get_skill_details()
+    modules = registry.manager.get_modules()
+
+    from angel_claw.skills.defaults import MODULE_DESCRIPTIONS
 
     # Get skill field definitions from skill modules
     skill_field_defs = {}
-    for skill_name in skills.keys():
+    skills_list = []
+    for skill_name, info in sorted(modules.items()):
         try:
             # Try to import the skill module and get SKILL_CONFIG
             mod = importlib.import_module(f"angel_claw.skills.{skill_name}")
@@ -760,12 +769,20 @@ def get_skills():
                 skill_field_defs[skill_name] = mod.SKILL_CONFIG.get("fields", [])
         except Exception:
             pass
+        skills_list.append(
+            {
+                "name": skill_name,
+                "description": MODULE_DESCRIPTIONS.get(skill_name)
+                or info.get("description")
+                or f"Tools for {skill_name}",
+                "enabled": registry.is_module_enabled(skill_name),
+                "tools": len(info["functions"]),
+            }
+        )
 
     if request.args.get("format") == "html":
-        return render_template("agent/partials/_skills_list.html", skills=skills)
+        return render_template("agent/partials/_skills_list.html", skills=modules)
 
-    # Convert dict to array
-    skills_list = [{"name": k, "description": v} for k, v in skills.items()]
     return jsonify(
         {
             "skills": skills_list,
@@ -786,10 +803,14 @@ def get_skill_config(skill_name):
     fields = {}
     if skill_config_file.exists():
         try:
-            config = json.load(open(skill_config_file))
-            fields = (config.get(skill_name) or {}).get("fields") or {}
-        except Exception:
-            fields = {}
+            with open(skill_config_file) as f:
+                config = json.load(f)
+        except Exception as e:
+            # Returning empty fields would open a blank (editable) form, and
+            # saving it would overwrite credentials we merely failed to read.
+            logger.error(f"Error reading skill config: {e}")
+            return jsonify({"error": "Could not read saved settings"}), 500
+        fields = (config.get(skill_name) or {}).get("fields") or {}
     return jsonify({"fields": fields})
 
 

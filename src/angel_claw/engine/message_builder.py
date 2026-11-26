@@ -66,15 +66,19 @@ class MessageBuilder:
         self, runtime, context, user_id: str, safe_memory: str
     ) -> str:
         """Build the system prompt with soul, user info, and memory context."""
+        from datetime import datetime, UTC
+
         return (
             f"{runtime.soul}\n\n"
             f"CURRENT USER: {context.email} (ID: {user_id})\n"
-            f"CHANNEL: {context.channel_type} ({context.channel_identifier})\n\n"
+            f"CHANNEL: {context.channel_type} ({context.channel_identifier})\n"
+            f"Current date: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n\n"
             "--- BEGIN RETRIEVED MEMORY CONTEXT ---\n"
             f"{safe_memory}\n"
             "--- END RETRIEVED MEMORY CONTEXT ---\n\n"
             "You have access to 'Skills' which are sandboxed tools you can call. "
-            "Always validate tool outputs before using them in your response."
+            "Always validate tool outputs before using them in your response.\n"
+            f"{self._skills_note()}"
             f"{self._device_capabilities_block(context, user_id)}"
         )
 
@@ -91,8 +95,21 @@ class MessageBuilder:
             "--- BEGIN RETRIEVED MEMORY CONTEXT ---\n"
             f"{safe_memory}\n"
             "--- END RETRIEVED MEMORY CONTEXT ---\n\n"
-            f"Current date: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"Current date: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S')} UTC\n"
+            f"{self._skills_note()}"
             f"{self._device_capabilities_block(context, user_id)}"
+        )
+
+    @staticmethod
+    def _skills_note() -> str:
+        return (
+            "Only the core skill tools are loaded up front. If a needed tool is "
+            "missing, call list_skill_modules, then load_skill_tools(module).\n"
+            "For a request about a future date (e.g. find a table on 2027-01-06), "
+            "use schedule_task with payload_kind='prompt' and an 'at' ISO time so "
+            "the check runs then; do not pretend to know the future result.\n"
+            "For current facts use web_search, then web_read on a result; there "
+            "is no site-specific booking skill.\n"
         )
 
     def build_messages(

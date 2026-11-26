@@ -14,6 +14,8 @@ import tempfile
 import uuid
 from pathlib import Path
 
+import pytest
+
 _ROOT = Path(__file__).resolve().parents[1]
 for _p in (str(_ROOT / "src"), str(_ROOT / "src" / "angel_claw" / "app")):
     if _p not in sys.path:
@@ -27,6 +29,24 @@ assert not _TEST_DB.startswith(os.path.dirname(_REAL_USER_DB)), (
     f"refusing to point tests at the real user DB dir: {_TEST_DB}"
 )
 os.environ["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{_TEST_DB}"
+
+
+@pytest.fixture(autouse=True)
+def _shopyo_app_path_first():
+    """Keep ``import app`` resolving to the Shopyo factory, not the package.
+
+    Some tests append/prepend ``src`` while running; without this, ``app``
+    can resolve to ``src/angel_claw/app/__init__.py`` and the endpoint tests
+    fail with ImportError depending on collection order.
+    """
+    app_path = str(_ROOT / "src" / "angel_claw" / "app")
+    if app_path in sys.path:
+        sys.path.remove(app_path)
+    sys.path.insert(0, app_path)
+    cached = sys.modules.get("app")
+    if cached is not None and not hasattr(cached, "create_app"):
+        del sys.modules["app"]
+    yield
 
 
 def pytest_sessionfinish(session, exitstatus):

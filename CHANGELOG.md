@@ -2,6 +2,52 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.18.0] - 2026-11-26
+
+### Added
+
+- Generic Tasks API for mobile/backend clients: create a scheduled prompt, list and filter tasks, fetch one task, cancel it, or run it now. Endpoints live under `/api/tasks` and use the existing API-key bearer auth.
+- `scheduled_tasks` table and migration storing title, prompt, run time, status, attempts, result, error and timestamps.
+- Cron jobs linked to a task now update its status through `running` to `succeeded`/`failed` and store the agent's result on the task.
+
+### Changed
+
+- Task results are returned through `/api/tasks` and are not duplicated into the Messages inbox.
+
+## [0.17.1] - 2026-11-26
+
+### Changed
+
+- Running `angel-claw` with no arguments (or `python -m angel_claw`) now prints version, data directory, database/model status and the next commands, instead of silently starting the FastAPI gateway. Use `angel-claw gateway` for the API and `angel-claw serve` for the dashboard.
+- `angel-claw --help` lists each command with a description; an unknown command shows the same status panel and exits non-zero.
+- `angel-claw serve` no longer blocks on the setup wizard when it has no TTY (systemd/Docker); it prints the missing `MODEL_KEY` instruction and continues.
+- `python -m angel_claw.main` and the repository `main.py` now delegate to the CLI.
+
+## [0.17.0] - 2026-11-26
+
+### Added
+
+- Web building blocks: `web_search` (Exa, Brave, or Lightpanda's keyless search) and `web_read` (Lightpanda markdown, HTTP fallback). They let the agent research menus, deals and table availability without a site-specific booking skill.
+- Lightpanda is bundled on Linux/macOS and now powers `web_read` and the `browser_*` tools; Chromium and Playwright are no longer needed for scraping.
+- Progressive skill loading: only calendar, reminders, todos, memory, scheduling and web tools are in the prompt; `list_skill_modules` and `load_skill_tools` expose browser, files, email and the rest on demand. Tool schemas are refreshed between turns of the same request.
+- Scheduled `prompt` tasks now store their result in the web Messages inbox, so a task set for a future date is not executed into the void.
+
+### Changed
+
+- Skills settings now list modules (one card per skill file) instead of individual tool functions; a toggle applies to the whole module.
+- Email, OpenWeather, Google Calendar, internal messaging and mobile tools are disabled by default; they stay installed and can be enabled in Settings -> Skills.
+- `browser_search` was replaced by `web_search`.
+- The non-streaming system prompt now includes the current date and guidance for scheduling future actions and loading missing tools.
+
+## [0.16.3] - 2026-11-26
+
+### Fixed
+
+- Skill settings no longer silently reset: if `skill_config.json` exists but cannot be read or parsed, the config endpoint returns an error and the dialog refuses to open instead of showing blank fields whose Save would wipe the stored credentials.
+- Opening another skill's settings while a request is still in flight no longer leaves the dialog showing the earlier skill's fields under the later skill's name.
+- `schedule_task` rejects names starting with `reminder_`, which were reserved for reminders and left the task hidden from both the Tasks and Reminders tabs.
+- Reminder timestamps are serialized with the server's UTC offset, so a browser in a different timezone no longer skips the notification or displays a shifted due time.
+
 ## [0.16.2] - 2026-11-26
 
 ### Changed

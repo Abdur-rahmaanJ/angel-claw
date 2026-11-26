@@ -177,3 +177,222 @@ def test_login_template(client, app):
     html = response.get_data(as_text=True)
     assert "Angel Claw" in html
     assert "Login" in html
+
+
+def test_tasks_api_create_list_and_cancel(client, auth_user, app, tmp_path):
+    from datetime import datetime, timedelta
+
+    from angel_claw.cron import cron_manager
+
+    login = client.post(
+        "/auth/login",
+        data={"email": "test@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    assert login.status_code == 200
+    key = client.post(
+        "/api-key", json={"name": "Tasks API"}
+    ).get_json()["key"]
+    headers = {"Authorization": f"Bearer {key}"}
+
+    old_dir, old_jobs = cron_manager.persist_dir, cron_manager.jobs
+    cron_manager.persist_dir = str(tmp_path)
+    cron_manager.jobs = {}
+    try:
+        run_at = (datetime.now() + timedelta(hours=1)).isoformat()
+        created = client.post(
+            "/api/tasks",
+            headers=headers,
+            json={"title": "Check prices", "prompt": "Check prices and report.", "run_at": run_at},
+        )
+        assert created.status_code == 201
+        task = created.get_json()["task"]
+        assert task["status"] == "scheduled"
+        assert task["prompt"] == "Check prices and report."
+        task_id = task["id"]
+
+        listed = client.get("/api/tasks?status=scheduled", headers=headers)
+        assert listed.status_code == 200
+        assert [t["id"] for t in listed.get_json()["tasks"]] == [task_id]
+
+        detail = client.get(f"/api/tasks/{task_id}", headers=headers)
+        assert detail.status_code == 200
+        assert detail.get_json()["task"]["title"] == "Check prices"
+
+        cancelled = client.post(f"/api/tasks/{task_id}/cancel", headers=headers)
+        assert cancelled.status_code == 200
+        assert cancelled.get_json()["task"]["status"] == "cancelled"
+        assert client.get("/api/tasks", headers=headers).get_json()["total"] == 1
+
+        missing = client.post("/api/tasks/999999/cancel", headers=headers)
+        assert missing.status_code == 404
+        empty = client.post("/api/tasks", headers=headers, json={"prompt": ""})
+        assert empty.status_code == 400
+        unauth = client.get("/api/tasks")
+        assert unauth.status_code == 401
+    finally:
+        cron_manager.persist_dir = old_dir
+        cron_manager.jobs = old_jobs
+        cron_manager.scheduler.remove_all_jobs()
+
+
+def test_task_execution_updates_status_without_inbox_duplicate(
+    client, auth_user, app, monkeypatch, tmp_path
+):
+    from datetime import datetime, timedelta
+    from unittest.mock import AsyncMock
+
+    from angel_claw.cron import cron_manager
+    from angel_claw.models import EngineResponse
+    from init import db
+    from modules.agent.models import InternalMessage
+    from modules.api.models import ScheduledTask
+
+    class FakeEngine:
+        async def execute(self, context, message):
+            return EngineResponse(content="Result for the scheduled task")
+
+    monkeypatch.setattr("angel_claw.engine.AngelClawEngine", FakeEngine)
+    monkeypatch.setattr(cron_manager, "_send_proactive_message", AsyncMock())
+
+    client.post(
+        "/auth/login",
+        data={"email": "test@example.com", "password": "password"},
+        follow_redirects=True,
+    )
+    key = client.post("/api-key", json={"name": "Task run"}).get_json()["key"]
+    headers = {"Authorization": f"Bearer {key}"}
+
+    old_dir, old_jobs = cron_manager.persist_dir, cron_manager.jobs
+    cron_manager.persist_dir = str(tmp_path)
+    cron_manager.jobs = {}
+    try:
+        created = client.post(
+            "/api/tasks",
+            headers=headers,
+            json={
+                "prompt": "Do the scheduled thing",
+                "run_at": (datetime.now() + timedelta(hours=1)).isoformat(),
+            },
+        ).get_json()["task"]
+
+        with app.app_context():
+            job = cron_manager.jobs[f"task_{created['id']}"]
+            asyncio.run(cron_manager._execute_job(job))
+            task = db.session.get(ScheduledTask, created["id"])
+            assert task.status == "succeeded"
+            assert task.result == "Result for the scheduled task"
+            assert task.finished_at is not None
+            assert task.attempts == 1
+            assert InternalMessage.query.filter_by(
+                recipient_id=str(auth_user["id"])
+            ).count() == 0
+
+        detail = client.get(f"/api/tasks/{created['id']}", headers=headers)
+        assert detail.get_json()["task"]["status"] == "succeeded"
+        assert detail.get_json()["task"]["result"] == "Result for the scheduled task"
+    finally:
+        cron_manager.persist_dir = old_dir
+        cron_manager.jobs = old_jobs
+        cron_manager.scheduler.remove_all_jobs()
+
+
+def test_scheduled_prompt_lands_in_tasks_and_messages(
+    client, auth_user, app, monkeypatch, tmp_path
+):
+    """A future prompt is a Tasks row; its result is one Messages entry.
+
+    Reminders are the exception: they stay in the Reminders tab and must not
+    create an inbox message when they fire.
+    """
+    from datetime import datetime, timedelta
+    from unittest.mock import AsyncMock
+
+    from angel_claw.cron import Job, JobPayload, JobSchedule, cron_manager
+    from angel_claw.models import EngineResponse
+    from init import db
+    from modules.agent.models import InternalMessage, Reminder
+
+    class FakeEngine:
+        async def execute(self, context, message):
+            assert "table" in message.lower()
+            return EngineResponse(
+                content="Found a table for six at Test Bistro: https://example.com/book"
+            )
+
+    monkeypatch.setattr("angel_claw.engine.AngelClawEngine", FakeEngine)
+    monkeypatch.setattr(cron_manager, "_send_proactive_message", AsyncMock())
+
+    old_dir, old_jobs = cron_manager.persist_dir, cron_manager.jobs
+    cron_manager.persist_dir = str(tmp_path)
+    cron_manager.jobs = {}
+    try:
+        login = client.post(
+            "/auth/login",
+            data={"email": "test@example.com", "password": "password"},
+            follow_redirects=True,
+        )
+        assert login.status_code == 200
+
+        with app.app_context():
+            user_id = str(auth_user["id"])
+            when = (datetime.now() + timedelta(minutes=5)).isoformat()
+            job = Job(
+                name="restaurant_table_check",
+                schedule=JobSchedule(kind="at", value=when),
+                payload=JobPayload(
+                    kind="prompt",
+                    content="Find a table for six at a restaurant tomorrow and report it.",
+                ),
+                session_id="Thread 1",
+                user_id=user_id,
+            )
+            cron_manager.save_job(job)
+
+            tasks = client.get("/cron/jobs").get_json()["jobs"]
+            assert "restaurant_table_check" in {t["name"] for t in tasks}
+
+            asyncio.run(
+                cron_manager._execute_job(cron_manager.jobs["restaurant_table_check"])
+            )
+            messages = InternalMessage.query.filter_by(recipient_id=user_id).all()
+            assert any("Test Bistro" in m.content for m in messages)
+            assert any(m.content.startswith("⏰") for m in messages)
+
+            # A reminder must stay out of Tasks and out of the inbox.
+            reminder_name = f"reminder_{user_id}_{int(datetime.now().timestamp())}"
+            reminder_job = Job(
+                name=reminder_name,
+                schedule=JobSchedule(kind="at", value=when),
+                payload=JobPayload(
+                    kind="message", content="🔔 REMINDER: table for six"
+                ),
+                session_id="Thread 1",
+                user_id=user_id,
+            )
+            cron_manager.save_job(reminder_job)
+            reminder = Reminder(
+                user_id=user_id,
+                message="table for six",
+                remind_at=datetime.now() + timedelta(minutes=5),
+                channel_type="web",
+                channel_identifier="Thread 1",
+                job_name=reminder_name,
+            )
+            db.session.add(reminder)
+            db.session.commit()
+
+            tasks = client.get("/cron/jobs").get_json()["jobs"]
+            assert reminder_name not in {t["name"] for t in tasks}
+
+            before = InternalMessage.query.filter_by(recipient_id=user_id).count()
+            asyncio.run(
+                cron_manager._execute_job(cron_manager.jobs[reminder_name])
+            )
+            db.session.refresh(reminder)
+            assert reminder.is_sent is True
+            assert InternalMessage.query.filter_by(recipient_id=user_id).count() == before
+    finally:
+        cron_manager.persist_dir = old_dir
+        cron_manager.jobs = old_jobs
+        cron_manager.scheduler.remove_all_jobs()

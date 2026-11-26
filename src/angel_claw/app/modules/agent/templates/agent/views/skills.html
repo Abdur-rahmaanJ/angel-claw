@@ -30,6 +30,7 @@
                             <div>
                                 <h4 class="font-bold" x-text="skill.name"></h4>
                                 <p class="text-sm text-zinc-400" x-text="skill.description"></p>
+                                <p class="text-xs text-zinc-500" x-text="skill.tools + (skill.tools === 1 ? ' tool' : ' tools')"></p>
                             </div>
                         </div>
                         <button x-show="skill.has_config" @click="openConfig(skill)" class="btn btn-secondary text-sm">

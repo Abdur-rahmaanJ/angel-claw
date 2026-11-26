@@ -197,7 +197,7 @@ wheels = [
 
 [[package]]
 name = "angel-claw"
-version = "0.16.2"
+version = "0.18.0"
 source = { editable = "." }
 dependencies = [
     { name = "aiohttp" },
@@ -207,6 +207,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "fastmcp" },
     { name = "httpx" },
+    { name = "lightpanda", marker = "sys_platform == 'darwin' or sys_platform == 'linux'" },
     { name = "litellm" },
     { name = "mcp", extra = ["cli"] },
     { name = "neonize" },
@@ -257,6 +258,7 @@ requires-dist = [
     { name = "google-api-python-client", marker = "extra == 'google-calendar'" },
     { name = "google-auth", marker = "extra == 'google-calendar'" },
     { name = "httpx" },
+    { name = "lightpanda", marker = "sys_platform == 'darwin' or sys_platform == 'linux'", specifier = ">=1.0.5" },
     { name = "litellm" },
     { name = "mcp", extras = ["cli"] },
     { name = "neonize" },
@@ -2049,6 +2051,17 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/22/b1/a1514b6fe33dc956bee1e6aba88470999d53a6ed02ec8fd14d6d409b8fb7/langsmith-0.7.6.tar.gz", hash = "sha256:e8646f8429d3c1641c7bae3c01bfdc3dfa27625994b0ef4303714d6b06fe1ef9", size = 1041741, upload-time = "2026-02-21T01:26:34.296Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/89/47/9865e5f0c49d74e3f4ea5697dadf11f2b9c9ae037f0bff599583ebe59189/langsmith-0.7.6-py3-none-any.whl", hash = "sha256:28d256584969db723b68189a7dbb065836572728ab4d9597ec5379fe0a1e1641", size = 325475, upload-time = "2026-02-21T01:26:32.504Z" },
+]
+
+[[package]]
+name = "lightpanda"
+version = "1.0.5"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/c4/85/ffe03b78abe9f89fd0389e31778137ec2d9d91c1f45b3703ceecb3f01a06/lightpanda-1.0.5-py3-none-macosx_13_0_x86_64.whl", hash = "sha256:40f8c630ecfcfb1173d7eba186adf65dff6afb7637db5dd9b3a12b7ac0cb2d66", size = 30549124, upload-time = "2026-11-20T23:38:06.658Z" },
+    { url = "https://files.pythonhosted.org/packages/96/ad/86d65338d027ea128cc47164ff6f0c1fe1444bd7ce138e613e077df9d214/lightpanda-1.0.5-py3-none-macosx_14_0_arm64.whl", hash = "sha256:b23d8bd455e0ebfb0e076aff0c9652df47205fcb3fc18055c2654e39f76d5a6d", size = 28687928, upload-time = "2026-11-20T23:38:11.082Z" },
+    { url = "https://files.pythonhosted.org/packages/33/1a/73feb090c444d827cd046e5a8058a16c544cbdfdd96462c6b9ed3c26d90d/lightpanda-1.0.5-py3-none-manylinux_2_35_aarch64.whl", hash = "sha256:bdd9fdb9e4f64fd4ac37edd67b337a9e2140f19f2080d547f9d0c8abbaa195e1", size = 27880065, upload-time = "2026-11-20T23:38:15.293Z" },
+    { url = "https://files.pythonhosted.org/packages/a7/c0/e5b93b55fc13d668ec5645e758cf67c8898d6d221bff6317d2058d97019a/lightpanda-1.0.5-py3-none-manylinux_2_35_x86_64.whl", hash = "sha256:337e1f3d53c6a818c37d65146563bf3645ca44dff0c02ec15b2df2ba07ab75fe", size = 29357286, upload-time = "2026-11-20T23:38:19.28Z" },
 ]
 
 [[package]]

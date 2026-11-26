@@ -75,6 +75,7 @@ class Settings(BaseSettings):
 
     # Search Settings
     brave_api_key: Optional[str] = Field(None, validation_alias="BRAVE_API_KEY")
+    exa_api_key: Optional[str] = Field(None, validation_alias="EXA_API_KEY")
 
     # MCP Settings
     # Example format: '{"server1": {"command": "npx", "args": ["-y", "@modelcontextprotocol/server-everything"]}, "server2": {"url": "http://localhost:3000/sse"}}'

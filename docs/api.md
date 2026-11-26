@@ -455,7 +455,7 @@ GET /api/version
 No authentication. Returns the installed package version:
 
 ```json
-{"status": "success", "version": "0.19.0"}
+{"status": "success", "version": "0.19.1"}
 ```
 
 ---

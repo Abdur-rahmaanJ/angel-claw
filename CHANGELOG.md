@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.19.1] - 2026-11-26
+
+### Fixed
+
+- The skill Config dialog ignores obsolete load responses, so a double-click cannot clear a dialog whose request finished later.
+- The non-interactive missing-key message points to `angel-claw chat` for the setup wizard instead of `angel-claw setup`, which does not configure the model.
+- An unreadable `skill_config.json` keeps the last valid settings instead of treating the file as empty and re-enabling disabled tools.
+- `load_skill_tools` preserves the discovered case of module names such as `MySkill` instead of lowercasing the lookup.
+
 ## [0.19.0] - 2026-11-26
 
 ### Security

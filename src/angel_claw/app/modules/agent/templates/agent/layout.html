@@ -96,6 +96,15 @@
                 const res = await fetch(`/view/${viewName}`, {
                     headers: { 'X-CSRFToken': token || '' }
                 });
+                if (res.redirected || res.status === 401) {
+                    // Session expired: reload so the server can show the login page.
+                    location.reload();
+                    return;
+                }
+                if (!res.ok) {
+                    Alpine.store('ui')?.toast('Could not load view', 'error');
+                    return;
+                }
                 if (res.ok) {
                     const html = await res.text();
                     container.innerHTML = html;

@@ -2,6 +2,22 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.17.0] - 2026-11-26
+
+### Added
+
+- Web building blocks: `web_search` (Exa, Brave, or Lightpanda's keyless search) and `web_read` (Lightpanda markdown, HTTP fallback). They let the agent research menus, deals and table availability without a site-specific booking skill.
+- Lightpanda is bundled on Linux/macOS and now powers `web_read` and the `browser_*` tools; Chromium and Playwright are no longer needed for scraping.
+- Progressive skill loading: only calendar, reminders, todos, memory, scheduling and web tools are in the prompt; `list_skill_modules` and `load_skill_tools` expose browser, files, email and the rest on demand. Tool schemas are refreshed between turns of the same request.
+- Scheduled `prompt` tasks now store their result in the web Messages inbox, so a task set for a future date is not executed into the void.
+
+### Changed
+
+- Skills settings now list modules (one card per skill file) instead of individual tool functions; a toggle applies to the whole module.
+- Email, OpenWeather, Google Calendar, internal messaging and mobile tools are disabled by default; they stay installed and can be enabled in Settings -> Skills.
+- `browser_search` was replaced by `web_search`.
+- The non-streaming system prompt now includes the current date and guidance for scheduling future actions and loading missing tools.
+
 ## [0.16.3] - 2026-11-26
 
 ### Fixed
